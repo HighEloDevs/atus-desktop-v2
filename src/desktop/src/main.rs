@@ -3,6 +3,8 @@
 mod project;
 
 use project::commands::*;
+#[cfg(target_os = "macos")]
+use project::menu::project_menu_enabled;
 use serde::Serialize;
 use tauri::Manager;
 
@@ -42,7 +44,13 @@ fn get_mock_analysis() -> MockAnalysis {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "macos")]
+    let builder = builder.setup(|app| {
+        project::menu::install(app)?;
+        Ok(())
+    });
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -52,7 +60,9 @@ fn main() {
             project_save,
             project_save_as,
             project_list,
-            project_available
+            project_available,
+            #[cfg(target_os = "macos")]
+            project_menu_enabled
         ])
         .build(tauri::generate_context!())
         .expect("failed to build ATUS Desktop")

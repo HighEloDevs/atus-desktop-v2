@@ -1,3 +1,4 @@
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -118,7 +119,7 @@ export function useProjectSave(initial: OpenProject | null, content: string) {
     };
   }, [initial, canLeave]);
 
-  async function saveAs() {
+  const saveAs = useCallback(async () => {
     if (!current.current || destinationOpen.current) return;
     destinationOpen.current = true;
     let copied = false;
@@ -131,9 +132,34 @@ export function useProjectSave(initial: OpenProject | null, content: string) {
       destinationOpen.current = false;
       if (copied && latest.current !== committed.current) void persist();
     }
-  }
+  }, [persist]);
+
+  const usesNativeMenu = isTauri() && /^Mac/.test(navigator.platform);
+  useEffect(() => {
+    if (!initial || !usesNativeMenu) return;
+    let active = true;
+    const listener = getCurrentWindow().listen<"save" | "save-as">(
+      "project-menu-action",
+      ({ payload }) => {
+        if (!active) return;
+        if (payload === "save") void flush();
+        if (payload === "save-as") void saveAs();
+      },
+    );
+    void listener
+      .then(() => active && invoke("project_menu_enabled", { enabled: true }))
+      .catch((error) => {
+        if (active) setError(String(error));
+      });
+    return () => {
+      active = false;
+      void listener.then((unlisten) => unlisten()).catch(() => {});
+      void invoke("project_menu_enabled", { enabled: false }).catch(console.error);
+    };
+  }, [initial, usesNativeMenu, flush, saveAs]);
 
   return {
+    usesNativeMenu,
     project,
     status: status === "Salvo" && content !== savedContent ? "Alterações pendentes" : status,
     error,

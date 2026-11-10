@@ -706,7 +706,7 @@ export function AnalysisPage({
                   {saving.project ? saving.status : "Não salvo"}
                 </p>
               </div>
-              {saving.project && (
+              {saving.project && !saving.usesNativeMenu && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
