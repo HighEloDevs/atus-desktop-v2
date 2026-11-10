@@ -44,6 +44,8 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 
 ## Desenvolvimento
 
+- Siga [CONTRIBUTING.md](CONTRIBUTING.md) para contribuições e descrições de PR. Use o template de corpo documentado ali e em `.github/pull_request_template.md`, mantendo o escopo final e as evidências de verificação atualizados.
+
 - Crie sempre worktrees novas dentro de `.worktree/` na raiz do repositório, usando uma subpasta por worktree. Os artefatos locais do Superpowers e o diretório de worktrees ficam fora do Git.
 
 - Pré-requisitos: Node.js, npm, Rust/Cargo e dependências de sistema do Tauri. No macOS, as Command Line Tools são suficientes para desktop.
@@ -59,6 +61,7 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 ## Estrutura atual
 
 - `AGENTS.md`: contexto e instruções vivas do repositório.
+- `CONTRIBUTING.md`: orientações de contribuição, verificações e template de descrição de PR.
 - `README.md`: apresentação e estado inicial para pessoas colaboradoras.
 - `.github/workflows/`: build de verificação e empacotamento Tauri em macOS e Windows; os artefatos são de teste, não releases assinadas.
 - `src/frontend/`: aplicação React; `components.json` configura shadcn/ui, `src/App.tsx` contém a homepage inicial e `src/styles/globals.css` os tokens e estilos globais; `src/components/ui/` para componentes shadcn de interface, `src/components/chart/` para o gráfico e sua personalização compartilhada com a sidebar, `features/` para funcionalidades, `hooks/`, `lib/` e `styles/` para recursos compartilhados, `public/` para assets estáticos e `tests/unit/` e `tests/integration/` para testes.
