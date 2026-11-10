@@ -46,7 +46,7 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 - Em `src/frontend/`, execute `npm ci`, `npm run build`, `npm run tauri -- dev` e `npm run tauri -- build` (build de distribuição na plataforma atual). O Tauri usa a configuração em `src/desktop/`; o servidor Vite usa a porta 1420.
 - Em `src/frontend/`, use `npm run lint` / `npm run lint:fix` e `npm run format:check` / `npm run format`. ESLint verifica TypeScript e regras de React; Prettier formata os arquivos do frontend. O CI executa as verificações sem modificá-los.
 - Links dos perfis na página Sobre abrem no navegador padrão pelo plugin Tauri Opener; os endereços permitidos ficam em `src/desktop/capabilities/default.json`.
-- O atalho de nova análise é `Cmd+Option+N` no macOS e `Ctrl+Alt+N` nos demais sistemas. O atalho e o acesso rápido abrem a tela de análise demonstrativa.
+- O atalho de nova análise é `Cmd+Option+N` no macOS e `Ctrl+Alt+N` nos demais sistemas. No desktop, o atalho e o acesso rápido criam um projeto em Documentos/ATUS/projects e abrem a análise demonstrativa.
 - O Vite usa `--configLoader runner`: o carregador padrão ficou bloqueado neste ambiente com Node 26.
 - `org.atus.desktop` é identificador provisório; confirme antes de distribuir. A ponte inicial compila C++ via `cc`; ela retorna somente dados de demonstração. Execute `cargo test --manifest-path src/desktop/Cargo.toml` para verificar a integração.
 
@@ -56,7 +56,7 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 - `README.md`: apresentação e estado inicial para pessoas colaboradoras.
 - `.github/workflows/`: build de verificação e empacotamento Tauri em macOS e Windows; os artefatos são de teste, não releases assinadas.
 - `src/frontend/`: aplicação React; `components.json` configura shadcn/ui, `src/App.tsx` contém a homepage inicial e `src/styles/globals.css` os tokens e estilos globais; `src/components/ui/` para componentes shadcn de interface, `src/components/chart/` para o gráfico e sua personalização compartilhada com a sidebar, `features/` para funcionalidades, `hooks/`, `lib/` e `styles/` para recursos compartilhados, `public/` para assets estáticos e `tests/unit/` e `tests/integration/` para testes.
-- `src/desktop/`: núcleo desktop em Rust, com `src/`, ponte C++ em `build.rs` e teste da fronteira nativa em `src/main.rs`. O módulo `src/project/` contém uma base experimental de leitura e escrita SQLite, ainda sem integração à interface, migrations ou proteção de concorrência; não deve ser usado como persistência de produção.
+- `src/desktop/`: núcleo desktop em Rust, com `src/`, ponte C++ em `build.rs` e teste da fronteira nativa em `src/main.rs`. O módulo `src/project/` mantém arquivos SQLite .atus versionados, gravação transacional, backup de migrations e detecção de edições concorrentes. O frontend integra abertura, recentes, salvamento automático e Salvar como em `src/features/projects/`.
 - `src/scientific-engine/`: motor científico C++, com interfaces públicas em `include/`, implementação em `src/` e testes unitários e de integração em `tests/`.
 - `docs/decisions/`: decisões arquiteturais, incluindo o componente de gráficos com D3.
 - `docs/references/`: documentos originais de especificação e identidade.

@@ -1,3 +1,5 @@
+import { useProjectSave } from "@/features/projects/useProjectSave";
+import type { OpenProject } from "@/features/projects/project-client";
 import { useLayoutEffect, useRef, useState, type SetStateAction } from "react";
 import { FitControls } from "./fit/FitControls";
 import { defaultFitConfig, validateFitConfig, type FitConfig } from "./fit/fit-config";
@@ -15,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChartExportMenu } from "@/components/chart/ChartExportMenu";
 import { ChartSettingsPanel } from "@/components/chart/ChartSettingsPanel";
-import { useChartSettings } from "@/components/chart/useChartSettings";
+import { useChartSettings, type ChartValues } from "@/components/chart/useChartSettings";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   Activity,
@@ -76,8 +78,33 @@ function parseValidPoints(text: string, separator: SeparatorType) {
   return points;
 }
 
-export function AnalysisPage({ onBack }: { onBack: () => void }) {
-  const chartSettings = useChartSettings();
+type AnalysisState = {
+  chart?: ChartValues;
+  selectedId?: string | null;
+  tableId?: string | null;
+  editingText?: string | null;
+  separator?: SeparatorType;
+};
+
+export function AnalysisPage({
+  onBack,
+  project = null,
+}: {
+  onBack: () => void;
+  project?: OpenProject | null;
+}) {
+  const [initialAnalysis] = useState(() =>
+    project
+      ? (project.snapshot.analyses[0] ?? {
+          id: crypto.randomUUID(),
+          kind: "analysis",
+          state: {},
+          datasets: [],
+        })
+      : undefined,
+  );
+  const initial = initialAnalysis?.state as AnalysisState | undefined;
+  const chartSettings = useChartSettings(initial?.chart);
   const graphicRef = useRef<HTMLDivElement>(null);
   const exampleNumber = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -85,15 +112,58 @@ export function AnalysisPage({ onBack }: { onBack: () => void }) {
   const scrollPositions = useRef({ analysis: 0, visual: 0 });
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [tableId, setTableId] = useState<string | null>(null);
-  const [editingText, setEditingText] = useState<string | null>(null);
+  const [tableId, setTableId] = useState<string | null>(initial?.tableId ?? null);
+  const [editingText, setEditingText] = useState<string | null>(initial?.editingText ?? null);
   const [editError, setEditError] = useState("");
-  const [separator, setSeparator] = useState<SeparatorType>("auto");
+  const [separator, setSeparator] = useState<SeparatorType>(initial?.separator ?? "auto");
   const [importError, setImportError] = useState("");
-  const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [datasets, setDatasets] = useState<Dataset[]>(
+    () =>
+      initialAnalysis?.datasets.map(({ id, name, points, state }) => ({
+        ...defaultFitConfig,
+        data: null,
+        linePoints: [],
+        color: "#f25a3c",
+        radius: 5,
+        symbol: "circle",
+        lineStyle: "solid",
+        lineWidth: 2,
+        visible: true,
+        fitState: "idle",
+        ...(state as Partial<Omit<Dataset, "id" | "name" | "points">>),
+        id,
+        name,
+        points: points.map(({ x, y, sx, sy }) => ({
+          x,
+          y,
+          sx: sx ?? undefined,
+          sy: sy ?? undefined,
+        })),
+      })) ?? [],
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(initial?.selectedId ?? null);
   const selected = datasets.find((item) => item.id === selectedId) ?? datasets[0];
   const data = selected;
+  const saving = useProjectSave(
+    project,
+    JSON.stringify(
+      initialAnalysis
+        ? [
+            {
+              ...initialAnalysis,
+              state: { chart: chartSettings, selectedId, tableId, editingText, separator },
+              datasets: datasets.map(({ id, name, points, ...state }) => ({
+                id,
+                name,
+                points,
+                state,
+              })),
+            },
+            ...(project?.snapshot.analyses.slice(1) ?? []),
+          ]
+        : [],
+    ),
+  );
   function updateSeries(id: string, updates: Partial<ChartSeries>) {
     setDatasets((items) => items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
   }
@@ -604,7 +674,11 @@ export function AnalysisPage({ onBack }: { onBack: () => void }) {
           <div className="flex h-[70px] shrink-0 items-center gap-3 border-b border-[#d8ded7] px-4">
             <button
               type="button"
-              onClick={onBack}
+              onClick={() => {
+                void saving.canLeave().then((ok) => {
+                  if (ok) onBack();
+                });
+              }}
               aria-label="Voltar ao início"
               className="rounded p-2 text-[#66716e] hover:bg-[#e9ece7]"
             >
@@ -613,13 +687,33 @@ export function AnalysisPage({ onBack }: { onBack: () => void }) {
             <div className="min-w-0 flex-1">
               <span className="text-[11px] font-medium text-[#87938a]">Projeto</span>
               <div className="flex items-center gap-2">
-                <h1 className="truncate text-[15px] font-semibold">Projeto sem título</h1>
-                <span className="rounded bg-[#fff3dc] px-1.5 py-0.5 text-[9px] font-semibold text-[#8c601d]">
-                  NÃO SALVO
+                <h1 className="truncate text-[15px] font-semibold">
+                  {saving.project?.snapshot.name ?? "Projeto sem título"}
+                </h1>
+                <span
+                  role="status"
+                  className="rounded bg-[#fff3dc] px-1.5 py-0.5 text-[9px] font-semibold text-[#8c601d]"
+                >
+                  {saving.project ? saving.status : "NÃO SALVO"}
                 </span>
               </div>
             </div>
           </div>
+          {saving.project && (
+            <div className="space-x-3 border-b px-4 py-2 text-xs">
+              <button type="button" className="underline" onClick={() => void saving.flush()}>
+                Salvar
+              </button>
+              <button type="button" className="underline" onClick={() => void saving.saveAs()}>
+                Salvar como
+              </button>
+              {saving.error && (
+                <p role="alert" className="mt-2 text-red-700">
+                  {saving.error}
+                </p>
+              )}
+            </div>
+          )}
           <div className="border-b border-[#d8ded7] px-4 py-3">
             <div
               role="tablist"

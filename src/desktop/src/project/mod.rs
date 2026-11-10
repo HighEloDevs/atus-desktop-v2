@@ -1,3 +1,5 @@
+pub mod commands;
+mod migrations;
 pub mod model;
 pub mod store;
 
@@ -134,5 +136,105 @@ mod tests {
         };
         assert!(write_project(&path, &invalid).is_err());
         assert_eq!(read_project(&path).unwrap(), original);
+    }
+    fn empty_project() -> ProjectSnapshot {
+        ProjectSnapshot {
+            id: "project".into(),
+            name: "Experimento".into(),
+            created_at: "2026-11-10T00:00:00Z".into(),
+            updated_at: "2026-11-10T00:00:00Z".into(),
+            analyses: vec![],
+        }
+    }
+
+    #[test]
+    fn migration_backs_up_v1_and_preserves_snapshot() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("project.atus");
+        let snapshot = empty_project();
+        create_project(&path, &snapshot).unwrap();
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        connection
+            .execute_batch("DROP INDEX analyses_by_kind; PRAGMA user_version=1;")
+            .unwrap();
+        drop(connection);
+        super::migrations::migrate(&path).unwrap();
+        super::migrations::migrate(&path).unwrap();
+        assert_eq!(read_project(&path).unwrap(), snapshot);
+        let backups: Vec<_> = std::fs::read_dir(directory.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("project.atus.backup-v1-")
+            })
+            .collect();
+        assert_eq!(backups.len(), 1);
+        let backup = rusqlite::Connection::open(backups[0].path()).unwrap();
+        let version: i32 = backup
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 1);
+    }
+
+    #[test]
+    fn stale_save_and_creation_cannot_overwrite_existing_project() {
+        use super::store::write_checked;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("project.atus");
+        let original = empty_project();
+        create_project(&path, &original).unwrap();
+        let mut first = original.clone();
+        first.name = "Primeira edição".into();
+        write_checked(&path, &original, &first).unwrap();
+        assert!(write_checked(&path, &original, &original).is_err());
+        assert!(create_project(&path, &original).is_err());
+        assert_eq!(read_project(&path).unwrap(), first);
+    }
+    #[test]
+    fn future_and_failed_migrations_preserve_original() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("project.atus");
+        create_project(&path, &empty_project()).unwrap();
+        for version in [99, 1] {
+            let connection = rusqlite::Connection::open(&path).unwrap();
+            connection
+                .pragma_update(None, "user_version", version)
+                .unwrap();
+            drop(connection);
+            let original = std::fs::read(&path).unwrap();
+            // At v1 the conflicting index makes the migration fail after the backup.
+            assert!(super::migrations::migrate(&path).is_err());
+            assert_eq!(std::fs::read(&path).unwrap(), original);
+        }
+    }
+
+    #[test]
+    fn project_commands_save_copy_and_reopen_without_the_original() {
+        use super::commands::{project_open, project_save, project_save_as};
+        let directory = tempfile::tempdir().unwrap();
+        let original = directory.path().join("original.atus");
+        let copy = directory.path().join("Cópia.atus");
+        let snapshot = empty_project();
+        create_project(&original, &snapshot).unwrap();
+        let mut edited = snapshot.clone();
+        edited.analyses.push(Analysis {
+            id: "analysis".into(),
+            kind: "analysis".into(),
+            state: serde_json::json!({"editingText": "1;"}),
+            datasets: vec![],
+        });
+        tauri::async_runtime::block_on(async {
+            project_save(original.clone(), snapshot, edited.clone())
+                .await
+                .unwrap();
+            project_save_as(copy.clone(), edited.clone()).await.unwrap();
+            std::fs::remove_file(original).unwrap();
+            project_open(copy.clone()).await.unwrap();
+        });
+        edited.name = "Cópia".into();
+        assert_eq!(read_project(&copy).unwrap(), edited);
     }
 }

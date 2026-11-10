@@ -2,7 +2,7 @@
 
 O ATUS Desktop é uma ferramenta científica gratuita e de código aberto para análise de dados de física experimental. A v2 busca oferecer um fluxo simples e reproduzível, preservando e verificando as capacidades científicas relevantes da versão anterior.
 
-O projeto está em fase inicial. A stack escolhida é React, Tailwind CSS e shadcn para o frontend, Tauri com Rust para o desktop e C++ para o motor científico. A aplicação inclui uma tela de análise demonstrativa conectada a um motor C++ que retorna valores fixos; nenhum ajuste científico é realizado. O contrato científico definitivo e os detalhes de distribuição ainda serão definidos. O frontend inicial usa Tailwind CSS e shadcn/ui; importação e projetos ainda estão em desenvolvimento.
+O projeto está em fase inicial. A stack escolhida é React, Tailwind CSS e shadcn para o frontend, Tauri com Rust para o desktop e C++ para o motor científico. A aplicação inclui uma tela de análise demonstrativa conectada a um motor C++ que retorna valores fixos; nenhum ajuste científico é realizado. O contrato científico definitivo e os detalhes de distribuição ainda serão definidos. O frontend inicial usa Tailwind CSS e shadcn/ui; é possível importar séries e retomar análises em projetos SQLite `.atus`.
 
 ## Desenvolvimento
 
@@ -33,3 +33,6 @@ A especificação é um retrato inicial: seus critérios de aceite e estimativas
 ## Licença
 
 Consulte [LICENSE](LICENSE).
+
+
+No desktop, **Nova análise** cria um arquivo em `ATUS/projects` dentro da pasta Documentos do sistema. **Abrir projeto** aceita arquivos de outras pastas e os inclui nos recentes. As mudanças são gravadas automaticamente. **Salvar** antecipa a gravação e **Salvar como** cria uma cópia em um caminho livre. Se o arquivo mudar em outra instância, use **Salvar como** para preservar a edição atual. A primeira abertura de um arquivo v1 cria um backup ao lado dele e migra o esquema para v2. Resultados simulados continuam identificados como simulação.

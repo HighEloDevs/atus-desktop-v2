@@ -1,4 +1,12 @@
-import { useEffect, useState } from "react";
+import { RecentProjects } from "@/features/projects/RecentProjects";
+import {
+  chooseProject,
+  newSnapshot,
+  projectClient,
+  rememberProject,
+  type OpenProject,
+} from "@/features/projects/project-client";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { AnalysisPage } from "@/features/analysis/AnalysisPage";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -116,6 +124,38 @@ function App() {
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
   const shortcut = isMac ? "⌘ ⌥ N" : "Ctrl + Alt + N";
 
+  const [project, setProject] = useState<OpenProject | null>(null);
+  const [projectError, setProjectError] = useState("");
+  const opening = useRef(false);
+  const runProjectAction = useCallback(
+    async (action: () => Promise<OpenProject | null>, replaces?: string) => {
+      if (opening.current) return;
+      opening.current = true;
+      setProjectError("");
+      try {
+        const opened = await action();
+        if (!opened) return;
+        setProject(opened);
+        setPage("analysis");
+        rememberProject(opened.path, replaces);
+      } catch (error) {
+        setProjectError(String(error));
+      } finally {
+        opening.current = false;
+      }
+    },
+    [],
+  );
+  const createProject = useCallback(() => {
+    if (!isTauri()) {
+      setPage("analysis");
+      return;
+    }
+    void runProjectAction(() => projectClient.create(newSnapshot()));
+  }, [runProjectAction]);
+  const openProject = (path: string, replaces?: string) =>
+    runProjectAction(() => projectClient.open(path), replaces);
+
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
       const target = event.target;
@@ -133,14 +173,23 @@ function App() {
         event.code === "KeyN"
       ) {
         event.preventDefault();
-        setPage("analysis");
+        if (page !== "analysis") createProject();
       }
     }
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [isMac]);
+  }, [isMac, page, createProject]);
 
-  if (page === "analysis") return <AnalysisPage onBack={() => setPage("home")} />;
+  if (page === "analysis")
+    return (
+      <AnalysisPage
+        project={project}
+        onBack={() => {
+          setProject(null);
+          setPage("home");
+        }}
+      />
+    );
 
   return (
     <div className="app-shell bg-[#f7f7f3] text-[#20272c]">
@@ -173,7 +222,7 @@ function App() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setPage("analysis")}
+                    onClick={createProject}
                     aria-keyshortcuts={isMac ? "Meta+Alt+N" : "Control+Alt+N"}
                     className="flex w-full max-w-[350px] items-start gap-3 rounded-md border border-[#d8ded7] bg-white p-4 text-left transition-colors hover:border-[#aab9ad] hover:bg-[#fafbf9]"
                   >
@@ -185,40 +234,35 @@ function App() {
                       <span className="mt-1 block text-[12px] leading-5 text-[#7b887e]">
                         Comece com um conjunto de dados.
                       </span>
-                      <span className="mt-2 block text-[10px] text-[#7b887e]">
-                        Abrir demonstração
-                      </span>
+                      <span className="mt-2 block text-[10px] text-[#7b887e]">Criar projeto</span>
                     </span>
                     <kbd className="whitespace-nowrap rounded border border-[#d8ded7] bg-[#f7f8f5] px-1.5 py-1 text-[10px] text-[#66716e]">
                       {shortcut}
                     </kbd>
                   </button>
                 </section>
-                <section
-                  aria-labelledby="recent-heading"
-                  className="mt-8 overflow-hidden rounded-md border border-[#d8ded7] bg-white"
-                >
-                  <div className="flex h-12 items-center justify-between border-b border-[#e5e9e3] px-4">
-                    <h2 id="recent-heading" className="text-[13px] font-semibold">
-                      Projetos recentes
-                    </h2>
-                    <span className="text-[11px] text-[#909c93]">Em breve</span>
-                  </div>
-                  <div className="flex min-h-[230px] flex-col items-center justify-center px-6 py-10 text-center">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#f1f4ef] text-[#839087]">
-                      <FolderOpen size={20} strokeWidth={1.5} />
-                    </div>
-                    <h3 className="mt-4 text-[13px] font-semibold">
-                      Seus projetos aparecerão aqui
-                    </h3>
-                    <p className="mt-1.5 max-w-[340px] text-[12px] leading-5 text-[#7b887e]">
-                      O acesso a projetos recentes estará disponível em uma próxima etapa.
-                    </p>
-                  </div>
-                </section>
-                <p className="mt-5 text-[11px] text-[#8b978e]">
-                  A importação e a abertura de projetos ainda estão em desenvolvimento.
-                </p>
+                {isTauri() && (
+                  <>
+                    <button
+                      type="button"
+                      className="mt-3 flex items-center gap-2 rounded border px-3 py-2 text-xs"
+                      onClick={() =>
+                        void runProjectAction(async () => {
+                          const path = await chooseProject();
+                          return path ? projectClient.open(path) : null;
+                        })
+                      }
+                    >
+                      <FolderOpen size={15} /> Abrir projeto
+                    </button>
+                    {projectError && (
+                      <p role="alert" className="mt-3 text-xs text-red-700">
+                        {projectError}
+                      </p>
+                    )}
+                    <RecentProjects onOpen={openProject} />
+                  </>
+                )}
               </>
             ) : (
               <section className="max-w-[980px]" aria-labelledby="about-title">

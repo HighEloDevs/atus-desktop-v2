@@ -2,7 +2,9 @@
 
 mod project;
 
+use project::commands::*;
 use serde::Serialize;
+use tauri::Manager;
 
 #[repr(C)]
 struct NativeMockAnalysis {
@@ -42,9 +44,28 @@ fn get_mock_analysis() -> MockAnalysis {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_mock_analysis])
-        .run(tauri::generate_context!())
-        .expect("failed to run ATUS Desktop");
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            get_mock_analysis,
+            project_create,
+            project_open,
+            project_save,
+            project_save_as,
+            project_list,
+            project_available
+        ])
+        .build(tauri::generate_context!())
+        .expect("failed to build ATUS Desktop")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                if let Some(window) = app.get_webview_window("main") {
+                    api.prevent_exit();
+                    if let Err(error) = window.close() {
+                        eprintln!("Não foi possível solicitar o fechamento da janela: {error}");
+                    }
+                }
+            }
+        });
 }
 
 #[cfg(test)]
