@@ -1,11 +1,9 @@
 import {
-  bin,
   extent,
   line,
   scaleLinear,
   scaleLog,
   select,
-  thresholdFreedmanDiaconis,
   zoom,
   zoomIdentity,
   type ZoomTransform,
@@ -70,6 +68,9 @@ export function Chart({ points, linePoints = [], label, settings, graphicRef }: 
     setYLabel,
     grid,
     legend,
+    legendOrientation,
+    legendPosition,
+    setLegendPosition,
     xLog,
     yLog,
     xMin,
@@ -82,13 +83,9 @@ export function Chart({ points, linePoints = [], label, settings, graphicRef }: 
     symbol,
     lineStyle,
     lineWidth,
-    mode,
-    column,
-    metric,
-    bins,
-    opacity,
     visible,
   } = settings;
+  const legendDrag = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const [tooltip, setTooltip] = useState<string | null>(null);
   const zoomRef = useRef<ReturnType<typeof zoom<SVGSVGElement, unknown>> | null>(null);
   useEffect(() => {
@@ -113,45 +110,9 @@ export function Chart({ points, linePoints = [], label, settings, graphicRef }: 
     };
   }, [size.width, size.height]);
   const valid = points.filter(finite);
-  const values = valid
-    .map((p) => p[column])
-    .filter((v): v is number => v !== undefined && Number.isFinite(v));
-  const rawBins = values.length
-    ? bin().thresholds(
-        bins > 0
-          ? bins
-          : thresholdFreedmanDiaconis(values, Math.min(...values), Math.max(...values)),
-      )(values)
-    : [];
-  let accumulated = 0;
-  const hist = rawBins.map((b) => {
-    accumulated += b.length;
-    const width = (b.x1 ?? 0) - (b.x0 ?? 0);
-    return {
-      x0: b.x0 ?? 0,
-      x1: b.x1 ?? 0,
-      count: b.length,
-      value:
-        metric === "percent"
-          ? (100 * b.length) / values.length
-          : metric === "density"
-            ? width
-              ? b.length / values.length / width
-              : 0
-            : metric === "cumulative"
-              ? accumulated
-              : b.length,
-    };
-  });
   const all = [...valid, ...linePoints.filter(finite)];
-  const xValues =
-    mode === "points"
-      ? all.flatMap((p) => [p.x, p.x - (p.sx || 0), p.x + (p.sx || 0)])
-      : hist.flatMap((b) => [b.x0, b.x1]);
-  const yValues =
-    mode === "points"
-      ? all.flatMap((p) => [p.y, p.y - (p.sy || 0), p.y + (p.sy || 0)])
-      : [0, ...hist.map((b) => b.value)];
+  const xValues = all.flatMap((p) => [p.x, p.x - (p.sx || 0), p.x + (p.sx || 0)]);
+  const yValues = all.flatMap((p) => [p.y, p.y - (p.sy || 0), p.y + (p.sy || 0)]);
   const limits = (vals: number[], log: boolean, low: string, high: string): [number, number] => {
     const d = domain(vals, log);
     const a = low === "" ? d[0] : Number(low);
@@ -348,7 +309,7 @@ export function Chart({ points, linePoints = [], label, settings, graphicRef }: 
                   ))}
                   <path d={`M0 0V${h}H${w}`} fill="none" stroke="#aebbb0" />
                   <g clipPath={`url(#${clipId})`}>
-                    {visible && mode === "points" && (
+                    {visible && (
                       <>
                         {path && (
                           <path
@@ -409,30 +370,67 @@ export function Chart({ points, linePoints = [], label, settings, graphicRef }: 
                           ))}
                       </>
                     )}
-                    {visible &&
-                      mode === "histogram" &&
-                      hist
-                        .filter((b) => (!xLog || b.x0 > 0) && (!yLog || b.value > 0))
-                        .map((b, i) => (
-                          <rect
-                            key={i}
-                            x={x(b.x0)}
-                            y={y(b.value)}
-                            width={Math.max(0, x(b.x1) - x(b.x0) - 1)}
-                            height={Math.max(0, y(yLog ? baseY.domain()[0] : 0) - y(b.value))}
-                            fill={color}
-                            opacity={opacity}
-                            onMouseEnter={() =>
-                              setTooltip(
-                                `Intervalo: ${fmt(b.x0)}–${fmt(b.x1)} · Valor: ${fmt(b.value)} · Contagem: ${b.count}`,
-                              )
-                            }
-                            onMouseLeave={() => setTooltip(null)}
-                          />
-                        ))}
                   </g>
                 </g>
               </svg>
+            )}
+            {legend && (
+              <div
+                className={`absolute z-[1] flex max-w-full touch-none cursor-grab select-none gap-x-4 gap-y-1 rounded bg-white/90 px-2 py-1 text-[11px] text-[#66716e] active:cursor-grabbing ${legendOrientation === "vertical" ? "flex-col" : "flex-row flex-wrap"}`}
+                style={{
+                  left: `${legendPosition.x * 100}%`,
+                  top: `${legendPosition.y * 100}%`,
+                  transform: `translate(${-legendPosition.x * 100}%, ${-legendPosition.y * 100}%)`,
+                }}
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  event.preventDefault();
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  legendDrag.current = {
+                    pointerId: event.pointerId,
+                    offsetX: event.clientX - rect.left,
+                    offsetY: event.clientY - rect.top,
+                  };
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  event.stopPropagation();
+                }}
+                onPointerMove={(event) => {
+                  const drag = legendDrag.current;
+                  const parent = container.current;
+                  if (!drag || drag.pointerId !== event.pointerId || !parent) return;
+                  const bounds = parent.getBoundingClientRect();
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const availableX = Math.max(0, bounds.width - rect.width);
+                  const availableY = Math.max(0, bounds.height - rect.height);
+                  setLegendPosition({
+                    x: availableX
+                      ? Math.max(
+                          0,
+                          Math.min(1, (event.clientX - bounds.left - drag.offsetX) / availableX),
+                        )
+                      : 0,
+                    y: availableY
+                      ? Math.max(
+                          0,
+                          Math.min(1, (event.clientY - bounds.top - drag.offsetY) / availableY),
+                        )
+                      : 0,
+                  });
+                }}
+                onPointerUp={() => {
+                  legendDrag.current = null;
+                }}
+                onPointerCancel={() => {
+                  legendDrag.current = null;
+                }}
+              >
+                <span className="whitespace-nowrap">
+                  <span style={{ color }}>●</span> Dados de exemplo
+                </span>
+                {linePoints.length > 0 && (
+                  <span className="whitespace-nowrap text-[#364cff]">━ Reta de exemplo</span>
+                )}
+              </div>
             )}
             {tooltip && (
               <div className="pointer-events-none absolute left-2 top-2 rounded border bg-white p-2 text-[11px] shadow">
@@ -451,14 +449,6 @@ export function Chart({ points, linePoints = [], label, settings, graphicRef }: 
             onAlignmentChange={setXAlignment}
           />
         </div>
-        {legend && (
-          <div className="pt-1 text-center text-[11px] text-[#66716e]">
-            <span style={{ color }}>●</span> Dados de exemplo{" "}
-            {mode === "points" && linePoints.length > 0 && (
-              <span className="ml-4 text-[#364cff]">━ Reta de exemplo</span>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

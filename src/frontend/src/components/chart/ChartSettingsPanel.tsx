@@ -2,7 +2,6 @@ import { Circle, Diamond, Square } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { SettingSwitch } from "@/components/ui/setting-switch";
-import { Slider } from "@/components/ui/slider";
 import type { ChartSettings } from "./useChartSettings";
 
 const markerOptions = [
@@ -17,6 +16,8 @@ export function ChartSettingsPanel({ settings }: { settings: ChartSettings }) {
     setGrid,
     legend,
     setLegend,
+    legendOrientation,
+    setLegendOrientation,
     xLog,
     setXLog,
     yLog,
@@ -41,25 +42,14 @@ export function ChartSettingsPanel({ settings }: { settings: ChartSettings }) {
     setLineStyle,
     lineWidth,
     setLineWidth,
-    mode,
-    column,
-    setColumn,
-    metric,
-    setMetric,
-    bins,
-    setBins,
-    opacity,
-    setOpacity,
   } = settings;
   return (
     <div className="space-y-5 text-xs">
       <section className="space-y-3 border-t border-border pt-4">
         <div>
-          <h3 className="font-semibold">{mode === "points" ? "Pontos" : "Histograma"}</h3>
+          <h3 className="font-semibold">Pontos</h3>
           <span className="mt-1 block font-normal leading-relaxed text-muted-foreground">
-            {mode === "points"
-              ? "Aparência dos marcadores no gráfico."
-              : "Aparência das barras e distribuição dos dados."}
+            Aparência dos marcadores no gráfico.
           </span>
         </div>
         <div className="space-y-3">
@@ -77,133 +67,77 @@ export function ChartSettingsPanel({ settings }: { settings: ChartSettings }) {
               </span>
             </span>
           </label>
-          {mode === "points" && (
-            <label className="block">
-              <span className="font-medium">Raio (px)</span>
-              <Input
-                className="mt-1 h-8 w-full text-xs"
-                type="number"
-                min="1"
-                max="10"
-                value={radius}
-                onChange={(e) => setRadius(Math.max(1, Math.min(10, Number(e.target.value))))}
-              />
-            </label>
-          )}
+          <label className="block">
+            <span className="font-medium">Raio (px)</span>
+            <Input
+              className="mt-1 h-8 w-full text-xs"
+              type="number"
+              min="1"
+              max="10"
+              value={radius}
+              onChange={(e) => setRadius(Math.max(1, Math.min(10, Number(e.target.value))))}
+            />
+          </label>
         </div>
-        {mode === "histogram" ? (
-          <div className="space-y-3">
-            <label className="block">
-              <span className="font-medium">Coluna</span>
-              <NativeSelect
-                className="mt-1 h-8 w-full text-xs"
-                value={column}
-                onChange={(e) => setColumn(e.target.value as ChartSettings["column"])}
-              >
-                {["x", "y", "sx", "sy"].map((v) => (
-                  <NativeSelectOption key={v}>{v}</NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </label>
-            <label className="block">
-              <span className="font-medium">Métrica</span>
-              <NativeSelect
-                className="mt-1 h-8 w-full text-xs"
-                value={metric}
-                onChange={(e) => setMetric(e.target.value as ChartSettings["metric"])}
-              >
-                <NativeSelectOption value="count">Contagem</NativeSelectOption>
-                <NativeSelectOption value="percent">Percentual</NativeSelectOption>
-                <NativeSelectOption value="density">Densidade</NativeSelectOption>
-                <NativeSelectOption value="cumulative">Cumulativa</NativeSelectOption>
-              </NativeSelect>
-            </label>
-            <label className="block">
-              <span className="font-medium">Classes (0 = auto)</span>
-              <Input
-                className="mt-1 h-8 w-full text-xs"
-                type="number"
-                min="0"
-                max="100"
-                value={bins}
-                onChange={(e) => setBins(Math.max(0, Math.min(100, Number(e.target.value))))}
-              />
-            </label>
-            <label className="block">
-              <span className="font-medium">Opacidade</span>
-              <Slider
-                className="mt-3"
-                min={0.1}
-                max={1}
-                step={0.1}
-                value={[opacity]}
-                onValueChange={([value]) => setOpacity(value)}
-                aria-label="Opacidade"
-              />
-            </label>
+        <fieldset>
+          <legend className="font-medium">Símbolo</legend>
+          <div className="mt-2 flex gap-2">
+            {markerOptions.map(({ value, label, Icon }) => (
+              <label key={value} title={label} className="cursor-pointer">
+                <input
+                  className="peer sr-only"
+                  type="radio"
+                  name="chart-marker"
+                  value={value}
+                  checked={symbol === value}
+                  onChange={() => setSymbol(value)}
+                  aria-label={label}
+                />
+                <span className="flex size-8 items-center justify-center rounded-md border border-input bg-background peer-checked:border-[#364cff] peer-checked:bg-[#364cff] peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2">
+                  <Icon size={14} fill="currentColor" aria-hidden="true" />
+                </span>
+              </label>
+            ))}
           </div>
-        ) : (
-          <fieldset>
-            <legend className="font-medium">Símbolo</legend>
-            <div className="mt-2 flex gap-2">
-              {markerOptions.map(({ value, label, Icon }) => (
-                <label key={value} title={label} className="cursor-pointer">
-                  <input
-                    className="peer sr-only"
-                    type="radio"
-                    name="chart-marker"
-                    value={value}
-                    checked={symbol === value}
-                    onChange={() => setSymbol(value)}
-                    aria-label={label}
-                  />
-                  <span className="flex size-8 items-center justify-center rounded-md border border-input bg-background peer-checked:border-[#364cff] peer-checked:bg-[#364cff] peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2">
-                    <Icon size={14} fill="currentColor" aria-hidden="true" />
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        )}
+        </fieldset>
       </section>
-      {mode === "points" && (
-        <section className="space-y-3 border-t border-border pt-4">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <h3 className="font-semibold">Linha de ajuste</h3>
-              <span className="mt-1 block font-normal leading-relaxed text-muted-foreground">
-                Aparência da curva exibida sobre os pontos.
-              </span>
-            </div>
+
+      <section className="space-y-3 border-t border-border pt-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h3 className="font-semibold">Linha de ajuste</h3>
+            <span className="mt-1 block font-normal leading-relaxed text-muted-foreground">
+              Aparência da curva exibida sobre os pontos.
+            </span>
           </div>
-          <div className="space-y-3">
-            <label className="block">
-              <span className="font-medium">Estilo</span>
-              <NativeSelect
-                className="mt-1 h-8 w-full text-xs"
-                value={lineStyle}
-                onChange={(e) => setLineStyle(e.target.value as typeof lineStyle)}
-              >
-                <NativeSelectOption value="solid">Contínua</NativeSelectOption>
-                <NativeSelectOption value="dashed">Tracejada</NativeSelectOption>
-                <NativeSelectOption value="dotted">Pontilhada</NativeSelectOption>
-                <NativeSelectOption value="dashdot">Traço-ponto</NativeSelectOption>
-              </NativeSelect>
-            </label>
-            <label className="block">
-              <span className="font-medium">Espessura (px)</span>
-              <Input
-                className="mt-1 h-8 w-full text-xs"
-                type="number"
-                min="1"
-                max="10"
-                value={lineWidth}
-                onChange={(e) => setLineWidth(Math.max(1, Math.min(10, Number(e.target.value))))}
-              />
-            </label>
-          </div>
-        </section>
-      )}
+        </div>
+        <div className="space-y-3">
+          <label className="block">
+            <span className="font-medium">Estilo</span>
+            <NativeSelect
+              className="mt-1 h-8 w-full text-xs"
+              value={lineStyle}
+              onChange={(e) => setLineStyle(e.target.value as typeof lineStyle)}
+            >
+              <NativeSelectOption value="solid">Contínua</NativeSelectOption>
+              <NativeSelectOption value="dashed">Tracejada</NativeSelectOption>
+              <NativeSelectOption value="dotted">Pontilhada</NativeSelectOption>
+              <NativeSelectOption value="dashdot">Traço-ponto</NativeSelectOption>
+            </NativeSelect>
+          </label>
+          <label className="block">
+            <span className="font-medium">Espessura (px)</span>
+            <Input
+              className="mt-1 h-8 w-full text-xs"
+              type="number"
+              min="1"
+              max="10"
+              value={lineWidth}
+              onChange={(e) => setLineWidth(Math.max(1, Math.min(10, Number(e.target.value))))}
+            />
+          </label>
+        </div>
+      </section>
       <section className="space-y-3 border-t border-border pt-4">
         <div>
           <h3 className="font-semibold">Eixos</h3>
@@ -271,18 +205,45 @@ export function ChartSettingsPanel({ settings }: { settings: ChartSettings }) {
       </section>
       <section className="space-y-3 border-t border-border pt-4">
         <div>
+          <h3 className="font-semibold">Legenda</h3>
+          <span className="mt-1 block leading-relaxed text-muted-foreground">
+            Arraste a legenda para movê-la no gráfico.
+          </span>
+        </div>
+        <SettingSwitch label="Mostrar legenda" value={legend} onChange={setLegend} />
+        {legend && (
+          <>
+            <fieldset>
+              <legend className="font-medium">Orientação</legend>
+              <div className="mt-2 flex gap-2">
+                {(["horizontal", "vertical"] as const).map((orientation) => (
+                  <label key={orientation} className="flex-1 cursor-pointer">
+                    <input
+                      className="peer sr-only"
+                      type="radio"
+                      name="legend-orientation"
+                      checked={legendOrientation === orientation}
+                      onChange={() => setLegendOrientation(orientation)}
+                    />
+                    <span className="flex h-8 items-center justify-center rounded-md border border-input bg-background peer-checked:border-[#364cff] peer-checked:bg-[#364cff] peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-ring">
+                      {orientation === "horizontal" ? "Horizontal" : "Vertical"}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          </>
+        )}
+      </section>
+      <section className="space-y-3 border-t border-border pt-4">
+        <div>
           <h3 className="font-semibold">Exibição</h3>
           <span className="mt-1 block font-normal leading-relaxed text-muted-foreground">
             Escolha os elementos visíveis no gráfico.
           </span>
         </div>
         <div className="space-y-2">
-          {(
-            [
-              ["Linhas de grade", grid, setGrid],
-              ["Mostrar legenda", legend, setLegend],
-            ] as const
-          ).map(([name, value, setter]) => (
+          {([["Linhas de grade", grid, setGrid]] as const).map(([name, value, setter]) => (
             <SettingSwitch key={name} label={name} value={value} onChange={setter} />
           ))}
         </div>

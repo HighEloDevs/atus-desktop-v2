@@ -18,4 +18,4 @@ A aplicação ganha uma porta de entrada reutilizável e domínios calculados a 
 
 ## Evolução
 
-O componente também oferece histograma, barras de incerteza quando fornecidas, escalas configuráveis, zoom, personalização e exportação de imagem. A tela continua alimentada apenas pelo exemplo fixo; múltiplos conjuntos e resultados científicos dependem de contratos ainda não implementados.
+O componente também oferece barras de incerteza quando fornecidas, escalas configuráveis, zoom, personalização e exportação de imagem. A tela continua alimentada apenas pelo exemplo fixo; múltiplos conjuntos e resultados científicos dependem de contratos ainda não implementados.

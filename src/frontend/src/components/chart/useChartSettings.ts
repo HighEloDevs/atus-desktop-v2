@@ -8,9 +8,6 @@ export const chartLinePatterns = {
   dashdot: "8 4 2 4",
 };
 
-type Metric = "count" | "percent" | "density" | "cumulative";
-type Column = "x" | "y" | "sx" | "sy";
-
 export function useChartSettings() {
   const [title, setTitle] = useState("Gráfico de exemplo");
   const [titleAlignment, setTitleAlignment] = useState<LabelAlignment>("center");
@@ -22,6 +19,8 @@ export function useChartSettings() {
   const [yLabel, setYLabel] = useState("y");
   const [grid, setGrid] = useState(true);
   const [legend, setLegend] = useState(true);
+  const [legendOrientation, setLegendOrientation] = useState<"horizontal" | "vertical">("vertical");
+  const [legendPosition, setLegendPosition] = useState({ x: 1, y: 0.5 });
   const [xLog, setXLog] = useState(false);
   const [yLog, setYLog] = useState(false);
   const [xMin, setXMin] = useState("");
@@ -34,11 +33,6 @@ export function useChartSettings() {
   const [symbol, setSymbol] = useState("circle");
   const [lineStyle, setLineStyle] = useState<keyof typeof chartLinePatterns>("solid");
   const [lineWidth, setLineWidth] = useState(2);
-  const [mode, setMode] = useState<"points" | "histogram">("points");
-  const [column, setColumn] = useState<Column>("x");
-  const [metric, setMetric] = useState<Metric>("count");
-  const [bins, setBins] = useState(0);
-  const [opacity, setOpacity] = useState(0.8);
   const [visible, setVisible] = useState(true);
   return {
     title,
@@ -61,6 +55,10 @@ export function useChartSettings() {
     setGrid,
     legend,
     setLegend,
+    legendOrientation,
+    setLegendOrientation,
+    legendPosition,
+    setLegendPosition,
     xLog,
     setXLog,
     yLog,
@@ -85,16 +83,6 @@ export function useChartSettings() {
     setLineStyle,
     lineWidth,
     setLineWidth,
-    mode,
-    setMode,
-    column,
-    setColumn,
-    metric,
-    setMetric,
-    bins,
-    setBins,
-    opacity,
-    setOpacity,
     visible,
     setVisible,
   };
