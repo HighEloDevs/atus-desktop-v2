@@ -746,13 +746,6 @@ export function AnalysisPage({
                   ) : null}
                   {saving.project ? saving.status : "Não salvo"}
                 </p>
-                {saving.project && saving.usesNativeMenu && (
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    Salvar <kbd className="font-sans">⌘S</kbd>
-                    <span aria-hidden="true"> · </span>
-                    Salvar como <kbd className="font-sans">⇧⌘S</kbd>
-                  </p>
-                )}
               </div>
               {saving.project && !saving.usesNativeMenu && (
                 <DropdownMenu>
