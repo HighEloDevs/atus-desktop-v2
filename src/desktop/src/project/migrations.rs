@@ -2,6 +2,16 @@ use super::store::{ProjectError, APPLICATION_ID, SCHEMA_VERSION};
 use rusqlite::{Connection, OpenFlags, TransactionBehavior};
 use std::path::Path;
 
+pub(super) const INITIAL_SCHEMA: &str = include_str!("../../migrations/0001_initial.sql");
+const VERSION_2: &str = include_str!("../../migrations/0002_index_analysis_kind.sql");
+
+pub(super) fn initialize(connection: &Connection) -> Result<(), ProjectError> {
+    connection.pragma_update(None, "foreign_keys", true)?;
+    connection.execute_batch(INITIAL_SCHEMA)?;
+    connection.execute_batch(VERSION_2)?;
+    Ok(())
+}
+
 pub fn migrate(path: &Path) -> Result<(), ProjectError> {
     let probe = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     let id: i32 = probe.pragma_query_value(None, "application_id", |row| row.get(0))?;
@@ -41,7 +51,7 @@ pub fn migrate(path: &Path) -> Result<(), ProjectError> {
     drop(destination);
     backup.as_file().sync_all()?;
     backup.keep()?;
-    tx.execute_batch("CREATE INDEX analyses_by_kind ON analyses(kind); PRAGMA user_version=2;")?;
+    tx.execute_batch(VERSION_2)?;
     let integrity: String = tx.query_row("PRAGMA quick_check", [], |row| row.get(0))?;
     if integrity != "ok" {
         return Err("Falha ao validar a migração do projeto".into());

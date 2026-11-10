@@ -152,14 +152,40 @@ mod tests {
     }
 
     #[test]
+    fn new_projects_apply_all_sql_migrations_without_creating_a_backup() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("project.atus");
+        create_project(&path, &empty_project()).unwrap();
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        let index_exists: bool = connection.query_row(
+            "SELECT EXISTS (SELECT 1 FROM sqlite_schema WHERE type = 'index' AND name = 'analyses_by_kind')",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(index_exists);
+        assert!(read_project(&path).is_ok());
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
+
+    #[test]
     fn migration_backs_up_v1_and_preserves_snapshot() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("project.atus");
         let snapshot = empty_project();
-        create_project(&path, &snapshot).unwrap();
         let connection = rusqlite::Connection::open(&path).unwrap();
         connection
-            .execute_batch("DROP INDEX analyses_by_kind; PRAGMA user_version=1;")
+            .execute_batch(super::migrations::INITIAL_SCHEMA)
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO project VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![
+                    snapshot.id,
+                    snapshot.name,
+                    snapshot.created_at,
+                    snapshot.updated_at
+                ],
+            )
             .unwrap();
         drop(connection);
         super::migrations::migrate(&path).unwrap();
