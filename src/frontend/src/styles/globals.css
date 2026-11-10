@@ -11,6 +11,13 @@
   --color-secondary: #e9ece7;
   --color-secondary-foreground: #20272c;
   --color-border: #d8ded7;
+  --color-input: #cbd4ca;
+  --color-muted: #e9ece7;
+  --color-muted-foreground: #66716e;
+  --color-accent: #e9ece7;
+  --color-accent-foreground: #20272c;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #20272c;
   --color-ring: #364cff;
   --radius-md: 6px;
 }
@@ -96,5 +103,12 @@ a:focus-visible {
   }
   .analysis-workspace main {
     min-height: 480px;
+  }
+}
+
+@media (hover: none) {
+  .chart-navigation {
+    pointer-events: auto;
+    opacity: 1;
   }
 }

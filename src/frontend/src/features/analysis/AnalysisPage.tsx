@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { Chart } from "@/components/chart/Chart";
+import { ChartExportMenu } from "@/components/chart/ChartExportMenu";
+import { ChartSettingsPanel } from "@/components/chart/ChartSettingsPanel";
+import { useChartSettings } from "@/components/chart/useChartSettings";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   Activity,
   ArrowLeft,
-  ChartNoAxesCombined,
   Database,
   FileInput,
   FlaskConical,
@@ -24,6 +27,8 @@ const format = (value: number) =>
   new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(value);
 
 export function AnalysisPage({ onBack }: { onBack: () => void }) {
+  const chartSettings = useChartSettings();
+  const graphicRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<MockAnalysis | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [panelOpen, setPanelOpen] = useState(true);
@@ -161,9 +166,9 @@ export function AnalysisPage({ onBack }: { onBack: () => void }) {
                           <label className="mt-3 block text-[11px] font-medium text-[#66716e]">
                             Modo
                           </label>
-                          <div className="mt-1.5 rounded border border-[#d8ded7] bg-white px-3 py-2 text-[12px] text-[#66716e]">
-                            Pontos
-                          </div>
+                          <p className="mt-1.5 text-[11px] text-[#66716e]">
+                            Escolha pontos ou histograma na aba Personalização.
+                          </p>
                         </div>
                         <div className="border-t border-[#e0e5df] pt-4">
                           <p className="text-[12px] font-semibold">Modelo</p>
@@ -215,9 +220,9 @@ export function AnalysisPage({ onBack }: { onBack: () => void }) {
                 <h2 className="flex items-center gap-2 text-[13px] font-semibold">
                   <Palette size={16} /> Personalização
                 </h2>
-                <p className="mt-3 text-[12px] leading-5 text-[#87938a]">
-                  A personalização do gráfico estará disponível em uma próxima etapa.
-                </p>
+                <div className="mt-4">
+                  <ChartSettingsPanel settings={chartSettings} />
+                </div>
               </div>
             )}
           </div>
@@ -247,9 +252,7 @@ export function AnalysisPage({ onBack }: { onBack: () => void }) {
             <PanelLeft size={17} />
           </button>
           <span className="text-[12px] font-semibold">Gráfico</span>
-          <span className="ml-auto rounded border border-[#e8d6b2] bg-[#fff8ea] px-2 py-1 text-[10px] font-semibold text-[#896022]">
-            DEMONSTRAÇÃO
-          </span>
+          <ChartExportMenu graphic={graphicRef} disabled={!data} />
         </div>
         <div
           className={`analysis-canvas relative flex min-h-0 flex-1 ${data ? "overflow-hidden p-0" : "items-center justify-center overflow-auto px-6 py-8"}`}
@@ -318,99 +321,24 @@ export function AnalysisPage({ onBack }: { onBack: () => void }) {
             </div>
           ) : (
             <div className="relative flex h-full min-h-0 w-full flex-col bg-white p-5">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <h2 className="flex items-center gap-2 text-[13px] font-semibold">
-                    <ChartNoAxesCombined size={16} /> Gráfico de exemplo
-                  </h2>
-                  <p className="mt-1 text-[11px] text-[#849087]">
-                    Pontos e reta retornados como dados fixos.
-                  </p>
-                </div>
-                <span className="text-[10px] font-medium text-[#8b682f]">
-                  SEM CÁLCULO CIENTÍFICO
-                </span>
-              </div>
-              <svg
-                viewBox="0 0 520 260"
-                preserveAspectRatio="none"
-                className="mt-4 min-h-0 w-full flex-1"
-                role="img"
-                aria-label="Gráfico ilustrativo com cinco pontos e uma reta de exemplo"
-              >
-                <g stroke="#e8ece7" strokeWidth="1">
-                  {[35, 85, 135, 185, 235].map((y) => (
-                    <line key={y} x1="45" y1={y} x2="495" y2={y} />
-                  ))}
-                  {[45, 145, 245, 345, 445].map((x) => (
-                    <line key={x} x1={x} y1="35" x2={x} y2="235" />
-                  ))}
-                </g>
-                <path d="M45 35V235H495" fill="none" stroke="#aebbb0" />
-                <line
-                  x1="45"
-                  y1={235 - data.intercept * (200 / 6)}
-                  x2="445"
-                  y2={235 - (4 * data.slope + data.intercept) * (200 / 6)}
-                  stroke="#364cff"
-                  strokeWidth="2"
-                />
-                {data.x.map((x, i) => (
-                  <circle
-                    key={i}
-                    cx={45 + x * 100}
-                    cy={235 - data.y[i] * 33.333}
-                    r="4.5"
-                    fill="#f25a3c"
-                    stroke="white"
-                    strokeWidth="2"
-                  />
-                ))}
-                <text x="490" y="254" fontSize="11" fill="#78857d">
-                  x
-                </text>
-                <text x="26" y="35" fontSize="11" fill="#78857d">
-                  y
-                </text>
-                {[0, 1, 2, 3, 4].map((n) => (
-                  <text
-                    key={n}
-                    x={45 + n * 100}
-                    y="252"
-                    textAnchor="middle"
-                    fontSize="10"
-                    fill="#78857d"
-                  >
-                    {n}
-                  </text>
-                ))}
-                {[0, 1.5, 3, 4.5, 6].map((n, i) => (
-                  <text
-                    key={n}
-                    x="36"
-                    y={239 - i * 50}
-                    textAnchor="end"
-                    fontSize="10"
-                    fill="#78857d"
-                  >
-                    {format(n)}
-                  </text>
-                ))}
-              </svg>
-              <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[#edf0ec] pt-4 text-[11px] text-[#66716e]">
-                <span>
-                  <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-[#f25a3c]" /> Dados
-                  de exemplo
-                </span>
-                <span>
-                  <span className="mr-1.5 inline-block h-0.5 w-4 bg-[#364cff] align-middle" /> Reta
-                  de exemplo
-                </span>
-                <span className="ml-auto font-mono">
-                  a = {format(data.slope)} · b = {format(data.intercept)} · R² ={" "}
-                  {format(data.r_squared)}
-                </span>
-              </div>
+              <Chart
+                graphicRef={graphicRef}
+                settings={chartSettings}
+                label="Gráfico ilustrativo com pontos e uma reta de exemplo"
+                points={data.x.map((x, index) => ({ x, y: data.y[index] }))}
+                linePoints={
+                  data.x.length > 0
+                    ? [Math.min(...data.x), Math.max(...data.x)].map((x) => ({
+                        x,
+                        y: data.slope * x + data.intercept,
+                      }))
+                    : []
+                }
+              />
+              <p className="mt-2 border-t border-[#edf0ec] pt-3 text-[11px] font-mono text-[#66716e]">
+                a = {format(data.slope)} · b = {format(data.intercept)} · R² ={" "}
+                {format(data.r_squared)}
+              </p>
               <p className="mt-3 text-[11px] text-[#8a6a38]">
                 Valores demonstrativos fixos: nenhum ajuste foi executado.
               </p>

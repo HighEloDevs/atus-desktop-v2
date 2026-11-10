@@ -13,7 +13,7 @@ Construir o ATUS Desktop v2, software científico gratuito e open source para es
 - `docs/references/atus-desktop-v2-especificacoes-0.1.pdf`: plano inicial de 08/11/2026, com catálogo AT-01 a AT-22, critérios de aceite propostos, dependências e referências do legado. É um documento de trabalho, não uma lista de funcionalidades concluídas ou decisões aprovadas.
 - `docs/references/atus-recorte-brandbook-1.0.html`: proposta de identidade ATUS / Recorte, com princípios visuais, componentes e assets. O mockup é demonstrativo e não é a aplicação implementada.
 - Legado: `HighEloDevs/Analysis-Tool-for-Undergrad-Students`, snapshot de referência `ab7673488849838a8a317279f8b4f1e611148734`. O inventário ainda precisa de validação funcional.
-- Fundação inicial com Tauri 2, Rust e frontend React/TypeScript com Vite, Tailwind CSS 4 e shadcn/ui. A homepage e a sidebar são iniciais; a seção Sobre resume a história e equipe da página atusweb.com.br/about, com funcionalidades futuras sinalizadas; priorize uma interface compacta de aplicativo desktop em vez de uma página editorial; a tela de análise usa uma área de trabalho com painel de configuração e canvas, baseada no módulo regression de `atus-ui-rrouter`, e pode carregar dados fixos do protótipo C++ e há um teste da ponte; o motor científico real ainda não foi implementado. O empacotamento para macOS e Windows está configurado; os artefatos são de teste e não assinados.
+- Fundação inicial com Tauri 2, Rust e frontend React/TypeScript com Vite, Tailwind CSS 4 e shadcn/ui. A homepage e a sidebar são iniciais; a seção Sobre resume a história e equipe da página atusweb.com.br/about, com funcionalidades futuras sinalizadas; priorize uma interface compacta de aplicativo desktop em vez de uma página editorial; a tela de análise usa uma área de trabalho com painel de configuração e um componente de gráfico D3 com pontos, histograma e controles de visualização, pode carregar dados fixos do protótipo C++ e há um teste da ponte; o motor científico real ainda não foi implementado. O empacotamento para macOS e Windows está configurado; os artefatos são de teste e não assinados.
 
 ## Convenções de linguagem
 
@@ -55,9 +55,9 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 - `AGENTS.md`: contexto e instruções vivas do repositório.
 - `README.md`: apresentação e estado inicial para pessoas colaboradoras.
 - `.github/workflows/`: build de verificação e empacotamento Tauri em macOS e Windows; os artefatos são de teste, não releases assinadas.
-- `src/frontend/`: aplicação React; `components.json` configura shadcn/ui, `src/App.tsx` contém a homepage inicial e `src/styles/globals.css` os tokens e estilos globais; `src/components/ui/` para componentes de interface, `features/` para funcionalidades, `hooks/`, `lib/` e `styles/` para recursos compartilhados, `public/` para assets estáticos e `tests/unit/` e `tests/integration/` para testes.
+- `src/frontend/`: aplicação React; `components.json` configura shadcn/ui, `src/App.tsx` contém a homepage inicial e `src/styles/globals.css` os tokens e estilos globais; `src/components/ui/` para componentes shadcn de interface, `src/components/chart/` para o gráfico e sua personalização compartilhada com a sidebar, `features/` para funcionalidades, `hooks/`, `lib/` e `styles/` para recursos compartilhados, `public/` para assets estáticos e `tests/unit/` e `tests/integration/` para testes.
 - `src/desktop/`: núcleo desktop em Rust, com `src/`, ponte C++ em `build.rs` e teste da fronteira nativa em `src/main.rs`.
 - `src/scientific-engine/`: motor científico C++, com interfaces públicas em `include/`, implementação em `src/` e testes unitários e de integração em `tests/`.
-- `docs/decisions/`: futuras decisões arquiteturais.
+- `docs/decisions/`: decisões arquiteturais, incluindo o componente de gráficos com D3.
 - `docs/references/`: documentos originais de especificação e identidade.
 - `LICENSE`: licença do repositório; preserve seu conteúdo.
