@@ -13,7 +13,7 @@ Construir o ATUS Desktop v2, software científico gratuito e open source para es
 - `docs/references/atus-desktop-v2-especificacoes-0.1.pdf`: plano inicial de 08/11/2026, com catálogo AT-01 a AT-22, critérios de aceite propostos, dependências e referências do legado. É um documento de trabalho, não uma lista de funcionalidades concluídas ou decisões aprovadas.
 - `docs/references/atus-recorte-brandbook-1.0.html`: proposta de identidade ATUS / Recorte, com princípios visuais, componentes e assets. O mockup é demonstrativo e não é a aplicação implementada.
 - Legado: `HighEloDevs/Analysis-Tool-for-Undergrad-Students`, snapshot de referência `ab7673488849838a8a317279f8b4f1e611148734`. O inventário ainda precisa de validação funcional.
-- A estrutura inicial contém apenas diretórios com `.gitkeep`: ainda não há código da aplicação, dependências, comandos de build, testes implementados ou workflows configurados. Atualize esta seção quando existirem.
+- Fundação inicial com Tauri 2, Rust e frontend React/TypeScript com Vite. Tailwind e shadcn ainda não foram configurados; não há motor científico, testes ou workflows implementados. O empacotamento para macOS e Windows está configurado; os artefatos são de teste e não assinados.
 
 ## Convenções de linguagem
 
@@ -40,11 +40,18 @@ A sequência proposta é fundação (AT-01, AT-19, AT-20), primeiro fluxo (AT-02
 
 Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A base é grafite `#20272C` sobre papel `#F7F7F3`, com coral `#F25A3C` para foco e atenção e cobalto `#364CFF` para análise, seleção e séries. Preserve proporções da marca e confira o contraste real: branco sobre coral não é adequado para texto pequeno. Inter Display, Inter e fonte monoespaçada são as referências tipográficas. Use linguagem clara, objetiva e acessível em português na interface.
 
+## Desenvolvimento
+
+- Pré-requisitos: Node.js, npm, Rust/Cargo e dependências de sistema do Tauri. No macOS, as Command Line Tools são suficientes para desktop.
+- Em `src/frontend/`, execute `npm ci`, `npm run build`, `npm run tauri -- dev` e `npm run tauri -- build` (build de distribuição na plataforma atual). O Tauri usa a configuração em `src/desktop/`; o servidor Vite usa a porta 1420.
+- O Vite usa `--configLoader runner`: o carregador padrão ficou bloqueado neste ambiente com Node 26.
+- `org.atus.desktop` é identificador provisório; confirme antes de distribuir. A integração entre Rust e C++ ainda não foi implementada.
+
 ## Estrutura atual
 
 - `AGENTS.md`: contexto e instruções vivas do repositório.
 - `README.md`: apresentação e estado inicial para pessoas colaboradoras.
-- `.github/workflows/`: futuros workflows de automação.
+- `.github/workflows/`: build de verificação e empacotamento Tauri em macOS e Windows; os artefatos são de teste, não releases assinadas.
 - `src/frontend/`: aplicação React; `src/components/ui/` para componentes de interface, `features/` para funcionalidades, `hooks/`, `lib/` e `styles/` para recursos compartilhados, `public/` para assets estáticos e `tests/unit/` e `tests/integration/` para testes.
 - `src/desktop/`: núcleo desktop em Rust, com `src/` e diretórios de testes unitários e de integração em `tests/`.
 - `src/scientific-engine/`: motor científico C++, com interfaces públicas em `include/`, implementação em `src/` e testes unitários e de integração em `tests/`.
