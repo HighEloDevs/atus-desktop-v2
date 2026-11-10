@@ -1,3 +1,4 @@
+import { ProjectFilePath } from "./ProjectFilePath";
 import {
   ArrowUpRight,
   FileChartColumn,
@@ -125,11 +126,12 @@ export function RecentProjects({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{fileName(path)}</span>
-                  <span className="mt-0.5 block truncate text-xs text-muted-foreground" dir="auto">
-                    {available
-                      ? path.replace(/[\\/][^\\/]+$/, "")
-                      : "Arquivo indisponível · Localizar"}
-                  </span>
+                  <ProjectFilePath path={path} />
+                  {!available && (
+                    <span className="mt-0.5 block text-xs text-[#8d432a]">
+                      Arquivo indisponível · Localizar
+                    </span>
+                  )}
                 </span>
                 {available && (
                   <ArrowUpRight

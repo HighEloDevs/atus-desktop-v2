@@ -50,9 +50,10 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 
 - Pré-requisitos: Node.js, npm, Rust/Cargo e dependências de sistema do Tauri. No macOS, as Command Line Tools são suficientes para desktop.
 - Em `src/frontend/`, execute `npm ci`, `npm run build`, `npm run tauri -- dev` e `npm run tauri -- build` (build de distribuição na plataforma atual). O Tauri usa a configuração em `src/desktop/`; o servidor Vite usa a porta 1420.
+- Em `src/frontend/`, execute `npm test` para verificar a renderização dos componentes de projetos.
 - Em `src/frontend/`, use `npm run lint` / `npm run lint:fix` e `npm run format:check` / `npm run format`. ESLint verifica TypeScript e regras de React; Prettier formata os arquivos do frontend. O CI executa as verificações sem modificá-los.
 - Links dos perfis na página Sobre abrem no navegador padrão pelo plugin Tauri Opener; os endereços permitidos ficam em `src/desktop/capabilities/default.json`.
-- O atalho de nova análise é `Cmd+Option+N` no macOS e `Ctrl+Alt+N` nos demais sistemas. No desktop, o atalho e o acesso rápido criam um projeto em Documentos/ATUS/projects e abrem a análise demonstrativa.
+- O atalho de nova análise é `Cmd+Option+N` no macOS e `Ctrl+Alt+N` nos demais sistemas. No desktop, o atalho e o cartão **Nova análise** em **Acesso rápido** criam um projeto em Documentos/ATUS/projects. O cartão **Abrir projeto** abre o seletor nativo, e os recentes exibem o caminho completo do arquivo.
 - No macOS, o pacote .app usa `src/desktop/Info.plist` para declarar a associação .atus e o ícone exibido no Finder. O aplicativo solicita confirmação antes de trocar uma análise aberta.
 - No macOS, **Arquivo** traz **Salvar projeto** (Cmd+S) e **Salvar como** (Cmd+Shift+S). Nas demais plataformas os comandos ficam no cabeçalho do projeto.
 - O Vite usa `--configLoader runner`: o carregador padrão ficou bloqueado neste ambiente com Node 26.

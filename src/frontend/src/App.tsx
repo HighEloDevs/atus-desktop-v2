@@ -1,5 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Button } from "@/components/ui/button";
+import { ProjectQuickActions } from "@/features/projects/ProjectQuickActions";
 import { RecentProjects } from "@/features/projects/RecentProjects";
 import {
   chooseProject,
@@ -12,15 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { AnalysisPage } from "@/features/analysis/AnalysisPage";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import {
-  ChevronRight,
-  CircleHelp,
-  FileClock,
-  FilePlus2,
-  FolderOpen,
-  House,
-  Info,
-} from "lucide-react";
+import { ChevronRight, CircleHelp, FileClock, House, Info } from "lucide-react";
 
 type Page = "home" | "about" | "analysis";
 
@@ -124,7 +116,6 @@ function App() {
   const [page, setPage] = useState<Page>("home");
   const [profileError, setProfileError] = useState(false);
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
-  const shortcut = isMac ? "⌘ ⌥ N" : "Ctrl + Alt + N";
 
   const [project, setProject] = useState<OpenProject | null>(null);
   const [projectError, setProjectError] = useState("");
@@ -252,48 +243,25 @@ function App() {
           <div className="mx-auto max-w-[1120px] p-6 sm:p-8">
             {page === "home" ? (
               <>
-                <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-b border-border pb-5">
-                  <div>
-                    <h1 className="text-[28px] leading-tight font-semibold tracking-[-.045em]">
-                      Projetos
-                    </h1>
-                    <p className="mt-1.5 text-sm text-muted-foreground">
-                      Crie uma análise ou retome seu trabalho.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {isTauri() && (
-                      <Button
-                        variant="outline"
-                        className="bg-white"
-                        onClick={() =>
+                <div className="border-b border-border pb-5">
+                  <h1 className="text-[28px] leading-tight font-semibold tracking-[-.045em]">
+                    Projetos
+                  </h1>
+                </div>
+                <ProjectQuickActions
+                  isMac={isMac}
+                  onCreate={createProject}
+                  onOpen={
+                    isTauri()
+                      ? () => {
                           void runProjectAction(async () => {
                             const path = await chooseProject();
                             return path ? projectClient.open(path) : null;
-                          })
+                          });
                         }
-                      >
-                        <FolderOpen aria-hidden="true" />
-                        Abrir projeto
-                      </Button>
-                    )}
-                    <Button
-                      onClick={createProject}
-                      aria-keyshortcuts={isMac ? "Meta+Alt+N" : "Control+Alt+N"}
-                      title={`Nova análise (${shortcut})`}
-                      className="bg-ring text-white hover:bg-[#263cdb]"
-                    >
-                      <FilePlus2 aria-hidden="true" />
-                      Nova análise
-                      <kbd
-                        aria-hidden="true"
-                        className="rounded border border-white/40 px-1.5 py-0.5 font-sans text-[11px] leading-none"
-                      >
-                        {shortcut}
-                      </kbd>
-                    </Button>
-                  </div>
-                </div>
+                      : undefined
+                  }
+                />
                 {projectError && (
                   <p
                     role="alert"

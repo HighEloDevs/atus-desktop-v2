@@ -1,3 +1,4 @@
+import { ProjectFilePath } from "@/features/projects/ProjectFilePath";
 import { Button } from "@/components/ui/button";
 import { useProjectSave } from "@/features/projects/useProjectSave";
 import { fileName, type OpenProject } from "@/features/projects/project-client";
@@ -605,6 +606,7 @@ export function AnalysisPage({
               <p className="text-sm" role="status">
                 Abrir {fileName(finderPath)} no lugar do projeto atual?
               </p>
+              <ProjectFilePath path={finderPath} />
               <div className="mt-3 flex justify-end gap-2">
                 <Button size="sm" variant="ghost" onClick={onCancelFinderProject}>
                   Cancelar

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --configLoader runner --host 127.0.0.1 --port 1420 --strictPort",
+    "test": "node --test tests/integration",
     "build": "tsc -b && vite build --configLoader runner",
     "tauri": "cd ../desktop && tauri",
     "lint": "eslint . --max-warnings 0",
