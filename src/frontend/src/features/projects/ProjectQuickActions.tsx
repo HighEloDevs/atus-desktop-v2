@@ -41,27 +41,23 @@ export function ProjectQuickActions({ isMac, onCreate, onOpen }: ProjectQuickAct
             type="button"
             onClick={onClick}
             aria-keyshortcuts={keyShortcuts}
-            className="flex h-full min-w-0 items-start gap-3 rounded-md border border-border bg-white p-4 text-left hover:border-ring hover:bg-[#f1f3ff]"
+            className="flex h-full min-w-0 items-center gap-3 rounded-md border border-border bg-white p-4 text-left hover:border-ring hover:bg-[#f1f3ff]"
           >
             <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[#eef0ff] text-ring">
               <Icon aria-hidden="true" size={18} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                <span className="text-sm font-semibold">{title}</span>
-                {shortcut && (
-                  <kbd
-                    aria-hidden="true"
-                    className="rounded border border-border bg-background px-1.5 py-0.5 font-sans text-[11px] text-muted-foreground"
-                  >
-                    {shortcut}
-                  </kbd>
-                )}
-              </span>
-              <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
-                {description}
-              </span>
+              <span className="block text-sm font-semibold">{title}</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
             </span>
+            {shortcut && (
+              <kbd
+                aria-hidden="true"
+                className="shrink-0 whitespace-nowrap rounded border border-border bg-background px-1.5 py-0.5 font-sans text-[11px] text-muted-foreground"
+              >
+                {shortcut}
+              </kbd>
+            )}
           </button>
         ))}
       </div>
