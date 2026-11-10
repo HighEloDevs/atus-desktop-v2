@@ -13,7 +13,7 @@ Construir o ATUS Desktop v2, software científico gratuito e open source para es
 - `docs/references/atus-desktop-v2-especificacoes-0.1.pdf`: plano inicial de 08/11/2026, com catálogo AT-01 a AT-22, critérios de aceite propostos, dependências e referências do legado. É um documento de trabalho, não uma lista de funcionalidades concluídas ou decisões aprovadas.
 - `docs/references/atus-recorte-brandbook-1.0.html`: proposta de identidade ATUS / Recorte, com princípios visuais, componentes e assets. O mockup é demonstrativo e não é a aplicação implementada.
 - Legado: `HighEloDevs/Analysis-Tool-for-Undergrad-Students`, snapshot de referência `ab7673488849838a8a317279f8b4f1e611148734`. O inventário ainda precisa de validação funcional.
-- Fundação inicial com Tauri 2, Rust e frontend React/TypeScript com Vite, Tailwind CSS 4 e shadcn/ui. A homepage e a sidebar são iniciais; a seção Sobre resume a história e equipe da página atusweb.com.br/about, com funcionalidades futuras sinalizadas; priorize uma interface compacta de aplicativo desktop em vez de uma página editorial; não há motor científico, testes ou workflows implementados. O empacotamento para macOS e Windows está configurado; os artefatos são de teste e não assinados.
+- Fundação inicial com Tauri 2, Rust e frontend React/TypeScript com Vite, Tailwind CSS 4 e shadcn/ui. A homepage e a sidebar são iniciais; a seção Sobre resume a história e equipe da página atusweb.com.br/about, com funcionalidades futuras sinalizadas; priorize uma interface compacta de aplicativo desktop em vez de uma página editorial; a tela de análise usa uma área de trabalho com painel de configuração e canvas, baseada no módulo regression de `atus-ui-rrouter`, e pode carregar dados fixos do protótipo C++ e há um teste da ponte; o motor científico real ainda não foi implementado. O empacotamento para macOS e Windows está configurado; os artefatos são de teste e não assinados.
 
 ## Convenções de linguagem
 
@@ -30,7 +30,7 @@ Construir o ATUS Desktop v2, software científico gratuito e open source para es
 
 ## Arquitetura e prioridades
 
-A stack escolhida para o projeto é React, Tailwind CSS e shadcn no frontend; Tauri e Rust no núcleo desktop; e C++ no motor científico. A especificação original apresentava alternativas em avaliação; esta escolha atualiza aquela proposta. Os detalhes de integração entre Rust e C++, o contrato e as bibliotecas científicas permanecem em aberto e devem ser documentados com evidências e justificativas antes de sua adoção.
+A stack escolhida para o projeto é React, Tailwind CSS e shadcn no frontend; Tauri e Rust no núcleo desktop; e C++ no motor científico. A especificação original apresentava alternativas em avaliação; esta escolha atualiza aquela proposta. A ponte C ABI atual é apenas um protótipo de dados fixos; o contrato científico e as bibliotecas permanecem em aberto. Consulte `docs/decisions/0001-mock-cpp-bridge.md`.
 
 Registre decisões arquiteturais relevantes em `docs/decisions/`, com contexto, alternativas, critérios, experimento quando aplicável, decisão e consequências.
 
@@ -44,10 +44,11 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 
 - Pré-requisitos: Node.js, npm, Rust/Cargo e dependências de sistema do Tauri. No macOS, as Command Line Tools são suficientes para desktop.
 - Em `src/frontend/`, execute `npm ci`, `npm run build`, `npm run tauri -- dev` e `npm run tauri -- build` (build de distribuição na plataforma atual). O Tauri usa a configuração em `src/desktop/`; o servidor Vite usa a porta 1420.
+- Em `src/frontend/`, use `npm run lint` / `npm run lint:fix` e `npm run format:check` / `npm run format`. ESLint verifica TypeScript e regras de React; Prettier formata os arquivos do frontend. O CI executa as verificações sem modificá-los.
 - Links dos perfis na página Sobre abrem no navegador padrão pelo plugin Tauri Opener; os endereços permitidos ficam em `src/desktop/capabilities/default.json`.
-- O atalho de nova análise é `Cmd+Option+N` no macOS e `Ctrl+Alt+N` nos demais sistemas. Por enquanto, o atalho e o acesso rápido informam que a criação de análises está em desenvolvimento; conecte ambos à mesma ação quando ela existir.
+- O atalho de nova análise é `Cmd+Option+N` no macOS e `Ctrl+Alt+N` nos demais sistemas. O atalho e o acesso rápido abrem a tela de análise demonstrativa.
 - O Vite usa `--configLoader runner`: o carregador padrão ficou bloqueado neste ambiente com Node 26.
-- `org.atus.desktop` é identificador provisório; confirme antes de distribuir. A integração entre Rust e C++ ainda não foi implementada.
+- `org.atus.desktop` é identificador provisório; confirme antes de distribuir. A ponte inicial compila C++ via `cc`; ela retorna somente dados de demonstração. Execute `cargo test --manifest-path src/desktop/Cargo.toml` para verificar a integração.
 
 ## Estrutura atual
 
@@ -55,7 +56,7 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 - `README.md`: apresentação e estado inicial para pessoas colaboradoras.
 - `.github/workflows/`: build de verificação e empacotamento Tauri em macOS e Windows; os artefatos são de teste, não releases assinadas.
 - `src/frontend/`: aplicação React; `components.json` configura shadcn/ui, `src/App.tsx` contém a homepage inicial e `src/styles/globals.css` os tokens e estilos globais; `src/components/ui/` para componentes de interface, `features/` para funcionalidades, `hooks/`, `lib/` e `styles/` para recursos compartilhados, `public/` para assets estáticos e `tests/unit/` e `tests/integration/` para testes.
-- `src/desktop/`: núcleo desktop em Rust, com `src/` e diretórios de testes unitários e de integração em `tests/`.
+- `src/desktop/`: núcleo desktop em Rust, com `src/`, ponte C++ em `build.rs` e teste da fronteira nativa em `src/main.rs`.
 - `src/scientific-engine/`: motor científico C++, com interfaces públicas em `include/`, implementação em `src/` e testes unitários e de integração em `tests/`.
 - `docs/decisions/`: futuras decisões arquiteturais.
 - `docs/references/`: documentos originais de especificação e identidade.

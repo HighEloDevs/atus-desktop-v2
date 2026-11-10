@@ -2,7 +2,7 @@
 
 O ATUS Desktop é uma ferramenta científica gratuita e de código aberto para análise de dados de física experimental. A v2 busca oferecer um fluxo simples e reproduzível, preservando e verificando as capacidades científicas relevantes da versão anterior.
 
-O projeto está em fase inicial. A stack escolhida é React, Tailwind CSS e shadcn para o frontend, Tauri com Rust para o desktop e C++ para o motor científico. Os detalhes de integração e distribuição ainda serão definidos; a aplicação contém apenas uma fundação inicial. O frontend inicial usa Tailwind CSS e shadcn/ui; ações de análise e projetos ainda estão em desenvolvimento.
+O projeto está em fase inicial. A stack escolhida é React, Tailwind CSS e shadcn para o frontend, Tauri com Rust para o desktop e C++ para o motor científico. A aplicação inclui uma tela de análise demonstrativa conectada a um motor C++ que retorna valores fixos; nenhum ajuste científico é realizado. O contrato científico definitivo e os detalhes de distribuição ainda serão definidos. O frontend inicial usa Tailwind CSS e shadcn/ui; importação e projetos ainda estão em desenvolvimento.
 
 ## Desenvolvimento
 
@@ -17,6 +17,10 @@ npm run tauri -- dev
 Para compilar o frontend, execute `npm run build` no mesmo diretório. Para gerar um pacote de teste na plataforma atual, execute `npm run tauri -- build`. Os ícones são derivados do brandbook. O identificador `org.atus.desktop` é provisório: confirme-o antes da primeira distribuição pública. Os pacotes ainda não são assinados nem estão prontos para publicação.
 
 O workflow de build gera pacotes de teste para macOS e Windows. A instalação e a remoção em uma máquina Windows limpa ainda precisam de validação manual.
+
+## Qualidade do frontend
+
+Em `src/frontend/`, execute `npm run lint` e `npm run format:check` para verificar o código. Para aplicar correções automáticas, use `npm run lint:fix` e `npm run format`. Essas verificações também são executadas no CI.
 
 ## Referências
 
