@@ -30,7 +30,7 @@ Dados importados são incorporados ao projeto, não apenas referenciados pelo ca
 
 A estratégia de journal e fechamento deve preservar a portabilidade de um único arquivo, inclusive ao copiar um projeto fechado; arquivos auxiliares temporários necessários durante o uso não podem ser omitidos de uma cópia ativa. Inspecionar candidatos à listagem ou abertura não deve criar nem alterar arquivos.
 
-O SQLite deve conter uma identificação de formato e versão de esquema explícitas, distintas da versão do aplicativo. O modelo inicial deve admitir múltiplas análises em versões futuras, sem implementar histograma ou multiplot agora. Alterações de esquema terão migrações versionadas e testadas; versões desconhecidas mais novas não serão modificadas. Uma migração deve preservar o arquivo original em caso de falha. O desenho das tabelas, biblioteca SQLite e mecanismo de cópia segura serão definidos no plano e em decisão arquitetural, antes da implementação.
+O SQLite deve conter uma identificação de formato e versão de esquema explícitas, distintas da versão do aplicativo. O modelo inicial deve admitir múltiplas análises em versões futuras, sem implementar histograma ou multiplot agora. Alterações de esquema terão migrações versionadas e testadas; versões desconhecidas mais novas não serão modificadas. Cada migração tem origem e destino explícitos; antes de migrar, criar uma cópia íntegra ao lado do projeto, com sufixo identificando a versão anterior e sem sobrescrever backups existentes. Essa localização é uma escolha provisória, pois não foi definida na conversa. Executar e validar a migração antes de substituir o original; em caso de falha preservar o arquivo original e a sessão. O desenho das tabelas, biblioteca SQLite e mecanismo de cópia segura serão definidos no plano e em decisão arquitetural, antes da implementação.
 
 ## Listagem e recentes
 
@@ -43,3 +43,7 @@ Deduplicar caminhos equivalentes considerando as regras da plataforma; uma entra
 Não inclui sincronização na nuvem, colaboração simultânea, motor científico, histograma ou multiplot. A importação do JSON legado não deve ser confundida com abrir um `.atus` e precisa de projeto e validação próprios.
 
 Verificar com testes automatizados e cenários de interface: criação sem sobrescrita; ida e volta de todos os campos persistidos, incluindo dados importados e indicação de simulação; salvamento automático e manual com alterações concorrentes; salvar como e falhas sem perda; abertura inválida, corrompida ou de versão futura sem substituir a sessão; interrupção e falha de escrita; migração e preservação em falha; descoberta, deduplicação, ordenação, arquivo ausente, localização e remoção dos recentes; e caminhos reais de Documentos em macOS e Windows. O primeiro fluxo científico completo segue dependente do motor real e de suas fixtures e tolerâncias.
+
+## Estrutura inicial proposta
+
+Usar tabelas para projeto, análises, séries e pontos ordenados (x, y, sx e sy); incertezas ausentes são NULL. Configurações de ajuste e gráfico e resultados podem usar JSON versionado por domínio, preservando textos incompletos e a identificação de simulação. Cada resultado deve ser associado à revisão de dados e configuração que o produziu para indicar quando estiver desatualizado. Esse modelo é uma proposta de implementação, sujeita à revisão do plano e do contrato científico.
