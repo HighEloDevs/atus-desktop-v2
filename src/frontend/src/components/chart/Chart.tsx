@@ -24,12 +24,24 @@ import { chartLinePatterns, type ChartSettings } from "./useChartSettings";
 import { EditableChartLabel } from "./EditableChartLabel";
 
 export type ChartPoint = { x: number; y: number; sx?: number; sy?: number };
-type ChartProps = {
+export type ChartSeries = {
+  id: string;
+  name: string;
   points: ChartPoint[];
-  linePoints?: ChartPoint[];
+  linePoints: ChartPoint[];
+  color: string;
+  radius: number;
+  symbol: string;
+  lineStyle: keyof typeof chartLinePatterns;
+  lineWidth: number;
+  visible: boolean;
+};
+type ChartProps = {
+  series: ChartSeries[];
   label: string;
   settings: ChartSettings;
   graphicRef: RefObject<HTMLDivElement | null>;
+  highlightedSeriesId?: string | null;
 };
 const fmt = (n: number) =>
   new Intl.NumberFormat("pt-BR", { maximumSignificantDigits: 5 }).format(n);
@@ -43,7 +55,7 @@ function domain(values: number[], log: boolean): [number, number] {
       : [min - (Math.abs(min) * 0.1 || 1), max + (Math.abs(max) * 0.1 || 1)];
   return [min, max];
 }
-export function Chart({ points, linePoints = [], label, settings, graphicRef }: ChartProps) {
+export function Chart({ series, label, settings, graphicRef, highlightedSeriesId }: ChartProps) {
   const container = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const clipId = useId().replace(/:/g, "");
@@ -78,12 +90,6 @@ export function Chart({ points, linePoints = [], label, settings, graphicRef }: 
     yMin,
     yMax,
     ticks,
-    color,
-    radius,
-    symbol,
-    lineStyle,
-    lineWidth,
-    visible,
   } = settings;
   const legendDrag = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const [tooltip, setTooltip] = useState<string | null>(null);
@@ -109,8 +115,11 @@ export function Chart({ points, linePoints = [], label, settings, graphicRef }: 
       select(el).on(".zoom", null);
     };
   }, [size.width, size.height]);
-  const valid = points.filter(finite);
-  const all = [...valid, ...linePoints.filter(finite)];
+  const visibleSeries = series.filter((item) => item.visible);
+  const all = visibleSeries.flatMap((item) => [
+    ...item.points.filter(finite),
+    ...item.linePoints.filter(finite),
+  ]);
   const xValues = all.flatMap((p) => [p.x, p.x - (p.sx || 0), p.x + (p.sx || 0)]);
   const yValues = all.flatMap((p) => [p.y, p.y - (p.sy || 0), p.y + (p.sy || 0)]);
   const limits = (vals: number[], log: boolean, low: string, high: string): [number, number] => {
@@ -133,10 +142,6 @@ export function Chart({ points, linePoints = [], label, settings, graphicRef }: 
   const y = transform.rescaleY(baseY);
   const xt = x.ticks(ticks);
   const yt = y.ticks(ticks);
-  const path = line<ChartPoint>()
-    .defined((p) => finite(p) && (!xLog || p.x > 0) && (!yLog || p.y > 0))
-    .x((p) => x(p.x))
-    .y((p) => y(p.y))(linePoints);
   const zoomBy = (factor: number) => {
     if (svgRef.current && zoomRef.current)
       select(svgRef.current).call(zoomRef.current.scaleBy, factor);
@@ -309,66 +314,88 @@ export function Chart({ points, linePoints = [], label, settings, graphicRef }: 
                   ))}
                   <path d={`M0 0V${h}H${w}`} fill="none" stroke="#aebbb0" />
                   <g clipPath={`url(#${clipId})`}>
-                    {visible && (
-                      <>
-                        {path && (
-                          <path
-                            d={path}
-                            fill="none"
-                            stroke="#364cff"
-                            strokeWidth={lineWidth}
-                            strokeDasharray={chartLinePatterns[lineStyle]}
-                          />
-                        )}
-                        {valid
-                          .filter((p) => (!xLog || p.x > 0) && (!yLog || p.y > 0))
-                          .map((p, i) => (
-                            <g
-                              key={i}
-                              onMouseEnter={() =>
-                                setTooltip(
-                                  `x: ${fmt(p.x)} · y: ${fmt(p.y)}${p.sx !== undefined ? ` · σx: ${fmt(p.sx)}` : ""}${p.sy !== undefined ? ` · σy: ${fmt(p.sy)}` : ""}`,
-                                )
-                              }
-                              onMouseLeave={() => setTooltip(null)}
-                            >
-                              {p.sx && (!xLog || p.x - p.sx > 0) ? (
-                                <line
-                                  x1={x(p.x - p.sx)}
-                                  x2={x(p.x + p.sx)}
-                                  y1={y(p.y)}
-                                  y2={y(p.y)}
-                                  stroke={color}
-                                />
-                              ) : null}
-                              {p.sy && (!yLog || p.y - p.sy > 0) ? (
-                                <line
-                                  x1={x(p.x)}
-                                  x2={x(p.x)}
-                                  y1={y(p.y - p.sy)}
-                                  y2={y(p.y + p.sy)}
-                                  stroke={color}
-                                />
-                              ) : null}
-                              {symbol === "circle" ? (
-                                <circle cx={x(p.x)} cy={y(p.y)} r={radius} fill={color} />
-                              ) : (
-                                <rect
-                                  x={x(p.x) - radius}
-                                  y={y(p.y) - radius}
-                                  width={radius * 2}
-                                  height={radius * 2}
-                                  fill={color}
-                                  transform={
-                                    symbol === "diamond"
-                                      ? `rotate(45 ${x(p.x)} ${y(p.y)})`
-                                      : undefined
+                    {visibleSeries.map(
+                      ({
+                        id,
+                        name,
+                        points,
+                        linePoints,
+                        color,
+                        radius,
+                        symbol,
+                        lineStyle,
+                        lineWidth,
+                      }) => {
+                        const valid = points.filter(finite);
+                        const path = line<ChartPoint>()
+                          .defined((p) => finite(p) && (!xLog || p.x > 0) && (!yLog || p.y > 0))
+                          .x((p) => x(p.x))
+                          .y((p) => y(p.y))(linePoints);
+                        return (
+                          <g
+                            key={id}
+                            opacity={highlightedSeriesId && highlightedSeriesId !== id ? 0.15 : 1}
+                          >
+                            {path && (
+                              <path
+                                d={path}
+                                fill="none"
+                                stroke={color}
+                                strokeWidth={lineWidth}
+                                strokeDasharray={chartLinePatterns[lineStyle]}
+                              />
+                            )}
+                            {valid
+                              .filter((p) => (!xLog || p.x > 0) && (!yLog || p.y > 0))
+                              .map((p, i) => (
+                                <g
+                                  key={i}
+                                  onMouseEnter={() =>
+                                    setTooltip(
+                                      `${name} · x: ${fmt(p.x)} · y: ${fmt(p.y)}${p.sx !== undefined ? ` · σx: ${fmt(p.sx)}` : ""}${p.sy !== undefined ? ` · σy: ${fmt(p.sy)}` : ""}`,
+                                    )
                                   }
-                                />
-                              )}
-                            </g>
-                          ))}
-                      </>
+                                  onMouseLeave={() => setTooltip(null)}
+                                >
+                                  {p.sx && (!xLog || p.x - p.sx > 0) ? (
+                                    <line
+                                      x1={x(p.x - p.sx)}
+                                      x2={x(p.x + p.sx)}
+                                      y1={y(p.y)}
+                                      y2={y(p.y)}
+                                      stroke={color}
+                                    />
+                                  ) : null}
+                                  {p.sy && (!yLog || p.y - p.sy > 0) ? (
+                                    <line
+                                      x1={x(p.x)}
+                                      x2={x(p.x)}
+                                      y1={y(p.y - p.sy)}
+                                      y2={y(p.y + p.sy)}
+                                      stroke={color}
+                                    />
+                                  ) : null}
+                                  {symbol === "circle" ? (
+                                    <circle cx={x(p.x)} cy={y(p.y)} r={radius} fill={color} />
+                                  ) : (
+                                    <rect
+                                      x={x(p.x) - radius}
+                                      y={y(p.y) - radius}
+                                      width={radius * 2}
+                                      height={radius * 2}
+                                      fill={color}
+                                      transform={
+                                        symbol === "diamond"
+                                          ? `rotate(45 ${x(p.x)} ${y(p.y)})`
+                                          : undefined
+                                      }
+                                    />
+                                  )}
+                                </g>
+                              ))}
+                          </g>
+                        );
+                      },
                     )}
                   </g>
                 </g>
@@ -424,12 +451,11 @@ export function Chart({ points, linePoints = [], label, settings, graphicRef }: 
                   legendDrag.current = null;
                 }}
               >
-                <span className="whitespace-nowrap">
-                  <span style={{ color }}>●</span> Dados de exemplo
-                </span>
-                {linePoints.length > 0 && (
-                  <span className="whitespace-nowrap text-[#364cff]">━ Reta de exemplo</span>
-                )}
+                {visibleSeries.map((item) => (
+                  <span key={item.id} className="whitespace-nowrap">
+                    <span style={{ color: item.color }}>●</span> {item.name}
+                  </span>
+                ))}
               </div>
             )}
             {tooltip && (
