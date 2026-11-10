@@ -2,7 +2,7 @@
 
 O ATUS Desktop é uma ferramenta científica gratuita e de código aberto para análise de dados de física experimental. A v2 busca oferecer um fluxo simples e reproduzível, preservando e verificando as capacidades científicas relevantes da versão anterior.
 
-O projeto está em fase inicial. A stack escolhida é React, Tailwind CSS e shadcn para o frontend, Tauri com Rust para o desktop e C++ para o motor científico. Os detalhes de integração e distribuição ainda serão definidos; a aplicação contém apenas uma fundação inicial. Tailwind e shadcn ainda não estão configurados.
+O projeto está em fase inicial. A stack escolhida é React, Tailwind CSS e shadcn para o frontend, Tauri com Rust para o desktop e C++ para o motor científico. Os detalhes de integração e distribuição ainda serão definidos; a aplicação contém apenas uma fundação inicial. O frontend inicial usa Tailwind CSS e shadcn/ui; ações de análise e projetos ainda estão em desenvolvimento.
 
 ## Desenvolvimento
 
