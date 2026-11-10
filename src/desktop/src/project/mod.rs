@@ -228,15 +228,16 @@ mod tests {
             state: serde_json::json!({"editingText": "1;"}),
             datasets: vec![],
         });
-        tauri::async_runtime::block_on(async {
+        let reopened = tauri::async_runtime::block_on(async {
             project_save(original.clone(), snapshot, edited.clone())
                 .await
                 .unwrap();
             project_save_as(copy.clone(), edited.clone()).await.unwrap();
             std::fs::remove_file(original).unwrap();
-            project_open(copy.clone()).await.unwrap();
+            project_open(copy.clone()).await.unwrap()
         });
         edited.name = "Cópia".into();
-        assert_eq!(read_project(&copy).unwrap(), edited);
+        let response = serde_json::to_value(reopened).unwrap();
+        assert_eq!(response["snapshot"], serde_json::to_value(edited).unwrap());
     }
 }

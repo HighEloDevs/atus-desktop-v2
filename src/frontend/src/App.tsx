@@ -242,6 +242,12 @@ function App() {
                     >
                       <FilePlus2 aria-hidden="true" />
                       Nova análise
+                      <kbd
+                        aria-hidden="true"
+                        className="rounded border border-white/40 px-1.5 py-0.5 font-sans text-[11px] leading-none"
+                      >
+                        {shortcut}
+                      </kbd>
                     </Button>
                   </div>
                 </div>
