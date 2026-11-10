@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { useProjectSave } from "@/features/projects/useProjectSave";
 import type { OpenProject } from "@/features/projects/project-client";
 import { useLayoutEffect, useRef, useState, type SetStateAction } from "react";
@@ -22,6 +23,9 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   Activity,
   ArrowLeft,
+  Check,
+  CircleAlert,
+  Save,
   Database,
   FileInput,
   FlaskConical,
@@ -671,49 +675,70 @@ export function AnalysisPage({
       </Dialog.Root>
       {panelOpen && (
         <aside className="analysis-panel flex h-full w-[360px] shrink-0 flex-col border-r border-[#d8ded7] bg-[#f7f8f5]">
-          <div className="flex h-[70px] shrink-0 items-center gap-3 border-b border-[#d8ded7] px-4">
-            <button
-              type="button"
-              onClick={() => {
-                void saving.canLeave().then((ok) => {
-                  if (ok) onBack();
-                });
-              }}
-              aria-label="Voltar ao início"
-              className="rounded p-2 text-[#66716e] hover:bg-[#e9ece7]"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <div className="min-w-0 flex-1">
-              <span className="text-[11px] font-medium text-[#87938a]">Projeto</span>
-              <div className="flex items-center gap-2">
-                <h1 className="truncate text-[15px] font-semibold">
+          <header className="border-b border-border bg-white px-3 py-3">
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => {
+                  void saving.canLeave().then((ok) => {
+                    if (ok) onBack();
+                  });
+                }}
+                aria-label="Voltar ao início"
+              >
+                <ArrowLeft aria-hidden="true" />
+              </Button>
+              <div className="min-w-0 flex-1">
+                <h1 className="truncate text-sm leading-5 font-semibold">
                   {saving.project?.snapshot.name ?? "Projeto sem título"}
                 </h1>
-                <span
+                <p
                   role="status"
-                  className="rounded bg-[#fff3dc] px-1.5 py-0.5 text-[9px] font-semibold text-[#8c601d]"
+                  className={`flex items-center gap-1.5 text-[11px] ${saving.error ? "text-red-800" : "text-muted-foreground"}`}
                 >
-                  {saving.project ? saving.status : "NÃO SALVO"}
-                </span>
-              </div>
-            </div>
-          </div>
-          {saving.project && (
-            <div className="space-x-3 border-b px-4 py-2 text-xs">
-              <button type="button" className="underline" onClick={() => void saving.flush()}>
-                Salvar
-              </button>
-              <button type="button" className="underline" onClick={() => void saving.saveAs()}>
-                Salvar como
-              </button>
-              {saving.error && (
-                <p role="alert" className="mt-2 text-red-700">
-                  {saving.error}
+                  {saving.error ? (
+                    <CircleAlert aria-hidden="true" size={12} />
+                  ) : saving.status === "Salvo" && saving.project ? (
+                    <Check aria-hidden="true" size={12} className="text-ring" />
+                  ) : null}
+                  {saving.project ? saving.status : "Não salvo"}
                 </p>
+              </div>
+              {saving.project && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      className="bg-white"
+                      aria-label="Comandos do projeto"
+                      title="Comandos do projeto"
+                    >
+                      <MoreHorizontal aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => void saving.flush()}>
+                      <Save aria-hidden="true" /> Salvar projeto
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => void saving.saveAs()}>
+                      <FileInput aria-hidden="true" /> Salvar como…
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
             </div>
-          )}
+            {saving.error && (
+              <p
+                role="alert"
+                className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
+              >
+                {saving.error}
+              </p>
+            )}
+          </header>
           <div className="border-b border-[#d8ded7] px-4 py-3">
             <div
               role="tablist"

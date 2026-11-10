@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { RecentProjects } from "@/features/projects/RecentProjects";
 import {
   chooseProject,
@@ -208,61 +209,51 @@ function App() {
           <div className="mx-auto max-w-[1120px] p-6 sm:p-8">
             {page === "home" ? (
               <>
-                <div>
-                  <h1 className="text-[24px] font-semibold tracking-[-.04em]">Início</h1>
-                  <p className="mt-1 text-[13px] text-[#758078]">
-                    Acesse seus projetos e comece uma análise.
-                  </p>
-                </div>
-                <section aria-labelledby="quick-actions" className="mt-8">
-                  <div className="mb-3 flex items-center gap-2">
-                    <h2 id="quick-actions" className="text-[13px] font-semibold">
-                      Acesso rápido
-                    </h2>
+                <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-b border-border pb-5">
+                  <div>
+                    <h1 className="text-[28px] leading-tight font-semibold tracking-[-.045em]">
+                      Projetos
+                    </h1>
+                    <p className="mt-1.5 text-sm text-muted-foreground">
+                      Crie uma análise ou retome seu trabalho.
+                    </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={createProject}
-                    aria-keyshortcuts={isMac ? "Meta+Alt+N" : "Control+Alt+N"}
-                    className="flex w-full max-w-[350px] items-start gap-3 rounded-md border border-[#d8ded7] bg-white p-4 text-left transition-colors hover:border-[#aab9ad] hover:bg-[#fafbf9]"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-[#f0f3ee] text-[#52625a]">
-                      <FilePlus2 size={17} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[13px] font-semibold">Nova análise</span>
-                      <span className="mt-1 block text-[12px] leading-5 text-[#7b887e]">
-                        Comece com um conjunto de dados.
-                      </span>
-                      <span className="mt-2 block text-[10px] text-[#7b887e]">Criar projeto</span>
-                    </span>
-                    <kbd className="whitespace-nowrap rounded border border-[#d8ded7] bg-[#f7f8f5] px-1.5 py-1 text-[10px] text-[#66716e]">
-                      {shortcut}
-                    </kbd>
-                  </button>
-                </section>
-                {isTauri() && (
-                  <>
-                    <button
-                      type="button"
-                      className="mt-3 flex items-center gap-2 rounded border px-3 py-2 text-xs"
-                      onClick={() =>
-                        void runProjectAction(async () => {
-                          const path = await chooseProject();
-                          return path ? projectClient.open(path) : null;
-                        })
-                      }
-                    >
-                      <FolderOpen size={15} /> Abrir projeto
-                    </button>
-                    {projectError && (
-                      <p role="alert" className="mt-3 text-xs text-red-700">
-                        {projectError}
-                      </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {isTauri() && (
+                      <Button
+                        variant="outline"
+                        className="bg-white"
+                        onClick={() =>
+                          void runProjectAction(async () => {
+                            const path = await chooseProject();
+                            return path ? projectClient.open(path) : null;
+                          })
+                        }
+                      >
+                        <FolderOpen aria-hidden="true" />
+                        Abrir projeto
+                      </Button>
                     )}
-                    <RecentProjects onOpen={openProject} />
-                  </>
+                    <Button
+                      onClick={createProject}
+                      aria-keyshortcuts={isMac ? "Meta+Alt+N" : "Control+Alt+N"}
+                      title={`Nova análise (${shortcut})`}
+                      className="bg-ring text-white hover:bg-[#263cdb]"
+                    >
+                      <FilePlus2 aria-hidden="true" />
+                      Nova análise
+                    </Button>
+                  </div>
+                </div>
+                {projectError && (
+                  <p
+                    role="alert"
+                    className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+                  >
+                    {projectError}
+                  </p>
                 )}
+                {isTauri() && <RecentProjects onOpen={openProject} />}
               </>
             ) : (
               <section className="max-w-[980px]" aria-labelledby="about-title">

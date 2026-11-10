@@ -54,7 +54,7 @@ export function ChartExportMenu({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="outline" size="sm" disabled={disabled || busy}>
-            <Download /> {busy ? "Exportando…" : "Salvar"} <ChevronDown />
+            <Download /> {busy ? "Exportando…" : "Exportar"} <ChevronDown />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64 p-1.5">
