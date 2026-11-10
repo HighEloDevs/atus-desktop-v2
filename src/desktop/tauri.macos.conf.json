@@ -1,16 +1,7 @@
 {
   "bundle": {
-    "fileAssociations": [
-      {
-        "ext": ["atus"],
-        "name": "Projeto ATUS",
-        "role": "Editor",
-        "rank": "Owner",
-        "exportedType": {
-          "identifier": "org.atus.desktop.project",
-          "conformsTo": ["public.data"]
-        }
-      }
-    ]
+    "macOS": {
+      "infoPlist": "Info.plist"
+    }
   }
 }

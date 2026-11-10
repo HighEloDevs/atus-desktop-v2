@@ -53,7 +53,7 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 - Em `src/frontend/`, use `npm run lint` / `npm run lint:fix` e `npm run format:check` / `npm run format`. ESLint verifica TypeScript e regras de React; Prettier formata os arquivos do frontend. O CI executa as verificações sem modificá-los.
 - Links dos perfis na página Sobre abrem no navegador padrão pelo plugin Tauri Opener; os endereços permitidos ficam em `src/desktop/capabilities/default.json`.
 - O atalho de nova análise é `Cmd+Option+N` no macOS e `Ctrl+Alt+N` nos demais sistemas. No desktop, o atalho e o acesso rápido criam um projeto em Documentos/ATUS/projects e abrem a análise demonstrativa.
-- No macOS, o pacote .app declara a associação .atus para abertura pelo Finder. O aplicativo solicita confirmação antes de trocar uma análise aberta.
+- No macOS, o pacote .app usa `src/desktop/Info.plist` para declarar a associação .atus e o ícone exibido no Finder. O aplicativo solicita confirmação antes de trocar uma análise aberta.
 - No macOS, **Arquivo** traz **Salvar projeto** (Cmd+S) e **Salvar como** (Cmd+Shift+S). Nas demais plataformas os comandos ficam no cabeçalho do projeto.
 - O Vite usa `--configLoader runner`: o carregador padrão ficou bloqueado neste ambiente com Node 26.
 - `org.atus.desktop` é identificador provisório; confirme antes de distribuir. A ponte inicial compila C++ via `cc`; ela retorna somente dados de demonstração. Execute `cargo test --manifest-path src/desktop/Cargo.toml` para verificar a integração.
