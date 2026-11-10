@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { useProjectSave } from "@/features/projects/useProjectSave";
-import type { OpenProject } from "@/features/projects/project-client";
+import { fileName, type OpenProject } from "@/features/projects/project-client";
 import { useLayoutEffect, useRef, useState, type SetStateAction } from "react";
 import { FitControls } from "./fit/FitControls";
 import { defaultFitConfig, validateFitConfig, type FitConfig } from "./fit/fit-config";
@@ -93,9 +93,17 @@ type AnalysisState = {
 export function AnalysisPage({
   onBack,
   project = null,
+  finderPath,
+  projectError,
+  onOpenFinderProject,
+  onCancelFinderProject,
 }: {
   onBack: () => void;
   project?: OpenProject | null;
+  finderPath: string | null;
+  projectError: string;
+  onOpenFinderProject: (path: string) => Promise<void>;
+  onCancelFinderProject: () => void;
 }) {
   const [initialAnalysis] = useState(() =>
     project
@@ -590,6 +598,37 @@ export function AnalysisPage({
 
   return (
     <div className="analysis-workspace flex h-screen min-h-0 bg-[#f7f7f3] text-[#20272c]">
+      {(finderPath || projectError) && (
+        <div className="fixed right-4 top-4 z-40 max-w-sm rounded-md border border-border bg-white p-4 shadow-md">
+          {finderPath && (
+            <>
+              <p className="text-sm" role="status">
+                Abrir {fileName(finderPath)} no lugar do projeto atual?
+              </p>
+              <div className="mt-3 flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={onCancelFinderProject}>
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    void saving.canLeave().then((allowed) => {
+                      if (allowed) return onOpenFinderProject(finderPath);
+                    });
+                  }}
+                >
+                  Abrir projeto
+                </Button>
+              </div>
+            </>
+          )}
+          {projectError && (
+            <p role="alert" className="text-sm text-red-800">
+              {projectError}
+            </p>
+          )}
+        </div>
+      )}
       <Dialog.Root
         open={!!table}
         onOpenChange={(open) => {

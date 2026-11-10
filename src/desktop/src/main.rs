@@ -4,7 +4,7 @@ mod project;
 
 use project::commands::*;
 #[cfg(target_os = "macos")]
-use project::menu::project_menu_enabled;
+use project::{finder::take_finder_project, menu::project_menu_enabled};
 use serde::Serialize;
 use tauri::Manager;
 
@@ -46,10 +46,12 @@ fn get_mock_analysis() -> MockAnalysis {
 fn main() {
     let builder = tauri::Builder::default();
     #[cfg(target_os = "macos")]
-    let builder = builder.setup(|app| {
-        project::menu::install(app)?;
-        Ok(())
-    });
+    let builder = builder
+        .manage(project::finder::FinderRequest::default())
+        .setup(|app| {
+            project::menu::install(app)?;
+            Ok(())
+        });
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -62,11 +64,17 @@ fn main() {
             project_list,
             project_available,
             #[cfg(target_os = "macos")]
-            project_menu_enabled
+            project_menu_enabled,
+            #[cfg(target_os = "macos")]
+            take_finder_project
         ])
         .build(tauri::generate_context!())
         .expect("failed to build ATUS Desktop")
         .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = &event {
+                project::finder::receive(app, urls.clone());
+            }
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
                 if let Some(window) = app.get_webview_window("main") {
                     api.prevent_exit();

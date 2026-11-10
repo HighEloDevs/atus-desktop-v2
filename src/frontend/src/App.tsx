@@ -1,3 +1,4 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Button } from "@/components/ui/button";
 import { RecentProjects } from "@/features/projects/RecentProjects";
 import {
@@ -8,7 +9,7 @@ import {
   type OpenProject,
 } from "@/features/projects/project-client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isTauri } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { AnalysisPage } from "@/features/analysis/AnalysisPage";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
@@ -128,6 +129,7 @@ function App() {
   const [project, setProject] = useState<OpenProject | null>(null);
   const [projectError, setProjectError] = useState("");
   const opening = useRef(false);
+  const [finderPath, setFinderPath] = useState<string | null>(null);
   const runProjectAction = useCallback(
     async (action: () => Promise<OpenProject | null>, replaces?: string) => {
       if (opening.current) return;
@@ -181,10 +183,51 @@ function App() {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [isMac, page, createProject]);
 
+  useEffect(() => {
+    if (!isTauri() || !isMac) return;
+    let active = true;
+    async function receive() {
+      if (!active) return;
+      try {
+        const path = await invoke<string | null>("take_finder_project");
+        if (active && path) setFinderPath(path);
+      } catch (error) {
+        if (active) setProjectError(String(error));
+      }
+    }
+    const listener = getCurrentWindow().listen("finder-project-requested", () => void receive());
+    void listener.then(receive).catch((error) => {
+      if (active) setProjectError(String(error));
+    });
+    return () => {
+      active = false;
+      void listener.then((unlisten) => unlisten()).catch(console.error);
+    };
+  }, [isMac]);
+
+  const openFinderProject = useCallback(
+    async (path: string) => {
+      await runProjectAction(() => projectClient.open(path));
+      setFinderPath((pending) => (pending === path ? null : pending));
+    },
+    [runProjectAction],
+  );
+
+  useEffect(() => {
+    if (page === "analysis" || !finderPath) return;
+    const timer = window.setTimeout(() => void openFinderProject(finderPath), 0);
+    return () => clearTimeout(timer);
+  }, [page, finderPath, openFinderProject]);
+
   if (page === "analysis")
     return (
       <AnalysisPage
+        key={project?.path}
         project={project}
+        finderPath={finderPath}
+        projectError={projectError}
+        onOpenFinderProject={openFinderProject}
+        onCancelFinderProject={() => setFinderPath(null)}
         onBack={() => {
           setProject(null);
           setPage("home");
