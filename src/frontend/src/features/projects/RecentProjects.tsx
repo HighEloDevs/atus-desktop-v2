@@ -1,11 +1,6 @@
+import { EmptyRecentProjects } from "./EmptyRecentProjects";
 import { ProjectFilePath } from "./ProjectFilePath";
-import {
-  ArrowUpRight,
-  FileChartColumn,
-  FileWarning,
-  FolderOpen,
-  MoreHorizontal,
-} from "lucide-react";
+import { ArrowUpRight, FileChartColumn, FileWarning, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -93,15 +88,7 @@ export function RecentProjects({
           Carregando projetos…
         </p>
       ) : entries.length === 0 ? (
-        <div className="flex items-center gap-3 rounded-md border border-dashed border-border px-4 py-5">
-          <FolderOpen aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
-          <div>
-            <p className="text-sm font-medium">Nenhum projeto recente</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Crie uma análise ou abra um arquivo .atus.
-            </p>
-          </div>
-        </div>
+        <EmptyRecentProjects />
       ) : (
         <ul className="divide-y divide-border rounded-md border border-border bg-white">
           {entries.map(({ path, available, recent }) => (

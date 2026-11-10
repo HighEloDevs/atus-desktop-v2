@@ -50,3 +50,13 @@ test("project path includes the filename and extension in the visible text", asy
     assert.ok(html.includes(`>${path}</span>`), html);
   }
 });
+
+test("the empty state explains how projects appear without adding duplicate actions", async () => {
+  const { EmptyRecentProjects } = await server.ssrLoadModule(
+    "/src/features/projects/EmptyRecentProjects.tsx",
+  );
+  const html = renderToStaticMarkup(createElement(EmptyRecentProjects));
+  assert.match(html, /Nenhum projeto recente/);
+  assert.match(html, /análises que você criar ou abrir aparecerão aqui/);
+  assert.doesNotMatch(html, /<button\b|<a\b/);
+});
