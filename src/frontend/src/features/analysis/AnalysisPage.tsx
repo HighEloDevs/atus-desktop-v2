@@ -1,3 +1,4 @@
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { useRef, useState } from "react";
 import { Chart } from "@/components/chart/Chart";
 import { ChartExportMenu } from "@/components/chart/ChartExportMenu";
@@ -101,6 +102,27 @@ export function AnalysisPage({ onBack }: { onBack: () => void }) {
           <div className="min-h-0 flex-1 overflow-auto p-5">
             {mode === "analysis" ? (
               <>
+                <section className="mb-5 space-y-3 border-b border-border pb-4 text-xs">
+                  <div>
+                    <h2 className="text-[13px] font-semibold">Visualização</h2>
+                    <span className="mt-1 block font-normal leading-relaxed text-muted-foreground">
+                      Escolha como explorar os dados no gráfico.
+                    </span>
+                  </div>
+                  <label className="block">
+                    <span className="font-medium">Tipo de gráfico</span>
+                    <NativeSelect
+                      className="mt-1 h-8 w-full text-xs"
+                      value={chartSettings.mode}
+                      onChange={(e) =>
+                        chartSettings.setMode(e.target.value as typeof chartSettings.mode)
+                      }
+                    >
+                      <NativeSelectOption value="points">Pontos</NativeSelectOption>
+                      <NativeSelectOption value="histogram">Histograma</NativeSelectOption>
+                    </NativeSelect>
+                  </label>
+                </section>
                 <div className="flex items-center justify-between">
                   <h2 className="flex items-center gap-2 text-[13px] font-semibold">
                     <Database size={16} className="text-[#758078]" /> Dados{" "}
@@ -167,7 +189,7 @@ export function AnalysisPage({ onBack }: { onBack: () => void }) {
                             Modo
                           </label>
                           <p className="mt-1.5 text-[11px] text-[#66716e]">
-                            Escolha pontos ou histograma na aba Personalização.
+                            Escolha pontos ou histograma na aba Análise.
                           </p>
                         </div>
                         <div className="border-t border-[#e0e5df] pt-4">

@@ -22,7 +22,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import type { ChartSettings } from "./useChartSettings";
+import { chartLinePatterns, type ChartSettings } from "./useChartSettings";
 import { EditableChartLabel } from "./EditableChartLabel";
 
 export type ChartPoint = { x: number; y: number; sx?: number; sy?: number };
@@ -356,11 +356,7 @@ export function Chart({ points, linePoints = [], label, settings, graphicRef }: 
                             fill="none"
                             stroke="#364cff"
                             strokeWidth={lineWidth}
-                            strokeDasharray={
-                              { solid: "", dashed: "8 5", dotted: "2 4", dashdot: "8 4 2 4" }[
-                                lineStyle
-                              ]
-                            }
+                            strokeDasharray={chartLinePatterns[lineStyle]}
                           />
                         )}
                         {valid

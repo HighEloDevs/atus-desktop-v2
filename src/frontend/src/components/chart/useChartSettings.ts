@@ -1,6 +1,13 @@
 import { useState } from "react";
 import type { LabelAlignment } from "./EditableChartLabel";
 
+export const chartLinePatterns = {
+  solid: "",
+  dashed: "8 5",
+  dotted: "2 4",
+  dashdot: "8 4 2 4",
+};
+
 type Metric = "count" | "percent" | "density" | "cumulative";
 type Column = "x" | "y" | "sx" | "sy";
 
@@ -25,7 +32,7 @@ export function useChartSettings() {
   const [color, setColor] = useState("#f25a3c");
   const [radius, setRadius] = useState(5);
   const [symbol, setSymbol] = useState("circle");
-  const [lineStyle, setLineStyle] = useState("solid");
+  const [lineStyle, setLineStyle] = useState<keyof typeof chartLinePatterns>("solid");
   const [lineWidth, setLineWidth] = useState(2);
   const [mode, setMode] = useState<"points" | "histogram">("points");
   const [column, setColumn] = useState<Column>("x");
