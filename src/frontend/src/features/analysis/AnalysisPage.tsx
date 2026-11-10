@@ -1,7 +1,7 @@
-import { ProjectFilePath } from "@/features/projects/ProjectFilePath";
+import { FinderProjectDialog } from "@/features/projects/FinderProjectDialog";
 import { Button } from "@/components/ui/button";
 import { useProjectSave } from "@/features/projects/useProjectSave";
-import { fileName, type OpenProject } from "@/features/projects/project-client";
+import type { OpenProject } from "@/features/projects/project-client";
 import { useLayoutEffect, useRef, useState, type SetStateAction } from "react";
 import { FitControls } from "./fit/FitControls";
 import { defaultFitConfig, validateFitConfig, type FitConfig } from "./fit/fit-config";
@@ -123,6 +123,8 @@ export function AnalysisPage({
   const fileInput = useRef<HTMLInputElement>(null);
   const sidebarContent = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef({ analysis: 0, visual: 0 });
+  const [openingFinderProject, setOpeningFinderProject] = useState(false);
+  const openingFinderRef = useRef(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [tableId, setTableId] = useState<string | null>(initial?.tableId ?? null);
@@ -599,37 +601,31 @@ export function AnalysisPage({
 
   return (
     <div className="analysis-workspace flex h-screen min-h-0 bg-[#f7f7f3] text-[#20272c]">
-      {(finderPath || projectError) && (
-        <div className="fixed right-4 top-4 z-40 max-w-sm rounded-md border border-border bg-white p-4 shadow-md">
-          {finderPath && (
-            <>
-              <p className="text-sm" role="status">
-                Abrir {fileName(finderPath)} no lugar do projeto atual?
-              </p>
-              <ProjectFilePath path={finderPath} />
-              <div className="mt-3 flex justify-end gap-2">
-                <Button size="sm" variant="ghost" onClick={onCancelFinderProject}>
-                  Cancelar
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    void saving.canLeave().then((allowed) => {
-                      if (allowed) return onOpenFinderProject(finderPath);
-                    });
-                  }}
-                >
-                  Abrir projeto
-                </Button>
-              </div>
-            </>
-          )}
-          {projectError && (
-            <p role="alert" className="text-sm text-red-800">
-              {projectError}
-            </p>
-          )}
-        </div>
+      <FinderProjectDialog
+        path={finderPath}
+        opening={openingFinderProject}
+        onCancel={onCancelFinderProject}
+        onOpen={(path) => {
+          if (openingFinderRef.current) return;
+          openingFinderRef.current = true;
+          setOpeningFinderProject(true);
+          void (async () => {
+            try {
+              if (await saving.canLeave()) await onOpenFinderProject(path);
+            } finally {
+              openingFinderRef.current = false;
+              setOpeningFinderProject(false);
+            }
+          })();
+        }}
+      />
+      {projectError && (
+        <p
+          role="alert"
+          className="fixed right-4 top-4 z-40 max-w-sm rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-md"
+        >
+          {projectError}
+        </p>
       )}
       <Dialog.Root
         open={!!table}
