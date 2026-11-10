@@ -81,6 +81,25 @@ a:focus-visible {
   }
 }
 
+/* Keep the desktop workspace fixed while its sidebar scrolls independently. */
+@media (min-width: 701px) {
+  html:has(.analysis-workspace),
+  body:has(.analysis-workspace) {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .analysis-workspace {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .analysis-panel {
+    min-height: 0;
+  }
+}
+
 .analysis-canvas {
   background-color: #f7f8f5;
   background-image:

@@ -99,7 +99,7 @@ export function AnalysisPage({ onBack }: { onBack: () => void }) {
               </button>
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto p-5">
+          <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-5">
             {mode === "analysis" ? (
               <>
                 <section className="mb-5 space-y-3 border-b border-border pb-4 text-xs">
