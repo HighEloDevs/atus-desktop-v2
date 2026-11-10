@@ -73,4 +73,66 @@ mod tests {
         assert!(read_project(&path).is_err());
         assert!(!path.exists());
     }
+    #[test]
+    fn rejects_nonfinite_numbers_before_creating_a_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("invalid.atus");
+        let snapshot = ProjectSnapshot {
+            id: "p".into(),
+            name: "p".into(),
+            created_at: "".into(),
+            updated_at: "".into(),
+            analyses: vec![Analysis {
+                id: "a".into(),
+                kind: "analysis".into(),
+                state: serde_json::json!({}),
+                datasets: vec![Dataset {
+                    id: "d".into(),
+                    name: "d".into(),
+                    state: serde_json::json!({}),
+                    points: vec![Point {
+                        x: f64::INFINITY,
+                        y: 1.0,
+                        sx: None,
+                        sy: None,
+                    }],
+                }],
+            }],
+        };
+        assert!(create_project(&path, &snapshot).is_err());
+        assert!(!path.exists());
+    }
+    #[test]
+    fn failed_save_preserves_previously_committed_project() {
+        use super::store::write_project;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("project.atus");
+        let original = ProjectSnapshot {
+            id: "p".into(),
+            name: "original".into(),
+            created_at: "".into(),
+            updated_at: "".into(),
+            analyses: vec![],
+        };
+        create_project(&path, &original).unwrap();
+        let invalid = ProjectSnapshot {
+            analyses: vec![
+                Analysis {
+                    id: "duplicate".into(),
+                    kind: "analysis".into(),
+                    state: serde_json::json!({}),
+                    datasets: vec![],
+                },
+                Analysis {
+                    id: "duplicate".into(),
+                    kind: "analysis".into(),
+                    state: serde_json::json!({}),
+                    datasets: vec![],
+                },
+            ],
+            ..original.clone()
+        };
+        assert!(write_project(&path, &invalid).is_err());
+        assert_eq!(read_project(&path).unwrap(), original);
+    }
 }

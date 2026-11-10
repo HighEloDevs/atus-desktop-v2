@@ -19,7 +19,28 @@ fn validate(conn: &Connection) -> Result<(), ProjectError> {
     Ok(())
 }
 
+fn validate_snapshot(snapshot: &ProjectSnapshot) -> Result<(), ProjectError> {
+    for point in snapshot
+        .analyses
+        .iter()
+        .flat_map(|a| &a.datasets)
+        .flat_map(|d| &d.points)
+    {
+        if !point.x.is_finite()
+            || !point.y.is_finite()
+            || point.sx.is_some_and(|v| !v.is_finite() || v < 0.0)
+            || point.sy.is_some_and(|v| !v.is_finite() || v < 0.0)
+        {
+            return Err(
+                "Os dados devem ser finitos e as incertezas não podem ser negativas".into(),
+            );
+        }
+    }
+    Ok(())
+}
+
 pub fn create_project(path: &Path, snapshot: &ProjectSnapshot) -> Result<(), ProjectError> {
+    validate_snapshot(snapshot)?;
     OpenOptions::new().write(true).create_new(true).open(path)?;
     let result = (|| {
         let mut conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
@@ -37,6 +58,7 @@ pub fn create_project(path: &Path, snapshot: &ProjectSnapshot) -> Result<(), Pro
 }
 
 pub fn write_project(path: &Path, snapshot: &ProjectSnapshot) -> Result<(), ProjectError> {
+    validate_snapshot(snapshot)?;
     let mut conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
     validate(&conn)?;
     conn.pragma_update(None, "foreign_keys", true)?;
