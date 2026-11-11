@@ -30,9 +30,7 @@ jobs:
           git merge-base --is-ancestor origin/main HEAD
           node scripts/version.mjs check --base origin/main
 
-  build-macos-arm64:
-    needs: check-version
-    if: always() && (needs.check-version.result == 'success' || needs.check-version.result == 'skipped')
+  test-macos-arm64:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -58,6 +56,22 @@ jobs:
         run: npm run format:check
       - name: Test Rust and C++ bridge
         run: cargo test --manifest-path src/desktop/Cargo.toml
+
+  build-macos-arm64:
+    needs: test-macos-arm64
+    if: github.event_name != 'pull_request'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci
       - name: Build desktop bundle
         working-directory: src/frontend
         run: npm run tauri -- build --bundles app
@@ -74,9 +88,8 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  build-macos-intel:
-    needs: check-version
-    if: always() && (needs.check-version.result == 'success' || needs.check-version.result == 'skipped')
+
+  test-macos-intel:
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
@@ -102,6 +115,22 @@ jobs:
         run: npm run format:check
       - name: Test Rust and C++ bridge
         run: cargo test --manifest-path src/desktop/Cargo.toml
+
+  build-macos-intel:
+    needs: test-macos-intel
+    if: github.event_name != 'pull_request'
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci
       - name: Build desktop bundle
         working-directory: src/frontend
         run: npm run tauri -- build --bundles app
@@ -118,9 +147,8 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  build-windows:
-    needs: check-version
-    if: always() && (needs.check-version.result == 'success' || needs.check-version.result == 'skipped')
+
+  test-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -146,6 +174,22 @@ jobs:
         run: npm run format:check
       - name: Test Rust and C++ bridge
         run: cargo test --manifest-path src/desktop/Cargo.toml
+
+  build-windows:
+    needs: test-windows
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci
       - name: Build desktop bundle
         working-directory: src/frontend
         run: npm run tauri -- build --bundles nsis
@@ -162,9 +206,8 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  build-linux:
-    needs: check-version
-    if: always() && (needs.check-version.result == 'success' || needs.check-version.result == 'skipped')
+
+  test-linux:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -205,6 +248,28 @@ jobs:
         run: |
           scripts/coverage/cpp-llvm.sh /tmp/atus-cpp.lcov
           node scripts/coverage/check.mjs /tmp/atus-cpp.lcov
+
+  build-linux:
+    needs: test-linux
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test Ubuntu dependency setup
+        run: node --test scripts/tests/ubuntu-deps.test.mjs
+      - name: Install Tauri system dependencies
+        timeout-minutes: 15
+        run: |
+          sudo scripts/ci/install-ubuntu-deps.sh
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci
       - name: Test Linux bundle verifier
         run: python3 -m unittest discover -s scripts/tests -p 'test_verify_linux_bundles.py'
       - name: Build Linux bundles
