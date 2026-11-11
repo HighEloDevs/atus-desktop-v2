@@ -220,3 +220,20 @@ it("connects the macOS menu to save and unregisters it on unmount", async () => 
   expect(api.invoke).toHaveBeenCalledWith("project_menu_enabled", { enabled: false });
   root = createRoot(node);
 });
+
+it("reports an error opening the save-as dialog and leaves the project intact", async () => {
+  await render(empty);
+  api.chooseDestination.mockRejectedValue(new Error("dialog unavailable"));
+  await act(async () => controls.saveAs());
+  expect(controls.error).toContain("dialog unavailable");
+  expect(controls.project.path).toBe("/original.atus");
+  expect(api.saveAs).not.toHaveBeenCalled();
+});
+
+it("retains the requested .atus extension without duplicating it", async () => {
+  await render(empty);
+  api.chooseDestination.mockResolvedValue("/backup.ATUS");
+  api.saveAs.mockImplementation(async (path, snapshot) => ({ path, snapshot }));
+  await act(async () => controls.saveAs());
+  expect(api.saveAs).toHaveBeenCalledWith("/backup.ATUS", expect.any(Object));
+});

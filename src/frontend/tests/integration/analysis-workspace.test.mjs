@@ -249,3 +249,25 @@ it("replaces imported data and reports invalid replacement files", async () => {
   );
   expect(node.querySelector('[data-testid="chart"]').textContent).toBe("a.csv:3:0");
 });
+
+it("reports a native bridge failure without adding a demonstration series", async () => {
+  native.isTauri.mockReturnValue(true);
+  native.invoke.mockRejectedValue(new Error("bridge unavailable"));
+  await render();
+  await act(async () => button("Carregar exemplo").click());
+  expect(node.textContent).toContain("Não foi possível carregar o exemplo");
+  expect(node.querySelector('[data-testid="chart"]')).toBeNull();
+});
+
+it("keeps the previous series when a replacement is oversized", async () => {
+  await render();
+  await importFiles([{ name: "a.csv", size: 10, text: async () => "1;2\n2;3" }]);
+  const input = node.querySelector('input[type="file"]:not([multiple])');
+  Object.defineProperty(input, "files", {
+    value: [{ name: "large.csv", size: 1024 * 1024 + 1 }],
+    configurable: true,
+  });
+  await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+  expect(node.querySelector('[role="alert"]').textContent).toContain("excede 1 MB");
+  expect(node.querySelector('[data-testid="chart"]').textContent).toBe("a.csv:2:0");
+});

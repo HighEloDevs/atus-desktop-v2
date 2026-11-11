@@ -70,6 +70,8 @@ fn main() {
             project_save_as,
             project_list,
             project_available,
+            #[cfg(feature = "desktop-e2e")]
+            project_test_directory,
             #[cfg(target_os = "macos")]
             project_menu_enabled,
             #[cfg(target_os = "macos")]

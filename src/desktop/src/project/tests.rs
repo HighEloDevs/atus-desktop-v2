@@ -521,3 +521,75 @@ fn invalid_schema_version_is_rejected_without_changing_project_contents() {
     assert!(super::store::write_checked(&path, &original, &original).is_err());
     assert_eq!(std::fs::read(&path).unwrap(), before);
 }
+
+#[test]
+fn save_as_reports_missing_parent_and_preserves_existing_project() {
+    let directory = tempfile::tempdir().unwrap();
+    let original_path = directory.path().join("original.atus");
+    let original = empty_project();
+    create_project(&original_path, &original).unwrap();
+    let destination = directory.path().join("missing").join("copy.atus");
+    assert!(
+        tauri::async_runtime::block_on(super::commands::project_save_as(
+            destination.clone(),
+            original.clone()
+        ))
+        .is_err()
+    );
+    assert!(!destination.exists());
+    assert_eq!(read_project(&original_path).unwrap(), original);
+}
+
+#[test]
+fn migration_rejects_unrelated_sqlite_without_altering_it() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("other.atus");
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    conn.execute_batch("CREATE TABLE notes (body TEXT); INSERT INTO notes VALUES ('preserve');")
+        .unwrap();
+    drop(conn);
+    let before = std::fs::read(&path).unwrap();
+    let error = super::migrations::migrate(&path).unwrap_err().to_string();
+    assert!(error.contains("não é um projeto ATUS"));
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+#[test]
+fn missing_project_record_is_rejected_without_overwriting_remaining_data() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("missing-record.atus");
+    let original = empty_project();
+    create_project(&path, &original).unwrap();
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    conn.execute("DELETE FROM project", []).unwrap();
+    drop(conn);
+    let before = std::fs::read(&path).unwrap();
+    assert!(read_project(&path).is_err());
+    assert!(super::store::write_checked(&path, &original, &original).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+#[test]
+fn save_as_with_invalid_data_preserves_destination_and_source() {
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("source.atus");
+    let destination = directory.path().join("copy.atus");
+    let valid = project_with_point(Point {
+        x: 1.0,
+        y: 2.0,
+        sx: None,
+        sy: None,
+    });
+    create_project(&source, &valid).unwrap();
+    let mut invalid = valid.clone();
+    invalid.analyses[0].datasets[0].points[0].sy = Some(-1.0);
+    assert!(
+        tauri::async_runtime::block_on(super::commands::project_save_as(
+            destination.clone(),
+            invalid
+        ))
+        .is_err()
+    );
+    assert!(!destination.exists());
+    assert_eq!(read_project(&source).unwrap(), valid);
+}

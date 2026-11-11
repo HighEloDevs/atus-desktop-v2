@@ -183,3 +183,46 @@ it("prevents overlapping creation requests while the first is pending", async ()
   await act(async () => finish(opened));
   expect(node.querySelector('[data-testid="analysis"]').textContent).toBe("/project.atus");
 });
+
+it("shows an error when the Finder request cannot be read", async () => {
+  Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true });
+  bridge.invoke.mockRejectedValueOnce(new Error("Finder unavailable"));
+  await render();
+  expect(node.querySelector('[role="alert"]').textContent).toContain("Finder unavailable");
+  expect(bridge.projectClient.open).not.toHaveBeenCalled();
+});
+
+it("uses Command-Option-N on macOS and does not trigger the Control shortcut", async () => {
+  Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true });
+  await render();
+  await act(async () =>
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { code: "KeyN", ctrlKey: true, altKey: true }),
+    ),
+  );
+  expect(bridge.projectClient.create).not.toHaveBeenCalled();
+  await act(async () =>
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { code: "KeyN", metaKey: true, altKey: true }),
+    ),
+  );
+  expect(bridge.projectClient.create).toHaveBeenCalledTimes(1);
+});
+
+it("opens an external profile through the browser in preview mode", async () => {
+  bridge.isTauri.mockReturnValue(false);
+  const open = vi.spyOn(window, "open").mockImplementation(() => null);
+  await render();
+  await act(async () => button("Sobre").click());
+  await act(async () =>
+    node
+      .querySelector('button[aria-label="Abrir LinkedIn de Willian Maximo no navegador"]')
+      .click(),
+  );
+  expect(open).toHaveBeenCalledWith(
+    "https://www.linkedin.com/in/willian-gama-maximo-85297017b/",
+    "_blank",
+    "noopener,noreferrer",
+  );
+  open.mockRestore();
+});
