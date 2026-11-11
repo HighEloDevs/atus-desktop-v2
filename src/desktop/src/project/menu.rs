@@ -8,6 +8,15 @@ use tauri::{
 const SAVE: &str = "atus-project-save";
 const SAVE_AS: &str = "atus-project-save-as";
 
+/// Maps a native menu identifier to its frontend action.
+fn menu_action(id: &str) -> Option<&'static str> {
+    match id {
+        SAVE => Some("save"),
+        SAVE_AS => Some("save-as"),
+        _ => None,
+    }
+}
+
 /// Native save menu items controlled by the active project.
 pub struct ProjectMenu {
     save: MenuItem<tauri::Wry>,
@@ -28,10 +37,8 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
     app.set_menu(menu)?;
     app.manage(ProjectMenu { save, save_as });
     app.on_menu_event(|app, event| {
-        let action = match event.id().as_ref() {
-            SAVE => "save",
-            SAVE_AS => "save-as",
-            _ => return,
+        let Some(action) = menu_action(event.id().as_ref()) else {
+            return;
         };
         if let Some(window) = app.get_webview_window("main") {
             if let Err(error) = window.emit("project-menu-action", action) {
@@ -53,3 +60,7 @@ pub fn project_menu_enabled(menu: State<'_, ProjectMenu>, enabled: bool) -> Resu
         .set_enabled(enabled)
         .map_err(|error| error.to_string())
 }
+
+#[cfg(test)]
+#[path = "menu_tests.rs"]
+mod tests;

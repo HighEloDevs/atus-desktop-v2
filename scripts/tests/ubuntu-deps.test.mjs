@@ -17,6 +17,7 @@ test('uses official Jammy sources and bounded network retries for update and ins
     assert.match(output, /security\.ubuntu\.com\/ubuntu jammy-security main universe/);
     assert.equal((output.match(/Acquire::Retries=3/g) || []).length, 2);
     assert.equal((output.match(/Acquire::http::Timeout=15/g) || []).length, 2);
+    assert.equal((output.match(/APT::Update::Error-Mode=any/g) || []).length, 2);
     assert.match(output, / update\n/);
     assert.match(output, / install -y .*libwebkit2gtk-4\.1-dev/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
