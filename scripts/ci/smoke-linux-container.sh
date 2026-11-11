@@ -50,6 +50,9 @@ if [[ ! -x "$program" ]]; then
   exit 1
 fi
 useradd --create-home atus-smoke
+if [[ "$kind" == appimage ]]; then
+  chown -R atus-smoke:atus-smoke "$work"
+fi
 # The container itself is isolated. Disable WebKit's nested sandbox because
 # unprivileged containers cannot reliably create its user namespaces.
 runuser -u atus-smoke -- env WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
