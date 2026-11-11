@@ -279,6 +279,28 @@ jobs:
           retention-days: 3
 
 
+  desktop-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install desktop test dependencies
+        timeout-minutes: 15
+        run: sudo .github/scripts/ci/install-ubuntu-deps.sh
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci
+      - name: Build desktop test application
+        run: cargo build --manifest-path src/desktop/Cargo.toml --features desktop-e2e
+      - name: Run desktop smoke on Linux
+        timeout-minutes: 10
+        run: xvfb-run -a .github/scripts/desktop-e2e/run-linux.sh
+
   test-linux:
     runs-on: ubuntu-22.04
     steps:

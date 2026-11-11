@@ -2,7 +2,7 @@
 # Runs the opt-in desktop smoke on an existing X11 display; for CI use xvfb-run.
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 app="$root/src/desktop/target/debug/atus-desktop"
 frontend="$root/src/frontend"
 if [[ "$(uname -s)" != Linux || -z "${DISPLAY:-}" ]]; then

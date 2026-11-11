@@ -57,3 +57,11 @@ test('package builds check platform applications before uploading', () => {
     assert.ok(job.indexOf(smoke) > 0 && job.indexOf(smoke) < job.indexOf('actions/upload-artifact'));
   }
 });
+
+test('Linux desktop smoke locates the repository after relocation to .github', () => {
+  const runner = readFileSync('.github/scripts/desktop-e2e/run-linux.sh', 'utf8');
+  assert.match(runner, /\$\(dirname "\$\{BASH_SOURCE\[0\]\}"\)\/\.\.\/\.\.\/\.\./);
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8');
+  assert.match(workflow, /^  desktop-linux:$/m);
+  assert.ok(workflow.includes('xvfb-run -a .github/scripts/desktop-e2e/run-linux.sh'));
+});
