@@ -222,9 +222,9 @@ jobs:
           deb=(src/desktop/target/release/bundle/deb/*.deb)
           rpm=(src/desktop/target/release/bundle/rpm/*.rpm)
           appimage=(src/desktop/target/release/bundle/appimage/*.AppImage)
-          docker run --rm -v "$PWD:/workspace:ro" ubuntu:22.04 bash /workspace/scripts/ci/smoke-linux-container.sh deb "/workspace/${deb[0]}"
-          docker run --rm -v "$PWD:/workspace:ro" fedora:44 bash /workspace/scripts/ci/smoke-linux-container.sh rpm "/workspace/${rpm[0]}"
-          docker run --rm -v "$PWD:/workspace:ro" ubuntu:22.04 bash /workspace/scripts/ci/smoke-linux-container.sh appimage "/workspace/${appimage[0]}"
+          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" ubuntu:22.04 bash /workspace/scripts/ci/smoke-linux-container.sh deb "/workspace/${deb[0]}"
+          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" fedora:44 bash /workspace/scripts/ci/smoke-linux-container.sh rpm "/workspace/${rpm[0]}"
+          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" ubuntu:22.04 bash /workspace/scripts/ci/smoke-linux-container.sh appimage "/workspace/${appimage[0]}"
       - uses: actions/upload-artifact@v4
         with:
           name: linux-bundles
