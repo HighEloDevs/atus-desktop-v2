@@ -8,9 +8,9 @@ A proposta é exigir testes no Ubuntu x64, Windows x64 e macOS Intel e Apple Sil
 
 A investigação foi feita em macOS ARM64, Node 26.13.0 e Cargo 1.99.1. O frontend possui quatro testes de integração (`src/frontend/tests/integration`), executados pelo test runner do Node e carregando TSX via Vite SSR. O Rust possui onze testes marcados `#[test]`, incluindo a ponte, e o C++ contém `mock_analysis.cpp` sem suíte própria. O motor não implementa cálculo científico.
 
-Após `npm ci`, `node --test --experimental-test-coverage tests/integration` passou os quatro testes, mas mostrou 100% com a tabela de arquivos vazia. Como os módulos são carregados por Vite SSR, esse número **não mede cobertura da aplicação** e não pode servir de baseline ou gate. Houve aviso de porta WebSocket 24678 em uso, sem falha dos testes. O npm informou 10 vulnerabilidades moderadas; não foram analisadas aqui.
+Após `npm ci`, a medição original com o test runner do Node mostrou 100% com a tabela de arquivos vazia; esse resultado não mede cobertura da aplicação. Os testes passaram a usar Vitest com cobertura V8, incluindo arquivos TS/TSX não executados: a medição inicial local indicou 187/1008 linhas (18,55%), abaixo da meta. O npm informou vulnerabilidades moderadas; não foram analisadas aqui.
 
-Não havia `cargo-llvm-cov` nem `rustup` no ambiente local; não foi obtido percentual confiável de Rust. Também não foi configurada instrumentação C++ e não há percentual confiável para o motor. É necessário instrumentar código compilado, incluir arquivos não exercitados no denominador e estabelecer uma política verificável de exclusões antes de ativar os limites. Não alegar que a cobertura supera 90% sem esse trabalho.
+A coleta LLVM exploratória de Rust mediu 512/696 linhas (73,56%), incluindo código de testes e apenas caminhos compilados para macOS ARM; ela ainda não é adequada como gate de produção. O C++ demonstrativo mediu 4/4 linhas localmente, sem comprovar comportamento científico. É necessário estabelecer uma política verificável de inclusão e exclusões e ampliar os testes antes de ativar os limites. Não alegar que a cobertura supera 90% por linguagem sem esse trabalho.
 
 ## Plataformas e alternativas
 

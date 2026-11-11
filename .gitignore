@@ -1,5 +1,6 @@
 node_modules/
 dist/
+src/frontend/coverage/
 target/
 .DS_Store
 

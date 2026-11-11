@@ -1,18 +1,15 @@
 import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
+import { afterAll, beforeAll, test } from "vitest";
 import { JSDOM } from "jsdom";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { createServer } from "vite";
-import { fileURLToPath } from "node:url";
 
-let server;
 let dom;
 let root;
-let FinderProjectDialog;
 let previousGlobals;
+let FinderProjectDialog;
 
-before(async () => {
+beforeAll(async () => {
   dom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>", {
     url: "http://localhost/",
     pretendToBeVisual: true,
@@ -55,23 +52,12 @@ before(async () => {
     });
   }
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-  server = await createServer({
-    configFile: false,
-    esbuild: { jsx: "automatic" },
-    resolve: { alias: { "@": fileURLToPath(new URL("../../src", import.meta.url)) } },
-    optimizeDeps: { noDiscovery: true },
-    server: { middlewareMode: true, watch: null },
-    appType: "custom",
-  });
-  ({ FinderProjectDialog } = await server.ssrLoadModule(
-    "/src/features/projects/FinderProjectDialog.tsx",
-  ));
+  ({ FinderProjectDialog } = await import("../../src/features/projects/FinderProjectDialog.tsx"));
   root = createRoot(document.getElementById("root"));
 });
 
-after(async () => {
+afterAll(async () => {
   if (root) await act(async () => root.unmount());
-  await server?.close();
   dom?.window.close();
   for (const [key, descriptor] of Object.entries(previousGlobals ?? {})) {
     if (descriptor) Object.defineProperty(globalThis, key, descriptor);

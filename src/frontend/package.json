@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite --configLoader runner --host 127.0.0.1 --port 1420 --strictPort",
-    "test": "node --test tests/integration",
+    "test": "vitest run --configLoader runner",
     "build": "tsc -b && vite build --configLoader runner",
     "tauri": "cd ../desktop && tauri",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:coverage": "vitest run --coverage --configLoader runner"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
@@ -43,6 +44,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "@vitest/coverage-v8": "^5.1.0",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -52,6 +54,7 @@
     "prettier": "3.9.10",
     "typescript": "~5.9.0",
     "typescript-eslint": "^8.72.2",
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "vitest": "^5.1.0"
   }
 }
