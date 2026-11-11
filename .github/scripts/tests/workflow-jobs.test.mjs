@@ -65,3 +65,10 @@ test('Linux desktop smoke locates the repository after relocation to .github', (
   assert.match(workflow, /^  desktop-linux:$/m);
   assert.ok(workflow.includes('xvfb-run -a .github/scripts/desktop-e2e/run-linux.sh'));
 });
+
+test('Windows desktop smoke runs only after building the test application', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const job = workflow.split('  desktop-windows:\n')[1]?.split(/^  [\w-]+:/m)[0];
+  assert.ok(job);
+  assert.ok(job.indexOf('cargo build --manifest-path') < job.indexOf('desktop-e2e/run-windows.ps1'));
+});

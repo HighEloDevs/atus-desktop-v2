@@ -212,6 +212,27 @@ jobs:
           retention-days: 3
 
 
+  desktop-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test desktop runner safeguards
+        run: .github/scripts/tests/windows-desktop-runner.test.ps1
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci
+      - name: Build desktop test application
+        run: cargo build --manifest-path src/desktop/Cargo.toml --features desktop-e2e
+      - name: Run desktop smoke on Windows
+        timeout-minutes: 10
+        run: .github/scripts/desktop-e2e/run-windows.ps1
+
   test-windows:
     runs-on: windows-latest
     steps:
