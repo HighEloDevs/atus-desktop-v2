@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  version:
+  check-version:
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-22.04
     steps:
@@ -31,6 +31,8 @@ jobs:
           node scripts/version.mjs check --base origin/main
 
   build-macos-arm64:
+    needs: check-version
+    if: always() && (needs.check-version.result == 'success' || needs.check-version.result == 'skipped')
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -73,6 +75,8 @@ jobs:
           retention-days: 3
 
   build-macos-intel:
+    needs: check-version
+    if: always() && (needs.check-version.result == 'success' || needs.check-version.result == 'skipped')
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
@@ -115,6 +119,8 @@ jobs:
           retention-days: 3
 
   build-windows:
+    needs: check-version
+    if: always() && (needs.check-version.result == 'success' || needs.check-version.result == 'skipped')
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -157,6 +163,8 @@ jobs:
           retention-days: 3
 
   build-linux:
+    needs: check-version
+    if: always() && (needs.check-version.result == 'success' || needs.check-version.result == 'skipped')
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4

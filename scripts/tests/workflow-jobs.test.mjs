@@ -13,3 +13,14 @@ test('desktop workflow has explicit platform jobs and artifacts', () => {
   }
   assert.doesNotMatch(workflow, /matrix\./);
 });
+
+test('builds wait for version validation and allow intentionally skipped checks', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8');
+  assert.match(workflow, /^  check-version:$/m);
+  for (const name of ['build-linux', 'build-windows', 'build-macos-intel', 'build-macos-arm64']) {
+    const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
+    assert.match(job, /needs: check-version/);
+    assert.match(job, /needs\.check-version\.result == 'success'/);
+    assert.match(job, /needs\.check-version\.result == 'skipped'/);
+  }
+});
