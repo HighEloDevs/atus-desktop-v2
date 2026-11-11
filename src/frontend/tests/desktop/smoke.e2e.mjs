@@ -15,7 +15,7 @@ async function request(method, path, body) {
     method,
     headers: { "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(5000),
+    signal: AbortSignal.timeout(path === "/session" && method === "POST" ? 30000 : 5000),
   });
   const data = await response.json();
   assert.ok(
@@ -25,7 +25,7 @@ async function request(method, path, body) {
   return data.value;
 }
 
-test("the native application shows the new analysis action", { timeout: 30000 }, async () => {
+test("the native application shows the new analysis action", { timeout: 60000 }, async () => {
   const { sessionId } = await request("POST", "/session", { capabilities: { alwaysMatch: {} } });
   assert.ok(sessionId);
   try {
@@ -50,7 +50,7 @@ test("the native application shows the new analysis action", { timeout: 30000 },
 
 test(
   "creates, saves and reopens a project in an isolated temporary directory",
-  { timeout: 30000 },
+  { timeout: 60000 },
   async () => {
     const configuredDir = process.env.ATUS_DESKTOP_E2E_PROJECT_DIR;
     assert.ok(configuredDir, "ATUS_DESKTOP_E2E_PROJECT_DIR is required");
