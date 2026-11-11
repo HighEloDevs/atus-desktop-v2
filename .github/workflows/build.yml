@@ -41,7 +41,7 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - name: Test CI helper scripts
-        run: node --test scripts/tests/version.test.mjs scripts/tests/release.test.mjs scripts/coverage/check.test.mjs
+        run: node --test scripts/tests/version.test.mjs scripts/tests/release.test.mjs scripts/tests/git-attributes.test.mjs scripts/coverage/check.test.mjs
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -90,7 +90,7 @@ jobs:
         working-directory: src/frontend
         run: npm ci
       - name: Test CI helper scripts
-        run: node --test scripts/tests/version.test.mjs scripts/tests/release.test.mjs scripts/coverage/check.test.mjs
+        run: node --test scripts/tests/version.test.mjs scripts/tests/release.test.mjs scripts/tests/git-attributes.test.mjs scripts/coverage/check.test.mjs
       - name: Lint, test, and build frontend
         working-directory: src/frontend
         run: |

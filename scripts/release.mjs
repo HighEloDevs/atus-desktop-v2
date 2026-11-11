@@ -4,6 +4,53 @@ import { lstatSync, readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+function validateExpected(expected) {
+  if (!expected || !/^[0-9a-f]{40}$/.test(expected.sha) || typeof expected.version !== 'string' || !expected.version ||
+      !Array.isArray(expected.names) || expected.names.length === 0 ||
+      new Set(expected.names).size !== expected.names.length ||
+      expected.names.some((name) => typeof name !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(name) || basename(name) !== name)) {
+    throw new Error('Invalid trusted release metadata');
+  }
+}
+
+function artifactDigest(directory, name) {
+  const path = join(directory, name);
+  if (!lstatSync(path).isFile()) throw new Error(`Not a regular artifact: ${name}`);
+  return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+/**
+ * Create a manifest from a trusted inventory after its build jobs succeed.
+ *
+ * @param {string} directory Directory containing artifact files.
+ * @param {{sha: string, version: string, names: string[]}} expected Trusted release identity and exact inventory.
+ * @returns {{sha: string, version: string, artifacts: Array<{name: string, sha256: string}>}} Manifest of artifact digests.
+ * @throws {Error} If identity, inventory, or an artifact is invalid.
+ */
+export function createManifest(directory, expected) {
+  validateExpected(expected);
+  return {
+    sha: expected.sha,
+    version: expected.version,
+    artifacts: [...expected.names].sort().map((name) => ({ name, sha256: artifactDigest(directory, name) })),
+  };
+}
+
+/**
+ * Format validated artifact digests in the conventional SHA-256 checksum format.
+ *
+ * @param {{sha: string, version: string, artifacts: Array<{name: string, sha256: string}>}} manifest Created manifest.
+ * @returns {string} Sorted checksums ending in a newline.
+ * @throws {Error} If metadata, names, or digests are invalid.
+ */
+export function formatChecksums(manifest) {
+  if (!manifest || !Array.isArray(manifest.artifacts)) throw new Error('Invalid manifest');
+  validateExpected({ sha: manifest.sha, version: manifest.version, names: manifest.artifacts.map((item) => item?.name) });
+  if (manifest.artifacts.some((item) => !/^[0-9a-f]{64}$/.test(item.sha256))) throw new Error('Invalid SHA-256');
+  return [...manifest.artifacts].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
+    .map(({ name, sha256 }) => `${sha256}  ${name}\n`).join('');
+}
+
 /**
  * Verify a manifest against trusted release metadata and artifact bytes.
  *
@@ -14,12 +61,7 @@ import { pathToFileURL } from 'node:url';
  * @throws {Error} If metadata, inventory, file type, or SHA-256 does not match.
  */
 export function verifyManifest(manifest, directory, expected) {
-  if (!/^[0-9a-f]{40}$/.test(expected.sha) || !expected.version ||
-      !Array.isArray(expected.names) || expected.names.length === 0 ||
-      new Set(expected.names).size !== expected.names.length ||
-      expected.names.some((name) => typeof name !== 'string' || !name || name === '.' || name === '..' || basename(name) !== name || name.includes('\\'))) {
-    throw new Error('Invalid trusted release metadata');
-  }
+  validateExpected(expected);
   if (!manifest || manifest.sha !== expected.sha || manifest.version !== expected.version || !Array.isArray(manifest.artifacts)) {
     throw new Error('Release identity does not match');
   }
@@ -29,9 +71,7 @@ export function verifyManifest(manifest, directory, expected) {
   }
   for (const artifact of manifest.artifacts) {
     if (!/^[0-9a-f]{64}$/.test(artifact.sha256)) throw new Error('Invalid SHA-256');
-    const path = join(directory, artifact.name);
-    if (!lstatSync(path).isFile()) throw new Error(`Not a regular artifact: ${artifact.name}`);
-    const digest = createHash('sha256').update(readFileSync(path)).digest('hex');
+    const digest = artifactDigest(directory, artifact.name);
     if (digest !== artifact.sha256) throw new Error(`SHA-256 mismatch: ${artifact.name}`);
   }
 }

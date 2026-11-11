@@ -270,4 +270,86 @@ mod tests {
         let response = serde_json::to_value(reopened).unwrap();
         assert_eq!(response["snapshot"], serde_json::to_value(edited).unwrap());
     }
+
+    #[test]
+    fn project_commands_reject_invalid_extensions_without_creating_files() {
+        use super::commands::{project_open, project_save, project_save_as};
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("experiment.txt");
+        let snapshot = empty_project();
+        tauri::async_runtime::block_on(async {
+            assert!(project_open(path.clone())
+                .await
+                .err()
+                .unwrap()
+                .contains(".atus"));
+            assert!(
+                project_save(path.clone(), snapshot.clone(), snapshot.clone())
+                    .await
+                    .unwrap_err()
+                    .contains(".atus")
+            );
+            assert!(project_save_as(path.clone(), snapshot)
+                .await
+                .err()
+                .unwrap()
+                .contains(".atus"));
+        });
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn save_as_does_not_overwrite_an_existing_project() {
+        use super::commands::project_save_as;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("existing.atus");
+        let original = empty_project();
+        create_project(&path, &original).unwrap();
+        let mut changed = original.clone();
+        changed.name = "Outro conteúdo".into();
+        let error = tauri::async_runtime::block_on(project_save_as(path.clone(), changed))
+            .err()
+            .expect("saving over an existing project must fail");
+        assert!(error.contains("Já existe"));
+        assert_eq!(read_project(&path).unwrap(), original);
+    }
+
+    #[test]
+    fn save_as_accepts_uppercase_extension_and_sets_project_name() {
+        use super::commands::project_save_as;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("Medições.ATUS");
+        let saved = tauri::async_runtime::block_on(project_save_as(path.clone(), empty_project()))
+            .ok()
+            .expect("uppercase extension should be accepted");
+        let response = serde_json::to_value(saved).unwrap();
+        assert_eq!(response["snapshot"]["name"], "Medições");
+        assert_eq!(read_project(&path).unwrap().name, "Medições");
+    }
+
+    #[test]
+    fn project_availability_requires_an_existing_file() {
+        use super::commands::project_available;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("experiment.atus");
+        assert!(!tauri::async_runtime::block_on(project_available(
+            path.clone()
+        )));
+        assert!(!tauri::async_runtime::block_on(project_available(
+            directory.path().to_path_buf()
+        )));
+        std::fs::write(&path, b"not necessarily a valid project").unwrap();
+        assert!(tauri::async_runtime::block_on(project_available(path)));
+    }
+
+    #[test]
+    fn opening_corrupt_project_preserves_original_bytes() {
+        use super::commands::project_open;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("corrupt.atus");
+        let contents = b"this is not a SQLite database";
+        std::fs::write(&path, contents).unwrap();
+        assert!(tauri::async_runtime::block_on(project_open(path.clone())).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), contents);
+    }
 }

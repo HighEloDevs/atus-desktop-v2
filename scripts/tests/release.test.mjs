@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { verifyManifest } from '../release.mjs';
+import { createManifest, formatChecksums, verifyManifest } from '../release.mjs';
 
 const sha = 'a'.repeat(40);
 const digest = (value) => createHash('sha256').update(value).digest('hex');
@@ -50,4 +50,20 @@ test('rejects symlink artifacts when supported', (t) => {
     throw error;
   }
   assert.throws(() => verifyManifest(manifest, dir, expected));
+});
+
+test('creates a verified manifest and deterministic checksums for trusted artifacts', (t) => {
+  const { dir, expected } = fixture(t);
+  writeFileSync(join(dir, 'second.deb'), 'other');
+  const metadata = { ...expected, names: ['second.deb', 'app.zip'] };
+  const manifest = createManifest(dir, metadata);
+  verifyManifest(manifest, dir, metadata);
+  assert.equal(formatChecksums(manifest), `${digest('contents')}  app.zip\n${digest('other')}  second.deb\n`);
+});
+
+test('rejects unsafe names, duplicate inventory and missing files when creating a manifest', (t) => {
+  const { dir, expected } = fixture(t);
+  for (const names of [['../app.zip'], ['app.zip\nother'], ['app.zip', 'app.zip'], ['missing.zip']]) {
+    assert.throws(() => createManifest(dir, { ...expected, names }));
+  }
 });
