@@ -41,3 +41,10 @@ test('release artifact gate waits for every platform package', () => {
     assert.ok(job.includes(`build-${platform}`));
   }
 });
+
+test('desktop smoke jobs cover both macOS architectures', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  assert.match(workflow, /^  coverage-rust:\n    runs-on: macos-latest$/m);
+  assert.match(workflow, /^  desktop-macos-intel:\n    runs-on: macos-15-intel$/m);
+  assert.equal((workflow.match(/\.github\/scripts\/coverage\/rust-desktop-macos\.sh/g) ?? []).length, 2);
+});

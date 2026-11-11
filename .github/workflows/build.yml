@@ -66,6 +66,26 @@ jobs:
           LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" .github/scripts/coverage/rust-desktop-macos.sh "$RUNNER_TEMP/rust.lcov"
           node .github/scripts/coverage/check.mjs "$RUNNER_TEMP/rust.lcov"
 
+  desktop-macos-intel:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci
+      - name: Run desktop smoke on macOS Intel
+        run: |
+          llvm_bin="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin"
+          LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" .github/scripts/coverage/rust-desktop-macos.sh "$RUNNER_TEMP/rust-intel.lcov"
+
   test-macos-arm64:
     runs-on: macos-latest
     steps:

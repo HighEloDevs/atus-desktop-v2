@@ -10,6 +10,7 @@ export const REQUIRED_RELEASE_GATES = Object.freeze([
 const JOB_EVIDENCE = Object.freeze({
   'coverage-frontend': 'test-linux',
   'coverage-cpp': 'test-linux',
+  'desktop-macos-arm64': 'coverage-rust',
   'install-linux-deb': 'build-linux',
   'install-linux-rpm': 'build-linux',
   'install-linux-appimage': 'build-linux',
