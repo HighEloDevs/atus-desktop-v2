@@ -45,6 +45,7 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 
 ## Desenvolvimento
 
+- O fluxo de CI atual executa lint, testes e builds no macOS e Windows, além de testes no Ubuntu; os artefatos de teste expiram em três dias. O verificador de cobertura e o comando de versionamento em `scripts/` são infraestrutura inicial: a cobertura por linguagem, os gates obrigatórios, a publicação automática e os testes completos multiplataforma ainda não estão implementados. Consulte `docs/decisions/0004-ci-platform-investigation.md` antes de ativá-los. A proteção de PR e a aprovação de maintainer ainda dependem de configuração e validação no GitHub.
 - Siga [CONTRIBUTING.md](CONTRIBUTING.md) para contribuições e descrições de PR. Use o template de corpo documentado ali e em `.github/pull_request_template.md`, mantendo o escopo final e as evidências de verificação atualizados.
 
 - Crie sempre worktrees novas dentro de `.worktree/` na raiz do repositório, usando uma subpasta por worktree. Os artefatos locais do Superpowers e o diretório de worktrees ficam fora do Git.
