@@ -352,4 +352,102 @@ mod tests {
         assert!(tauri::async_runtime::block_on(project_open(path.clone())).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), contents);
     }
+
+    fn project_with_point(point: Point) -> ProjectSnapshot {
+        let mut snapshot = empty_project();
+        snapshot.analyses.push(Analysis {
+            id: "analysis".into(),
+            kind: "analysis".into(),
+            state: serde_json::json!({}),
+            datasets: vec![Dataset {
+                id: "dataset".into(),
+                name: "measurement".into(),
+                state: serde_json::json!({}),
+                points: vec![point],
+            }],
+        });
+        snapshot
+    }
+
+    #[test]
+    fn invalid_measurements_never_replace_existing_project() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("measurement.atus");
+        let original = project_with_point(Point {
+            x: 1.0,
+            y: 2.0,
+            sx: Some(0.1),
+            sy: Some(0.2),
+        });
+        create_project(&path, &original).unwrap();
+        let invalid_points = [
+            Point {
+                x: f64::NAN,
+                y: 2.0,
+                sx: None,
+                sy: None,
+            },
+            Point {
+                x: 1.0,
+                y: f64::INFINITY,
+                sx: None,
+                sy: None,
+            },
+            Point {
+                x: 1.0,
+                y: 2.0,
+                sx: Some(-0.1),
+                sy: None,
+            },
+            Point {
+                x: 1.0,
+                y: 2.0,
+                sx: None,
+                sy: Some(-0.1),
+            },
+            Point {
+                x: 1.0,
+                y: 2.0,
+                sx: Some(f64::NAN),
+                sy: None,
+            },
+            Point {
+                x: 1.0,
+                y: 2.0,
+                sx: None,
+                sy: Some(f64::INFINITY),
+            },
+        ];
+        for point in invalid_points {
+            let changed = project_with_point(point);
+            assert!(super::store::write_checked(&path, &original, &changed).is_err());
+            assert_eq!(read_project(&path).unwrap(), original);
+        }
+    }
+
+    #[test]
+    fn invalid_json_in_saved_analysis_or_dataset_is_rejected_without_rewriting() {
+        for table in ["analyses", "datasets"] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("invalid-state.atus");
+            create_project(
+                &path,
+                &project_with_point(Point {
+                    x: 1.0,
+                    y: 2.0,
+                    sx: None,
+                    sy: None,
+                }),
+            )
+            .unwrap();
+            let connection = rusqlite::Connection::open(&path).unwrap();
+            connection
+                .execute(&format!("UPDATE {table} SET state_json = ?1"), ["{invalid"])
+                .unwrap();
+            drop(connection);
+            let before = std::fs::read(&path).unwrap();
+            assert!(read_project(&path).is_err());
+            assert_eq!(std::fs::read(&path).unwrap(), before);
+        }
+    }
 }

@@ -85,7 +85,7 @@ jobs:
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2 rpm
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -105,3 +105,22 @@ jobs:
           cc -std=c11 -Isrc/scientific-engine/include -c src/scientific-engine/tests/mock_analysis_test.c -o /tmp/atus-mock-test.o
           c++ -std=c++17 -Isrc/scientific-engine/include src/scientific-engine/src/mock_analysis.cpp /tmp/atus-mock-test.o -o /tmp/atus-mock-test
           /tmp/atus-mock-test
+      - name: Test Linux bundle verifier
+        run: python3 -m unittest discover -s scripts/tests -p 'test_verify_linux_bundles.py'
+      - name: Build Linux bundles
+        working-directory: src/frontend
+        run: npm run tauri -- build --bundles deb,rpm,appimage
+      - name: Check Linux bundles
+        run: |
+          python3 scripts/verify-linux-bundles.py src/desktop/target/release/bundle
+          dpkg-deb --info src/desktop/target/release/bundle/deb/*.deb
+          rpm -qpi src/desktop/target/release/bundle/rpm/*.rpm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-bundles
+          path: |
+            src/desktop/target/release/bundle/deb/*.deb
+            src/desktop/target/release/bundle/rpm/*.rpm
+            src/desktop/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+          retention-days: 3
