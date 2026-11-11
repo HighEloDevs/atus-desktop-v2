@@ -450,4 +450,43 @@ mod tests {
             assert_eq!(std::fs::read(&path).unwrap(), before);
         }
     }
+
+    #[test]
+    fn failed_initial_creation_does_not_leave_a_partial_project() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("duplicate.atus");
+        let mut snapshot = project_with_point(Point {
+            x: 1.0,
+            y: 2.0,
+            sx: Some(0.0),
+            sy: Some(0.0),
+        });
+        snapshot.analyses.push(snapshot.analyses[0].clone());
+        assert!(create_project(&path, &snapshot).is_err());
+        assert!(!path.exists());
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn checked_save_rolls_back_on_duplicate_dataset_and_can_retry() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("retry.atus");
+        let original = project_with_point(Point {
+            x: 1.0,
+            y: 2.0,
+            sx: Some(0.0),
+            sy: None,
+        });
+        create_project(&path, &original).unwrap();
+        let mut invalid = original.clone();
+        invalid.analyses[0]
+            .datasets
+            .push(original.analyses[0].datasets[0].clone());
+        assert!(super::store::write_checked(&path, &original, &invalid).is_err());
+        assert_eq!(read_project(&path).unwrap(), original);
+        let mut valid = original.clone();
+        valid.name = "Recovered".into();
+        super::store::write_checked(&path, &original, &valid).unwrap();
+        assert_eq!(read_project(&path).unwrap(), valid);
+    }
 }
