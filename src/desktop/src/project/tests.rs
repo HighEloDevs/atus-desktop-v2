@@ -593,3 +593,25 @@ fn save_as_with_invalid_data_preserves_destination_and_source() {
     assert!(!destination.exists());
     assert_eq!(read_project(&source).unwrap(), valid);
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn finder_selects_last_atus_file_and_ignores_other_urls() {
+    use super::finder::last_project_path;
+    let temp = tempfile::tempdir().unwrap();
+    let first = temp.path().join("first.atus");
+    let last = temp.path().join("Análise.ATUS");
+    let other = temp.path().join("ignore.txt");
+    let urls = vec![
+        tauri::Url::from_file_path(&first).unwrap(),
+        tauri::Url::parse("https://example.org/unrelated.atus").unwrap(),
+        tauri::Url::from_file_path(&last).unwrap(),
+        tauri::Url::from_file_path(&other).unwrap(),
+    ];
+    assert_eq!(last_project_path(urls), Some(last));
+    assert_eq!(
+        last_project_path(vec![tauri::Url::from_file_path(other).unwrap()]),
+        None
+    );
+    assert_eq!(last_project_path(Vec::new()), None);
+}

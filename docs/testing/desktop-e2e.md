@@ -13,3 +13,5 @@ Em três terminais, a partir da raiz do repositório:
 3. `cd src/frontend && ATUS_DESKTOP_E2E_PROJECT_DIR="<diretório>" ATUS_DESKTOP_E2E_URL=http://127.0.0.1:4455 node --test tests/desktop/smoke.e2e.mjs` (no Windows, configure as variáveis com a sintaxe do shell).
 
 As portas 1420 e 4455 devem estar livres. Encerre os dois processos e remova o diretório temporário ao terminar. Um servidor em execução na porta escolhida pode ser controlado pelo teste; confirme que ele é o aplicativo de teste. A opção usa apenas o cliente HTTP nativo do Node, sem os pacotes npm WebDriver. A dependência Rust adicional e sua árvore ainda precisam de auditoria de segurança antes de se tornar gate no CI.
+
+No Linux, o experimento `xvfb-run -a scripts/desktop-e2e/run-linux.sh` inicia e encerra os processos, usa um diretório temporário e isola o diretório pessoal do aplicativo. Antes, instale as dependências do Tauri, Xvfb e `xauth`, execute `npm ci` em `src/frontend` e compile a feature de teste conforme acima. Este runner ainda não foi validado em Linux ou CI e não é gate de PR.

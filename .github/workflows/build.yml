@@ -137,6 +137,16 @@ jobs:
           python3 scripts/verify-linux-bundles.py src/desktop/target/release/bundle
           dpkg-deb --info src/desktop/target/release/bundle/deb/*.deb
           rpm -qpi src/desktop/target/release/bundle/rpm/*.rpm
+      - name: Test isolated package smoke script
+        run: node --test scripts/tests/linux-smoke.test.mjs
+      - name: Install and open Linux bundles in isolated systems
+        run: |
+          deb=(src/desktop/target/release/bundle/deb/*.deb)
+          rpm=(src/desktop/target/release/bundle/rpm/*.rpm)
+          appimage=(src/desktop/target/release/bundle/appimage/*.AppImage)
+          docker run --rm -v "$PWD:/workspace:ro" ubuntu:22.04 bash /workspace/scripts/ci/smoke-linux-container.sh deb "/workspace/${deb[0]}"
+          docker run --rm -v "$PWD:/workspace:ro" fedora:44 bash /workspace/scripts/ci/smoke-linux-container.sh rpm "/workspace/${rpm[0]}"
+          docker run --rm -v "$PWD:/workspace:ro" ubuntu:22.04 bash /workspace/scripts/ci/smoke-linux-container.sh appimage "/workspace/${appimage[0]}"
       - uses: actions/upload-artifact@v4
         with:
           name: linux-bundles
