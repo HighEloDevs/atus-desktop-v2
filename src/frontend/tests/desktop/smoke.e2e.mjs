@@ -111,3 +111,45 @@ test(
     }
   },
 );
+
+test(
+  "the Finder request opens a confirmation in the running application",
+  { skip: process.platform !== "darwin", timeout: 30000 },
+  async () => {
+    const dir = await realpath(process.env.ATUS_DESKTOP_E2E_PROJECT_DIR);
+    const files = (await readdir(dir)).filter((name) => name.endsWith(".atus"));
+    assert.equal(files.length, 1);
+    const filename = path.join(dir, files[0]);
+    const { sessionId } = await request("POST", "/session", { capabilities: { alwaysMatch: {} } });
+    const base = `/session/${sessionId}`;
+    try {
+      await request("POST", `${base}/execute/sync`, {
+        script:
+          'return window.__TAURI_INTERNALS__.invoke("project_test_finder", { path: arguments[0] })',
+        args: [filename],
+      });
+      const deadline = Date.now() + 10000;
+      let dialog;
+      while (Date.now() < deadline && !dialog) {
+        const matches = await request("POST", `${base}/elements`, {
+          using: "xpath",
+          value: '//*[contains(text(), "Abrir outro projeto?")]',
+        });
+        dialog = matches[0]?.["element-6066-11e4-a52e-4f735466cecf"];
+        if (!dialog) await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      assert.ok(dialog, "Finder confirmation was not shown");
+      const buttons = await request("POST", `${base}/elements`, {
+        using: "xpath",
+        value: '//button[contains(., "Cancelar")]',
+      });
+      await request(
+        "POST",
+        `${base}/element/${buttons[0]["element-6066-11e4-a52e-4f735466cecf"]}/click`,
+        {},
+      );
+    } finally {
+      await request("DELETE", base);
+    }
+  },
+);

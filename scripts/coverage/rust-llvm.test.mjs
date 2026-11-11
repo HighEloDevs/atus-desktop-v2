@@ -34,7 +34,7 @@ test('excludes only the explicitly separated test files from LLVM export', () =>
     });
     assert.equal(result.status, 0, result.stderr);
     const args = readFileSync(log, 'utf8');
-    assert.match(args, /-ignore-filename-regex=.*project\/tests.*project\/additional_tests.*project\/menu_tests.*project\/store_test_support.*main_tests/);
+    assert.match(args, /-ignore-filename-regex=.*project\/tests.*project\/additional_tests.*project\/menu_tests.*project\/e2e.*project\/store_test_support.*main_tests/);
     assert.match(result.stderr, /platform cfg paths and unlinked code may be absent/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

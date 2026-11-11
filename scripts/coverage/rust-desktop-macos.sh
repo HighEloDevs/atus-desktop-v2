@@ -111,6 +111,6 @@ done
 if kill -0 "$app_pid" 2>/dev/null; then echo 'Test application did not exit; no coverage report generated.' >&2; exit 1; fi
 wait "$app_pid"; app_pid=''
 "$profdata" merge -sparse "$tmp"/profiles/*.profraw -o "$tmp/merged.profdata"
-"$cov" export -format=lcov -ignore-filename-regex='/(project/tests|project/additional_tests|project/menu_tests|project/store_test_support|main_tests)\.rs$' -instr-profile="$tmp/merged.profdata" src/desktop/target/debug/atus-desktop -object "$(cat "$tmp/binary")" "$root/src/desktop/src" > "$output"
+"$cov" export -format=lcov -ignore-filename-regex='/(project/tests|project/additional_tests|project/menu_tests|project/e2e|project/store_test_support|main_tests)\.rs$' -instr-profile="$tmp/merged.profdata" src/desktop/target/debug/atus-desktop -object "$(cat "$tmp/binary")" "$root/src/desktop/src" > "$output"
 grep -q '^SF:' "$output" || { echo 'Rust coverage report is empty.' >&2; exit 1; }
 echo 'Exploratory report: unlinked code and other platform cfg paths may be absent; not a production coverage gate.' >&2

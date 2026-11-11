@@ -8,6 +8,10 @@ mod project;
 compile_error!("The desktop-e2e feature is only permitted in debug builds");
 
 use project::commands::*;
+#[cfg(feature = "desktop-e2e")]
+use project::e2e::project_test_directory;
+#[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
+use project::e2e::project_test_finder;
 #[cfg(target_os = "macos")]
 use project::{finder::take_finder_project, menu::project_menu_enabled};
 use serde::Serialize;
@@ -72,6 +76,8 @@ fn main() {
             project_available,
             #[cfg(feature = "desktop-e2e")]
             project_test_directory,
+            #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
+            project_test_finder,
             #[cfg(target_os = "macos")]
             project_menu_enabled,
             #[cfg(target_os = "macos")]

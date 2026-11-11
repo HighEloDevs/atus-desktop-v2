@@ -13,61 +13,20 @@ pub struct OpenProject {
     snapshot: ProjectSnapshot,
 }
 
-fn project_directory(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub(super) fn project_directory(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     #[cfg(feature = "desktop-e2e")]
     {
         let _ = app;
         let path = std::env::var_os("ATUS_DESKTOP_E2E_PROJECT_DIR")
             .map(PathBuf::from)
             .ok_or("ATUS_DESKTOP_E2E_PROJECT_DIR é obrigatório no teste desktop")?;
-        return validate_test_directory(&path, &std::env::temp_dir());
+        return super::e2e::validate_test_directory(&path, &std::env::temp_dir());
     }
     #[cfg(not(feature = "desktop-e2e"))]
     app.path()
         .document_dir()
         .map(|path| path.join("ATUS").join("projects"))
         .map_err(|e| e.to_string())
-}
-
-#[cfg(feature = "desktop-e2e")]
-fn validate_test_directory(path: &Path, temp: &Path) -> Result<PathBuf, String> {
-    if !path.is_absolute() || !path.is_dir() {
-        return Err("Diretório de teste deve existir e ser absoluto".into());
-    }
-    let path = path.canonicalize().map_err(|error| error.to_string())?;
-    let temp = temp.canonicalize().map_err(|error| error.to_string())?;
-    if path == temp || !path.starts_with(&temp) {
-        return Err("Diretório de teste deve ficar dentro do diretório temporário".into());
-    }
-    Ok(path)
-}
-
-#[cfg(all(test, feature = "desktop-e2e"))]
-mod e2e_directory_tests {
-    use super::validate_test_directory;
-    use std::path::Path;
-
-    #[test]
-    fn accepts_only_existing_subdirectories_of_the_temporary_directory() {
-        let temp = tempfile::tempdir().unwrap();
-        let other = tempfile::tempdir().unwrap();
-        let project = temp.path().join("project");
-        std::fs::create_dir(&project).unwrap();
-        assert_eq!(
-            validate_test_directory(&project, temp.path()).unwrap(),
-            project.canonicalize().unwrap()
-        );
-        assert!(validate_test_directory(temp.path(), temp.path()).is_err());
-        assert!(validate_test_directory(other.path(), temp.path()).is_err());
-        assert!(validate_test_directory(Path::new("relative"), temp.path()).is_err());
-        assert!(validate_test_directory(&temp.path().join("missing"), temp.path()).is_err());
-        #[cfg(unix)]
-        {
-            let link = temp.path().join("outside-link");
-            std::os::unix::fs::symlink(other.path(), &link).unwrap();
-            assert!(validate_test_directory(&link, temp.path()).is_err());
-        }
-    }
 }
 
 fn check_extension(path: &Path) -> Result<(), String> {
@@ -80,14 +39,6 @@ fn check_extension(path: &Path) -> Result<(), String> {
     } else {
         Err("Selecione um arquivo com extensão .atus.".into())
     }
-}
-
-/// Returns the isolated project directory configured for desktop integration tests.
-/// Fails if the test directory is missing or invalid.
-#[cfg(feature = "desktop-e2e")]
-#[tauri::command]
-pub async fn project_test_directory(app: tauri::AppHandle) -> Result<PathBuf, String> {
-    project_directory(&app)
 }
 
 /// Creates an initial snapshot under Documents/ATUS/projects with an available name.
