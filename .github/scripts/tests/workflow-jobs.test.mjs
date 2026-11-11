@@ -48,3 +48,12 @@ test('desktop smoke jobs cover both macOS architectures', () => {
   assert.match(workflow, /^  desktop-macos-intel:\n    runs-on: macos-15-intel$/m);
   assert.equal((workflow.match(/\.github\/scripts\/coverage\/rust-desktop-macos\.sh/g) ?? []).length, 2);
 });
+
+test('package builds check platform applications before uploading', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  for (const platform of ['macos-intel', 'macos-arm64', 'windows']) {
+    const job = workflow.split(`  build-${platform}:\n`)[1].split(/^  [\w-]+:/m)[0];
+    const smoke = platform === 'windows' ? 'smoke-windows-installer.ps1' : 'smoke-macos-bundle.sh';
+    assert.ok(job.indexOf(smoke) > 0 && job.indexOf(smoke) < job.indexOf('actions/upload-artifact'));
+  }
+});

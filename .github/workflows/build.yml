@@ -263,6 +263,14 @@ jobs:
       - name: Archive macOS app
         if: runner.os == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent "src/desktop/target/release/bundle/macos/ATUS Desktop.app" "src/desktop/target/release/bundle/macos/atus-desktop-macos.zip"
+      - name: Test Windows installer smoke helper
+        run: .github/scripts/tests/windows-installer-smoke.test.ps1
+      - name: Install and open Windows package
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem src/desktop/target/release/bundle/nsis/*.exe)
+          if ($installers.Count -ne 1) { throw 'Expected exactly one Windows installer.' }
+          .github/scripts/ci/smoke-windows-installer.ps1 -Installer $installers[0].FullName
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
