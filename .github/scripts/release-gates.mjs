@@ -11,6 +11,8 @@ const JOB_EVIDENCE = Object.freeze({
   'coverage-frontend': 'test-linux',
   'coverage-cpp': 'test-linux',
   'desktop-macos-arm64': 'coverage-rust',
+  'install-windows': 'build-windows',
+  'install-macos-arm64': 'build-macos-arm64',
   'install-linux-deb': 'build-linux',
   'install-linux-rpm': 'build-linux',
   'install-linux-appimage': 'build-linux',
