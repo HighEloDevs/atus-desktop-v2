@@ -18,6 +18,7 @@ Construir o ATUS Desktop v2, software científico gratuito e open source para es
 ## Convenções de linguagem
 
 - Escreva código, identificadores e nomes de arquivos e pastas em inglês. A interface permanece em português, conforme a orientação de produto.
+- Documente funções e métodos públicos em inglês com docstrings no padrão da linguagem (JSDoc, rustdoc ou Doxygen). Descreva propósito, parâmetros, retorno, erros, efeitos colaterais e pré-condições relevantes ao contrato. Mantenha a documentação atualizada junto com a implementação.
 
 ## Princípios de implementação
 
