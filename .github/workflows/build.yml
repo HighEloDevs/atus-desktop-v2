@@ -111,6 +111,10 @@ jobs:
       - name: Build desktop bundle
         working-directory: src/frontend
         run: npm run tauri -- build --bundles app
+      - name: Test macOS bundle smoke helper
+        run: node --test .github/scripts/tests/macos-bundle-smoke.test.mjs
+      - name: Open packaged macOS application
+        run: .github/scripts/ci/smoke-macos-bundle.sh "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
       - name: Check macOS project document icon
         if: runner.os == 'macOS'
         run: python3 .github/scripts/tests/check_macos_document_icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
@@ -170,6 +174,10 @@ jobs:
       - name: Build desktop bundle
         working-directory: src/frontend
         run: npm run tauri -- build --bundles app
+      - name: Test macOS bundle smoke helper
+        run: node --test .github/scripts/tests/macos-bundle-smoke.test.mjs
+      - name: Open packaged macOS application
+        run: .github/scripts/ci/smoke-macos-bundle.sh "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
       - name: Check macOS project document icon
         if: runner.os == 'macOS'
         run: python3 .github/scripts/tests/check_macos_document_icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
