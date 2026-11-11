@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Inline editing for chart labels.
+ */
+
 import { useEffect, useRef, useState } from "react";
 
 export type LabelAlignment = "left" | "center" | "right";
@@ -15,6 +20,11 @@ type Props = {
   initialFontSize?: number;
 };
 
+/**
+ * Renders an editable chart label with alignment controls.
+ * @param props - Label text, alignment, and update callbacks.
+ * @returns The rendered React element.
+ */
 export function EditableChartLabel({
   value,
   onChange,

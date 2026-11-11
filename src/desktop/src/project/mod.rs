@@ -1,3 +1,5 @@
+//! Project persistence and platform integration.
+
 pub mod commands;
 #[cfg(target_os = "macos")]
 pub mod finder;

@@ -1,6 +1,16 @@
+/**
+ * @module
+ * Reusable text input component.
+ */
+
 import * as React from "react";
 import { cn } from "cn";
 
+/**
+ * Renders a styled native input with the supplied input props.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   return (
     <input

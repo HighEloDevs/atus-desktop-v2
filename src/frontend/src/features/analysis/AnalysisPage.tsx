@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Analysis workspace and its project editing state.
+ */
+
 import { FinderProjectDialog } from "@/features/projects/FinderProjectDialog";
 import { Button } from "@/components/ui/button";
 import { useProjectSave } from "@/features/projects/useProjectSave";
@@ -91,6 +96,11 @@ type AnalysisState = {
   separator?: SeparatorType;
 };
 
+/**
+ * Renders the analysis workspace and coordinates project editing.
+ * @param props - Current project, navigation callback, and Finder opening state and callbacks.
+ * @returns The rendered React element.
+ */
 export function AnalysisPage({
   onBack,
   project = null,

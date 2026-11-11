@@ -1,3 +1,5 @@
+//! Native macOS project menu.
+
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     App, Emitter, Manager, State,
@@ -6,11 +8,14 @@ use tauri::{
 const SAVE: &str = "atus-project-save";
 const SAVE_AS: &str = "atus-project-save-as";
 
+/// Native save menu items controlled by the active project.
 pub struct ProjectMenu {
     save: MenuItem<tauri::Wry>,
     save_as: MenuItem<tauri::Wry>,
 }
 
+/// Installs the native File menu and save handlers on app.
+/// Returns an error on menu failures and panics if the default File submenu is absent.
 pub fn install(app: &mut App) -> tauri::Result<()> {
     let menu = Menu::default(app.handle())?;
     let items = menu.items()?;
@@ -37,6 +42,8 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Enables or disables both project save commands.
+/// Returns an error if either menu item cannot be updated.
 #[tauri::command]
 pub fn project_menu_enabled(menu: State<'_, ProjectMenu>, enabled: bool) -> Result<(), String> {
     menu.save

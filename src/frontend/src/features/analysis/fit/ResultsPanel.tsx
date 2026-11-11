@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Presentation of simulated fit results.
+ */
+
 import { useState } from "react";
 import { Activity, ChevronDown, ChevronUp, ChevronRight, Copy } from "lucide-react";
 import { Dialog } from "radix-ui";
@@ -7,6 +12,11 @@ type ResultItem = { id: string; name: string; color: string; result: FitResponse
 const format = (value: number) =>
   new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 4 }).format(value);
 
+/**
+ * Renders simulated fit results and their details.
+ * @param props - Results and a callback for highlighting a selected series.
+ * @returns The rendered React element.
+ */
 export function ResultsPanel({
   results,
   onHighlight,

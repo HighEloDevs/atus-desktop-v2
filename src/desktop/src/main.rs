@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+//! Desktop entry point and native demonstration bridge.
+
 mod project;
 
 use project::commands::*;

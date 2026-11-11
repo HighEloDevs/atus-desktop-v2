@@ -1,7 +1,17 @@
+/**
+ * @module
+ * Styled native select control.
+ */
+
 import * as React from "react";
 import { cn } from "cn";
 import { ChevronDownIcon } from "lucide-react";
 
+/**
+ * Renders a styled native select.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function NativeSelect({
   className,
   size = "default",
@@ -32,6 +42,11 @@ function NativeSelect({
   );
 }
 
+/**
+ * Renders an option for a native select.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function NativeSelectOption({ className, ...props }: React.ComponentProps<"option">) {
   return (
     <option
@@ -42,6 +57,11 @@ function NativeSelectOption({ className, ...props }: React.ComponentProps<"optio
   );
 }
 
+/**
+ * Renders an option group for a native select.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function NativeSelectOptGroup({ className, ...props }: React.ComponentProps<"optgroup">) {
   return (
     <optgroup

@@ -1,5 +1,14 @@
+/**
+ * @module
+ * Empty state for the recent-project list.
+ */
+
 import { FileClock } from "lucide-react";
 
+/**
+ * Renders the message shown when no recent projects are available.
+ * @returns The rendered React element.
+ */
 export function EmptyRecentProjects() {
   return (
     <div className="flex min-h-40 flex-col items-center justify-center rounded-md border border-border bg-white px-5 py-6 text-center">

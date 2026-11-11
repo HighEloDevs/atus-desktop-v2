@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Controls for chart and series presentation.
+ */
+
 import { useId } from "react";
 import { Circle, Diamond, Square } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -11,6 +16,11 @@ const markerOptions = [
   { value: "diamond", label: "Losango", Icon: Diamond },
 ];
 
+/**
+ * Renders editing controls for the selected chart settings section.
+ * @param props - Chart settings and the section to display.
+ * @returns The rendered React element.
+ */
 export function ChartSettingsPanel({
   settings,
   section = "all",

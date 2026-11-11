@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Serialized autosave and project-close coordination.
+ */
+
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { confirm } from "@tauri-apps/plugin-dialog";
@@ -10,6 +15,12 @@ import {
   type ProjectSnapshot,
 } from "./project-client";
 
+/**
+ * Coordinates debounced and manual saves and project closing.
+ * @param initial - Open project, or null outside the desktop workflow.
+ * @param content - Serialized analysis state to save.
+ * @returns Save status, errors, and actions for saving, copying, and leaving.
+ */
 export function useProjectSave(initial: OpenProject | null, content: string) {
   const [project, setProject] = useState(initial);
   const [status, setStatus] = useState("Salvo");

@@ -2,10 +2,12 @@ import { create, all, isSymbolNode } from "mathjs";
 import type { MathJsInstance, EvalFunction } from "mathjs";
 
 /**
- * FunctionInterpreter
+ * Compiles and evaluates mathematical expressions with mathjs.
  *
- * A class to interpret and execute mathematical expressions as functions.
- * Example: "a*x + b" where a, x, b are variables
+ * Variable values can be supplied by position or by name. This interpreter
+ * evaluates expressions only; it does not perform scientific fitting.
+ *
+ * @module function-interpreter
  */
 
 export interface FunctionInterpreterOptions {
@@ -16,12 +18,25 @@ export interface FunctionInterpreterOptions {
   variables?: string[];
 }
 
+/**
+ * Evaluates one expression using detected or explicitly ordered variables.
+ *
+ * @example
+ * const model = new FunctionInterpreter("a*x+b", { variables: ["a", "x", "b"] });
+ * model.execute(2, 3, 1); // 7
+ */
 export class FunctionInterpreter {
   private compiledFunction: EvalFunction | null = null;
   private expression: string;
   private variables: string[];
   private math: MathJsInstance;
 
+  /**
+   * Creates an interpreter and normalizes the exponent operator.
+   *
+   * @param expression - Mathjs expression to evaluate.
+   * @param options - Optional variable order; detected variables are used when omitted.
+   */
   constructor(expression: string, options: FunctionInterpreterOptions = {}) {
     // Replace exponential operator ** with ^
     this.expression = expression.trim().replace(/\*\*/g, "^");
@@ -38,7 +53,9 @@ export class FunctionInterpreter {
   }
 
   /**
-   * Compiles the expression into an executable function
+   * Compiles the expression for subsequent evaluation.
+   * @returns This interpreter.
+   * @throws If mathjs cannot compile the expression.
    */
   compile(): this {
     try {
@@ -55,8 +72,10 @@ export class FunctionInterpreter {
   }
 
   /**
-   * Executes the compiled expression with the provided values
-   * The values must be in the same order as the variables
+   * Evaluates the expression, compiling it on first use.
+   * @param values - One value for each variable, in the order from getVariables().
+   * @returns The result converted to a number.
+   * @throws If the value count is wrong, compilation fails, or evaluation fails.
    */
   execute(...values: number[]): number {
     if (!this.compiledFunction) {
@@ -94,8 +113,12 @@ export class FunctionInterpreter {
   }
 
   /**
-   * Executes the expression with named values
-   * Example: executeWithNames({ x: 5, a: 2, b: 3 }) for "a*x + b"
+   * Evaluates the expression using an object keyed by variable name.
+   * @param namedValues - Values for all required variables; extra keys are ignored.
+   * @returns The result converted to a number.
+   * @throws If a variable is missing or evaluation fails.
+   * @example
+   * new FunctionInterpreter("a*x+b").executeWithNames({ x: 5, a: 2, b: 3 }); // 13
    */
   executeWithNames(namedValues: Record<string, number>): number {
     const values = this.variables.map((variable) => {
@@ -109,7 +132,10 @@ export class FunctionInterpreter {
   }
 
   /**
-   * Executes the expression and returns the result or default value in case of error
+   * Evaluates the expression or returns a fallback after logging an error.
+   * @param defaultValue - Value returned if evaluation fails.
+   * @param values - Values in the order from getVariables().
+   * @returns The evaluated number or the fallback.
    */
   executeOrDefault(defaultValue: number, ...values: number[]): number {
     try {
@@ -121,14 +147,16 @@ export class FunctionInterpreter {
   }
 
   /**
-   * Returns the detected variables in the expression
+   * Returns a copy of the variable order used for positional evaluation.
+   * @returns Variable names in evaluation order.
    */
   getVariables(): string[] {
     return [...this.variables];
   }
 
   /**
-   * Returns the original expression
+   * Returns the trimmed expression with exponent operators normalized to ^.
+   * @returns The normalized expression.
    */
   toString(): string {
     return this.expression;
@@ -266,7 +294,9 @@ export class FunctionInterpreter {
   }
 
   /**
-   * Validates if an expression can be compiled without executing it
+   * Checks whether an expression compiles without evaluating it.
+   * @param expression - Expression to compile.
+   * @returns Validation status and, on failure, the compilation error message.
    */
   static validate(expression: string): { valid: boolean; error?: string } {
     try {
@@ -282,7 +312,11 @@ export class FunctionInterpreter {
   }
 
   /**
-   * Creates an interpreter and executes immediately
+   * Creates an interpreter and evaluates it with detected variable order.
+   * @param expression - Expression to evaluate.
+   * @param values - Values in detected variable order.
+   * @returns The evaluated number.
+   * @throws If compilation, value binding, or evaluation fails.
    */
   static executeOnce(expression: string, ...values: number[]): number {
     const interpreter = new FunctionInterpreter(expression);
@@ -291,7 +325,10 @@ export class FunctionInterpreter {
 }
 
 /**
- * Helper to quickly create and use an expression interpreter
+ * Creates an interpreter without compiling or evaluating the expression.
+ * @param expression - Mathjs expression to interpret.
+ * @param options - Optional variable order.
+ * @returns A new interpreter.
  */
 export function interpretExpression(
   expression: string,

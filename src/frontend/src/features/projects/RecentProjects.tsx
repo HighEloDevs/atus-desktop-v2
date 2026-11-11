@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Discovery and presentation of recent projects.
+ */
+
 import { EmptyRecentProjects } from "./EmptyRecentProjects";
 import { ProjectFilePath } from "./ProjectFilePath";
 import { ArrowUpRight, FileChartColumn, FileWarning, MoreHorizontal } from "lucide-react";
@@ -17,6 +22,11 @@ import {
   recentPaths,
 } from "./project-client";
 
+/**
+ * Lists discovered and recent projects, including missing files.
+ * @param props - Callback that opens a selected or relocated project.
+ * @returns The rendered React element.
+ */
 export function RecentProjects({
   onOpen,
 }: {

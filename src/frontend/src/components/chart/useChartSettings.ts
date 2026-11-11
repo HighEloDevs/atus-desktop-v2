@@ -1,3 +1,8 @@
+/**
+ * @module
+ * State and defaults for chart presentation.
+ */
+
 import { useState } from "react";
 import type { LabelAlignment } from "./EditableChartLabel";
 
@@ -8,6 +13,11 @@ export const chartLinePatterns = {
   dashdot: "8 4 2 4",
 };
 
+/**
+ * Creates local state and setters for chart presentation.
+ * @param initial - Optional persisted chart values.
+ * @returns Current settings and React state setters.
+ */
 export function useChartSettings(initial?: Partial<ChartValues>) {
   const [title, setTitle] = useState(initial?.title ?? "Gráfico de exemplo");
   const [titleAlignment, setTitleAlignment] = useState<LabelAlignment>(

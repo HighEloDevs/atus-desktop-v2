@@ -1,24 +1,49 @@
+/**
+ * @module
+ * Accessible dropdown menu primitives.
+ */
+
 import * as React from "react";
 import { cn } from "cn";
 import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 
+/**
+ * Provides the root state for a dropdown menu.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
   return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />;
 }
 
+/**
+ * Renders menu content in a portal.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenuPortal({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Portal>) {
   return <DropdownMenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />;
 }
 
+/**
+ * Renders the control that opens a dropdown menu.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenuTrigger({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Trigger>) {
   return <DropdownMenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />;
 }
 
+/**
+ * Renders the positioned dropdown content.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenuContent({
   className,
   sideOffset = 4,
@@ -39,10 +64,20 @@ function DropdownMenuContent({
   );
 }
 
+/**
+ * Groups related dropdown items.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenuGroup({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Group>) {
   return <DropdownMenuPrimitive.Group data-slot="dropdown-menu-group" {...props} />;
 }
 
+/**
+ * Renders an actionable dropdown item.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenuItem({
   className,
   inset,
@@ -66,6 +101,11 @@ function DropdownMenuItem({
   );
 }
 
+/**
+ * Renders a checkable dropdown item.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenuCheckboxItem({
   className,
   children,
@@ -92,12 +132,22 @@ function DropdownMenuCheckboxItem({
   );
 }
 
+/**
+ * Groups mutually exclusive radio items.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenuRadioGroup({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.RadioGroup>) {
   return <DropdownMenuPrimitive.RadioGroup data-slot="dropdown-menu-radio-group" {...props} />;
 }
 
+/**
+ * Renders a radio item within a menu group.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenuRadioItem({
   className,
   children,
@@ -122,6 +172,11 @@ function DropdownMenuRadioItem({
   );
 }
 
+/**
+ * Renders a label for a menu group.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenuLabel({
   className,
   inset,
@@ -139,6 +194,11 @@ function DropdownMenuLabel({
   );
 }
 
+/**
+ * Renders a visual separator between menu items.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenuSeparator({
   className,
   ...props
@@ -152,6 +212,11 @@ function DropdownMenuSeparator({
   );
 }
 
+/**
+ * Displays a keyboard shortcut alongside a menu item.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
@@ -162,10 +227,20 @@ function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<"spa
   );
 }
 
+/**
+ * Provides state for a nested menu.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenuSub({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Sub>) {
   return <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" {...props} />;
 }
 
+/**
+ * Renders a trigger for a nested menu.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenuSubTrigger({
   className,
   inset,
@@ -190,6 +265,11 @@ function DropdownMenuSubTrigger({
   );
 }
 
+/**
+ * Renders the positioned content of a nested menu.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function DropdownMenuSubContent({
   className,
   ...props

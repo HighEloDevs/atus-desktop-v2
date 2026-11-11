@@ -1,9 +1,12 @@
+//! Tauri project file commands.
+
 use super::{migrations, model::ProjectSnapshot, store};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 
 #[derive(Serialize)]
+/// An opened project and its canonical path.
 pub struct OpenProject {
     path: PathBuf,
     snapshot: ProjectSnapshot,
@@ -28,6 +31,8 @@ fn check_extension(path: &Path) -> Result<(), String> {
     }
 }
 
+/// Creates an initial snapshot under Documents/ATUS/projects with an available name.
+/// Returns the opened project or an error if creation fails.
 #[tauri::command]
 pub async fn project_create(
     app: tauri::AppHandle,
@@ -63,6 +68,8 @@ pub async fn project_create(
     Err("Não há um nome disponível para criar o projeto.".into())
 }
 
+/// Opens the project at path, applying supported migrations.
+/// Returns the canonical path and snapshot or an error for invalid or inaccessible files.
 #[tauri::command]
 pub async fn project_open(path: PathBuf) -> Result<OpenProject, String> {
     check_extension(&path)?;
@@ -72,6 +79,8 @@ pub async fn project_open(path: PathBuf) -> Result<OpenProject, String> {
     Ok(OpenProject { path, snapshot })
 }
 
+/// Saves snapshot at path if the disk still matches previous.
+/// Returns an error if validation, conflict detection, or writing fails.
 #[tauri::command]
 pub async fn project_save(
     path: PathBuf,
@@ -82,6 +91,8 @@ pub async fn project_save(
     store::write_checked(&path, &previous, &snapshot).map_err(|e| e.to_string())
 }
 
+/// Creates a project copy at path without overwriting an existing file.
+/// Returns the new path and snapshot or an error.
 #[tauri::command]
 pub async fn project_save_as(
     path: PathBuf,
@@ -110,6 +121,8 @@ pub async fn project_save_as(
     })
 }
 
+/// Lists canonical .atus paths in the default project directory.
+/// Returns an empty list if the directory is absent, or an error if it cannot be read.
 #[tauri::command]
 pub async fn project_list(app: tauri::AppHandle) -> Result<Vec<PathBuf>, String> {
     let directory = project_directory(&app)?;
@@ -130,6 +143,7 @@ pub async fn project_list(app: tauri::AppHandle) -> Result<Vec<PathBuf>, String>
     Ok(paths)
 }
 
+/// Returns whether path currently refers to an accessible file.
 #[tauri::command]
 pub async fn project_available(path: PathBuf) -> bool {
     path.is_file()

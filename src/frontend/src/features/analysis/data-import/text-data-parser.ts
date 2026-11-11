@@ -1,3 +1,8 @@
+/**
+ * Parses delimited text data into chart points.
+ *
+ * @module text-data-parser
+ */
 import type { ChartPoint as DataPoint } from "@/components/chart/Chart";
 export type SeparatorType = "auto" | "," | ";" | "\t" | " ";
 type ParseOptions = { separator: SeparatorType };
@@ -137,7 +142,21 @@ function parseMultiColumnLines(numericLines: ParsedLine[]): DataPoint[] {
   return data;
 }
 
+/**
+ * Parses single-column y values or rows containing x, y and optional uncertainties.
+ *
+ * @example
+ * const points = new TextDataParser().parse("1;2\n3;4", { separator: ";" });
+ * // points contain x/y pairs (1, 2) and (3, 4)
+ */
 export class TextDataParser {
+  /**
+   * Parses text using the selected or automatically detected separator.
+   * @param content - Text containing one data row per line.
+   * @param options - Separator selection.
+   * @returns Parsed points, including optional uncertainty values.
+   * @throws If the input contains malformed rows, mixed formats, or no valid data.
+   */
   parse(content: string, options: ParseOptions): DataPoint[] {
     const { separator } = options;
     const effectiveSeparator = separator === "auto" ? detectDelimiter(content) : separator;

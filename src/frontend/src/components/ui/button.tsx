@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Reusable button component and presentation variants.
+ */
+
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "cn";
@@ -35,6 +40,11 @@ const buttonVariants = cva(
   },
 );
 
+/**
+ * Renders a button with the requested visual variant and size.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function Button({
   className,
   variant = "default",

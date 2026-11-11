@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Parsing and resolution of model parameter constraints.
+ */
+
 import { FunctionInterpreter } from "./function-interpreter";
 
 export type ParsedFitParameter = {
@@ -113,6 +118,12 @@ function fillMissingParameters(
   return merged.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * Resolves explicit parameter constraints against variables in a model expression.
+ * @param constraints - Parameter text.
+ * @param equation - Model expression.
+ * @returns A parse result containing parameters or an error.
+ */
 export function resolveFitParameters(constraints: string, equation: string): ParseResult {
   const parsed = parseConstraintsString(constraints);
   if (!parsed.ok) return parsed;
@@ -135,6 +146,11 @@ export function resolveFitParameters(constraints: string, equation: string): Par
   };
 }
 
+/**
+ * Parses parameter declarations and bounds from text.
+ * @param paramString - Parameter declarations.
+ * @returns A parse result containing parsed parameters or an error.
+ */
 export function parseFitParameters(paramString: string): ParseResult {
   return parseConstraintsString(paramString);
 }

@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Application navigation, project lifecycle, and desktop home screen.
+ */
+
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ProjectQuickActions } from "@/features/projects/ProjectQuickActions";
 import { RecentProjects } from "@/features/projects/RecentProjects";

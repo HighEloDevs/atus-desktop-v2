@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Delimiter selection and line tokenization for imported data.
+ */
+
 import { parseLocaleNumber } from "./parse-locale-number";
 
 export const AUTO_DELIMITERS = [",", ";", "\t", " "] as const;
@@ -5,6 +10,12 @@ export type AutoDelimiter = (typeof AUTO_DELIMITERS)[number];
 
 const SAMPLE_LINE_LIMIT = 10;
 
+/**
+ * Splits and trims a row using a delimiter; a space delimiter splits whitespace.
+ * @param line - Input row.
+ * @param delimiter - Column delimiter.
+ * @returns Trimmed column values.
+ */
 export function splitLine(line: string, delimiter: string): string[] {
   if (delimiter === " ") {
     return line
@@ -16,6 +27,11 @@ export function splitLine(line: string, delimiter: string): string[] {
   return line.split(delimiter).map((p) => p.trim());
 }
 
+/**
+ * Selects up to ten nonempty lines containing a digit.
+ * @param content - Input text.
+ * @returns Sampled lines in original order.
+ */
 export function sampleDataLines(content: string): string[] {
   const lines: string[] = [];
   for (const rawLine of content.trim().split("\n")) {
@@ -35,6 +51,11 @@ function isNumericLine(parts: string[]): boolean {
   return parts.length >= 2 && parts.length <= 4 && parts.every((p) => !isNaN(parseLocaleNumber(p)));
 }
 
+/**
+ * Scores supported delimiters against sampled numeric rows.
+ * @param content - Input text.
+ * @returns Best delimiter, defaulting to comma for empty input.
+ */
 export function detectDelimiter(content: string): AutoDelimiter {
   const sampleLines = sampleDataLines(content);
   if (sampleLines.length === 0) return ",";

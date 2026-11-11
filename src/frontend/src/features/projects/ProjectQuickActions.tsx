@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Quick actions for creating and opening projects.
+ */
+
 import { FilePlus2, FolderOpen } from "lucide-react";
 
 type ProjectQuickActionsProps = {
@@ -6,6 +11,11 @@ type ProjectQuickActionsProps = {
   onOpen?: () => void;
 };
 
+/**
+ * Renders actions for creating and optionally opening a project.
+ * @param props - Platform flag and callbacks for each available action.
+ * @returns The rendered React element.
+ */
 export function ProjectQuickActions({ isMac, onCreate, onOpen }: ProjectQuickActionsProps) {
   const shortcut = isMac ? "⌘ ⌥ N" : "Ctrl + Alt + N";
   const actions = [

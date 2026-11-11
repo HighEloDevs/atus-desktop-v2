@@ -1,9 +1,14 @@
+//! Delivery of Finder open requests.
+
 use std::{path::PathBuf, sync::Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[derive(Default)]
+/// The latest Finder project request awaiting delivery.
 pub struct FinderRequest(Mutex<Option<PathBuf>>);
 
+/// Records the last .atus file URL in urls and notifies the main window.
+/// Replaces any pending request and ignores other URLs.
 pub fn receive(app: &AppHandle, urls: Vec<tauri::Url>) {
     let path = urls
         .into_iter()
@@ -22,6 +27,7 @@ pub fn receive(app: &AppHandle, urls: Vec<tauri::Url>) {
     }
 }
 
+/// Removes and returns the pending Finder path, if present.
 #[tauri::command]
 pub fn take_finder_project(request: State<'_, FinderRequest>) -> Option<PathBuf> {
     request.0.lock().unwrap().take()

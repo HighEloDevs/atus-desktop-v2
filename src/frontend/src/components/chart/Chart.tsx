@@ -1,3 +1,8 @@
+/**
+ * @module
+ * D3 chart rendering and interactive data inspection.
+ */
+
 import {
   extent,
   line,
@@ -55,6 +60,11 @@ function domain(values: number[], log: boolean): [number, number] {
       : [min - (Math.abs(min) * 0.1 || 1), max + (Math.abs(max) * 0.1 || 1)];
   return [min, max];
 }
+/**
+ * Renders ordered series with D3 and handles chart interaction.
+ * @param props - Series, labels, chart settings, export ref, and optional highlighted series.
+ * @returns The rendered React element.
+ */
 export function Chart({ series, label, settings, graphicRef, highlightedSeriesId }: ChartProps) {
   const container = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);

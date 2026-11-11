@@ -1,3 +1,5 @@
+//! Transactional project persistence.
+
 use super::model::{Analysis, Dataset, Point, ProjectSnapshot};
 use rusqlite::{params, Connection, OpenFlags};
 use std::path::Path;
@@ -39,6 +41,8 @@ fn validate_snapshot(snapshot: &ProjectSnapshot) -> Result<(), ProjectError> {
     Ok(())
 }
 
+/// Creates an initial SQLite project from snapshot at the unused path.
+/// Returns an error for invalid data, existing files, or failed writes.
 pub fn create_project(path: &Path, snapshot: &ProjectSnapshot) -> Result<(), ProjectError> {
     validate_snapshot(snapshot)?;
     let directory = path
@@ -59,6 +63,8 @@ pub fn create_project(path: &Path, snapshot: &ProjectSnapshot) -> Result<(), Pro
     Ok(())
 }
 
+/// Replaces project contents in a transaction.
+/// Returns an error for invalid data, incompatible files, or failed writes.
 #[cfg(test)]
 pub fn write_project(path: &Path, snapshot: &ProjectSnapshot) -> Result<(), ProjectError> {
     validate_snapshot(snapshot)?;
@@ -68,6 +74,8 @@ pub fn write_project(path: &Path, snapshot: &ProjectSnapshot) -> Result<(), Proj
     save(&mut conn, snapshot)
 }
 
+/// Saves snapshot atomically only when disk contents still match previous.
+/// Returns an error for conflicts, invalid data, or failed transactions.
 pub fn write_checked(
     path: &Path,
     previous: &ProjectSnapshot,
@@ -141,6 +149,8 @@ fn replace(tx: &Connection, snapshot: &ProjectSnapshot) -> Result<(), ProjectErr
     Ok(())
 }
 
+/// Reads and validates a snapshot from path.
+/// Returns an error for incompatible, corrupt, or inaccessible files.
 pub fn read_project(path: &Path) -> Result<ProjectSnapshot, ProjectError> {
     let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     let tx = conn.unchecked_transaction()?;

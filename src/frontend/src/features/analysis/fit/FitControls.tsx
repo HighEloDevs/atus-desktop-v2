@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Controls for entering a model and fit configuration.
+ */
+
 import katex from "katex";
 import { useId } from "react";
 import { ChevronRight, Lock, MoveHorizontal, MoveVertical, SlidersHorizontal } from "lucide-react";
@@ -11,6 +16,11 @@ const field =
 const heading = "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 const description = "mt-1.5 text-[12px] leading-5 text-muted-foreground";
 
+/**
+ * Renders inputs for a series model and fit configuration.
+ * @param props - Series name, fit configuration, and update callback.
+ * @returns The rendered React element.
+ */
 export function FitControls({
   name,
   config,

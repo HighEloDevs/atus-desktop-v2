@@ -1,3 +1,5 @@
+//! Versioned SQLite schema migrations.
+
 use super::store::{ProjectError, APPLICATION_ID, SCHEMA_VERSION};
 use rusqlite::{Connection, OpenFlags, TransactionBehavior};
 use std::path::Path;
@@ -12,6 +14,8 @@ pub(super) fn initialize(connection: &Connection) -> Result<(), ProjectError> {
     Ok(())
 }
 
+/// Migrates a supported project at path to the current schema, creating a backup for v1.
+/// Returns an error for incompatible files or failed backup, migration, or validation.
 pub fn migrate(path: &Path) -> Result<(), ProjectError> {
     let probe = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     let id: i32 = probe.pragma_query_value(None, "application_id", |row| row.get(0))?;

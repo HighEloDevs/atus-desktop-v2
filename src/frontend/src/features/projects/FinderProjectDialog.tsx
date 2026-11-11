@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Confirmation when opening a Finder project over an active analysis.
+ */
+
 import { Dialog } from "radix-ui";
 import { Button } from "../../components/ui/button";
 import { fileName } from "./project-client";
@@ -10,6 +15,11 @@ type FinderProjectDialogProps = {
   onOpen: (path: string) => void;
 };
 
+/**
+ * Confirms replacing the current analysis with a Finder request.
+ * @param props - Requested path, opening state, and cancel and open callbacks.
+ * @returns The rendered React element.
+ */
 export function FinderProjectDialog({ path, opening, onCancel, onOpen }: FinderProjectDialogProps) {
   return (
     <Dialog.Root
