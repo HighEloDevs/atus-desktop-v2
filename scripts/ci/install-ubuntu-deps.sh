@@ -2,7 +2,12 @@
 # Install Tauri build dependencies on the pinned Ubuntu 22.04 runner.
 set -euo pipefail
 sources="$(mktemp)"
-trap 'rm -f "$sources"' EXIT
+cleanup() {
+  rm -f "$sources"
+  python3 -c 'from pathlib import Path; p=Path(__import__("os").environ.get("ATUS_HOSTS_FILE", "/etc/hosts")); p.write_text("".join(line for line in p.read_text().splitlines(keepends=True) if "# atus-ci-dns" not in line))'
+}
+trap cleanup EXIT
+scripts/ci/ubuntu-dns-fallback.sh
 cat > "$sources" <<'SOURCES'
 deb http://archive.ubuntu.com/ubuntu jammy main universe
 deb http://archive.ubuntu.com/ubuntu jammy-updates main universe
