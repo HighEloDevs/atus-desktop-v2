@@ -17,10 +17,7 @@ pub(super) fn project_directory(app: &tauri::AppHandle) -> Result<PathBuf, Strin
     #[cfg(feature = "desktop-e2e")]
     {
         let _ = app;
-        let path = std::env::var_os("ATUS_DESKTOP_E2E_PROJECT_DIR")
-            .map(PathBuf::from)
-            .ok_or("ATUS_DESKTOP_E2E_PROJECT_DIR é obrigatório no teste desktop")?;
-        return super::e2e::validate_test_directory(&path, &std::env::temp_dir());
+        return super::e2e::test_project_directory();
     }
     #[cfg(not(feature = "desktop-e2e"))]
     app.path()

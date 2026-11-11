@@ -30,6 +30,42 @@ jobs:
           git merge-base --is-ancestor origin/main HEAD
           node .github/scripts/version.mjs check --base origin/main
 
+  release-version:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate version against previous main commit
+        run: node .github/scripts/version.mjs check --base HEAD^
+
+  coverage-rust:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci
+      - name: Verify Rust coverage collector
+        run: node --test .github/scripts/coverage/rust-inventory.test.mjs .github/scripts/coverage/rust-desktop-macos.test.mjs
+      - name: Collect Rust coverage from unit tests and desktop smoke
+        run: |
+          llvm_bin="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin"
+          LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" .github/scripts/coverage/rust-desktop-macos.sh "$RUNNER_TEMP/rust.lcov"
+          node .github/scripts/coverage/check.mjs "$RUNNER_TEMP/rust.lcov"
+
   test-macos-arm64:
     runs-on: macos-latest
     steps:
@@ -299,3 +335,11 @@ jobs:
             src/desktop/target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
           retention-days: 3
+
+  release-artifacts:
+    needs: [release-version, build-linux, build-windows, build-macos-intel, build-macos-arm64]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Confirm all release packages were generated
+        run: echo 'All platform build jobs succeeded.'

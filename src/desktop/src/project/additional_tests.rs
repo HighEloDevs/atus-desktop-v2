@@ -54,3 +54,12 @@ fn invalid_point_type_is_reported_without_changing_the_file() {
     assert!(read_project(&path).is_err());
     assert_eq!(std::fs::read(&path).unwrap(), before);
 }
+
+#[test]
+fn listing_a_file_as_a_directory_returns_an_error_without_modification() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("not-a-directory");
+    std::fs::write(&path, b"preserve").unwrap();
+    assert!(super::commands::list_projects_in(&path).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), b"preserve");
+}

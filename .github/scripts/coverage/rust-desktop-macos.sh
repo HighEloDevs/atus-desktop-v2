@@ -34,8 +34,9 @@ trap cleanup EXIT
 mkdir -p "$(dirname "$output")" "$tmp/projects" "$tmp/profiles"
 export RUSTFLAGS="${RUSTFLAGS:-} -C instrument-coverage"
 export LLVM_PROFILE_FILE="$tmp/profiles/%p-%m.profraw"
-cargo build --manifest-path src/desktop/Cargo.toml --features desktop-e2e
-cargo test --manifest-path src/desktop/Cargo.toml --message-format=json > "$tmp/cargo.jsonl"
+# Apply link-dead-code only to the application/test targets, not dependencies.
+cargo rustc --manifest-path src/desktop/Cargo.toml --features desktop-e2e --bin atus-desktop -- -C link-dead-code
+cargo rustc --manifest-path src/desktop/Cargo.toml --tests --message-format=json -- -C link-dead-code > "$tmp/cargo.jsonl"
 node - "$tmp/cargo.jsonl" > "$tmp/binary" <<'NODE'
 const fs = require('node:fs');
 const bins = new Set();
@@ -46,6 +47,7 @@ for (const line of fs.readFileSync(process.argv[2], 'utf8').split('\n')) {
 if (bins.size !== 1) throw new Error(`Expected one test binary; got ${bins.size}`);
 process.stdout.write([...bins][0]);
 NODE
+"$(cat "$tmp/binary")"
 (cd src/frontend && exec node ./node_modules/vite/bin/vite.js --configLoader runner --host 127.0.0.1 --port 1420 --strictPort) > "$tmp/vite.log" 2>&1 & vite_pid=$!
 wait_http() {
   local url="$1" pid="$2" attempt
@@ -113,4 +115,5 @@ wait "$app_pid"; app_pid=''
 "$profdata" merge -sparse "$tmp"/profiles/*.profraw -o "$tmp/merged.profdata"
 "$cov" export -format=lcov -ignore-filename-regex='/(project/tests|project/additional_tests|project/menu_tests|project/e2e|project/store_test_support|main_tests)\.rs$' -instr-profile="$tmp/merged.profdata" src/desktop/target/debug/atus-desktop -object "$(cat "$tmp/binary")" "$root/src/desktop/src" > "$output"
 grep -q '^SF:' "$output" || { echo 'Rust coverage report is empty.' >&2; exit 1; }
-echo 'Exploratory report: unlinked code and other platform cfg paths may be absent; not a production coverage gate.' >&2
+node .github/scripts/coverage/rust-inventory.mjs "$root/src/desktop/src" "$output" .github/scripts/coverage/rust-source-inventory.json
+echo 'Exploratory macOS report: other platform cfg paths may be absent; not a multiplatform coverage gate.' >&2

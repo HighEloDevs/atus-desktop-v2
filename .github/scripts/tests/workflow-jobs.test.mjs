@@ -23,3 +23,21 @@ test('platform tests run independently and packages run only after tests outside
     assert.ok(job.includes("github.event_name != 'pull_request'"));
   }
 });
+
+test('main pushes validate version against the previous commit before release', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const job = workflow.split('  release-version:\n')[1]?.split(/^  [\w-]+:/m)[0];
+  assert.ok(job);
+  assert.ok(job.includes("github.event_name == 'push'"));
+  assert.ok(job.includes("github.ref == 'refs/heads/main'"));
+  assert.ok(job.includes('check --base HEAD^'));
+});
+
+test('release artifact gate waits for every platform package', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const job = workflow.split('  release-artifacts:\n')[1]?.split(/^  [\w-]+:/m)[0];
+  assert.ok(job);
+  for (const platform of ['linux', 'windows', 'macos-intel', 'macos-arm64']) {
+    assert.ok(job.includes(`build-${platform}`));
+  }
+});

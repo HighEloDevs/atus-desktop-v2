@@ -2,6 +2,14 @@
 
 use std::path::{Path, PathBuf};
 
+/// Resolves the explicitly configured isolated test project directory.
+pub(super) fn test_project_directory() -> Result<PathBuf, String> {
+    let path = std::env::var_os("ATUS_DESKTOP_E2E_PROJECT_DIR")
+        .map(PathBuf::from)
+        .ok_or("ATUS_DESKTOP_E2E_PROJECT_DIR é obrigatório no teste desktop")?;
+    validate_test_directory(&path, &std::env::temp_dir())
+}
+
 /// Delivers a simulated Finder request for a file inside the isolated test directory.
 #[cfg(target_os = "macos")]
 #[tauri::command]

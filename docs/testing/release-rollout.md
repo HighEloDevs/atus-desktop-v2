@@ -24,7 +24,7 @@ Os nomes finais de jobs e arquivos de release dependem dos resultados dos testes
 
 ## Workflow de release
 
-`Release desktop` recebe o resultado de `Build desktop` na `main` ou um ID informado manualmente. Ele consulta a execução com permissões limitadas e exige todos os gates nomeados em `.github/scripts/release-gates.mjs` antes de baixar artefatos da mesma execução. Esses nomes são um contrato proposto e vários jobs ainda não existem: até serem implementados o fluxo falha antes de criar tags ou releases.
+`Release desktop` recebe o resultado de `Build desktop` na `main` ou um ID informado manualmente. Ele consulta a execução com permissões limitadas e exige todos os gates nomeados em `.github/scripts/release-gates.mjs` antes de baixar artefatos da mesma execução. A cobertura de frontend e C++ usa o resultado de `test-linux`, e a instalação Linux usa `build-linux`; `release-version` e `release-artifacts` validam versão e empacotamento após o push. O job `coverage-rust` está em validação no CI; gates como desktop multiplataforma ainda não existem: até serem implementados o fluxo falha antes de criar tags ou releases.
 
 Após os gates, o workflow confere o inventário, a versão, o SHA e os hashes, cria ou retoma um rascunho e só publica após validar os arquivos enviados. As validações de RC, de publicação concorrente e de recuperação em um repositório de teste continuam necessárias antes da ativação efetiva.
 
