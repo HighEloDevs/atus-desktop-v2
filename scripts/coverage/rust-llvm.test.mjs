@@ -19,7 +19,7 @@ test('refuses LLVM tools that do not match rustc before generating a report', ()
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('excludes only the explicitly separated project tests from LLVM export', () => {
+test('excludes only the explicitly separated test files from LLVM export', () => {
   const dir = mkdtempSync(join(tmpdir(), 'atus-rust-tools-'));
   try {
     const script = (name, content) => writeFileSync(join(dir, name), `#!/bin/sh\n${content}\n`, { mode: 0o755 });
@@ -34,7 +34,7 @@ test('excludes only the explicitly separated project tests from LLVM export', ()
     });
     assert.equal(result.status, 0, result.stderr);
     const args = readFileSync(log, 'utf8');
-    assert.match(args, /-ignore-filename-regex=\/project\/tests\\\.rs\$/);
+    assert.match(args, /-ignore-filename-regex=.*project\/tests.*project\/additional_tests.*project\/store_test_support.*main_tests/);
     assert.match(result.stderr, /platform cfg paths and unlinked code may be absent/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

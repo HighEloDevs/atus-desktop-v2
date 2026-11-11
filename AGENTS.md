@@ -56,6 +56,7 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 - Em `src/frontend/`, use `npm run lint` / `npm run lint:fix` e `npm run format:check` / `npm run format`. ESLint verifica TypeScript e regras de React; Prettier formata os arquivos do frontend. O CI executa as verificações sem modificá-los.
 - `.gitattributes` mantém arquivos de texto do frontend com finais de linha LF também no Windows, conforme exigido pelo Prettier.
 - O smoke desktop experimental usa a feature opt-in `desktop-e2e` e abre um driver local sem autenticação; siga `docs/testing/desktop-e2e.md` e não o use com dados reais. A feature não faz parte do build padrão e é recusada no perfil release convencional.
+- O workflow de release está em preparação e bloqueia a publicação enquanto os gates completos não existirem; o fluxo e as validações pendentes estão em `docs/testing/release-rollout.md`.
 - Links dos perfis na página Sobre abrem no navegador padrão pelo plugin Tauri Opener; os endereços permitidos ficam em `src/desktop/capabilities/default.json`.
 - O atalho de nova análise é `Cmd+Option+N` no macOS e `Ctrl+Alt+N` nos demais sistemas. No desktop, o atalho e o cartão **Nova análise** em **Acesso rápido** criam um projeto em Documentos/ATUS/projects. O cartão **Abrir projeto** abre o seletor nativo, e os recentes exibem o caminho completo do arquivo.
 - No macOS, o pacote .app usa `src/desktop/Info.plist` para declarar a associação .atus e o ícone exibido no Finder. O aplicativo solicita confirmação antes de trocar uma análise aberta.

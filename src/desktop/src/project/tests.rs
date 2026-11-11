@@ -615,3 +615,43 @@ fn finder_selects_last_atus_file_and_ignores_other_urls() {
     );
     assert_eq!(last_project_path(Vec::new()), None);
 }
+
+#[test]
+fn project_directory_listing_filters_and_sorts_project_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path();
+    assert!(super::commands::list_projects_in(&path.join("missing"))
+        .unwrap()
+        .is_empty());
+    std::fs::write(path.join("z.ATUS"), "").unwrap();
+    std::fs::write(path.join("a.atus"), "").unwrap();
+    std::fs::write(path.join("other.txt"), "").unwrap();
+    std::fs::create_dir(path.join("folder.atus")).unwrap();
+    assert_eq!(
+        super::commands::list_projects_in(path).unwrap(),
+        vec![
+            path.join("a.atus").canonicalize().unwrap(),
+            path.join("z.ATUS").canonicalize().unwrap()
+        ]
+    );
+}
+
+#[test]
+fn project_creation_assigns_available_name_without_overwriting() {
+    let dir = tempfile::tempdir().unwrap();
+    let snapshot = project_with_point(Point {
+        x: 1.0,
+        y: 2.0,
+        sx: None,
+        sy: None,
+    });
+    let first = super::commands::create_project_in(dir.path(), snapshot.clone()).unwrap();
+    let second = super::commands::create_project_in(dir.path(), snapshot).unwrap();
+    let first = serde_json::to_value(first).unwrap();
+    let second = serde_json::to_value(second).unwrap();
+    assert_ne!(first["path"], second["path"]);
+    assert_eq!(first["snapshot"]["name"], "Projeto sem título");
+    assert_eq!(second["snapshot"]["name"], "Projeto sem título (2)");
+    assert!(std::path::Path::new(first["path"].as_str().unwrap()).is_file());
+    assert!(std::path::Path::new(second["path"].as_str().unwrap()).is_file());
+}

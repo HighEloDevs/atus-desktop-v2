@@ -21,3 +21,11 @@ A publicação automática permanece desativada. O CI atual ainda não oferece c
 - Identificar os artefatos como não assinados até que assinatura e notarização sejam implementadas e verificadas.
 
 Os nomes finais de jobs e arquivos de release dependem dos resultados dos testes dos empacotadores. Este documento não ativa workflows, tags ou releases.
+
+## Workflow de release
+
+`Release desktop` recebe o resultado de `Build desktop` na `main` ou um ID informado manualmente. Ele consulta a execução com permissões limitadas e exige todos os gates nomeados em `scripts/release-gates.mjs` antes de baixar artefatos da mesma execução. Esses nomes são um contrato proposto e vários jobs ainda não existem: até serem implementados o fluxo falha antes de criar tags ou releases.
+
+Após os gates, o workflow confere o inventário, a versão, o SHA e os hashes, cria ou retoma um rascunho e só publica após validar os arquivos enviados. As validações de RC, de publicação concorrente e de recuperação em um repositório de teste continuam necessárias antes da ativação efetiva.
+
+As publicações usam `concurrency.queue: max` e não cancelam as anteriores; o GitHub limita essa fila a 100 execuções pendentes, e novas execuções acima desse limite podem ser canceladas. A operação deve monitorar falhas e reexecutar manualmente execuções recusadas; esta fila não garante entrega ilimitada nem ordem de merge. A retomada nunca sobrescreve assets: arquivos existentes devem ter hash idêntico, caso contrário a execução falha.

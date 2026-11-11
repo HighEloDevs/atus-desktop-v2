@@ -63,16 +63,11 @@ pub fn create_project(path: &Path, snapshot: &ProjectSnapshot) -> Result<(), Pro
     Ok(())
 }
 
-/// Replaces project contents in a transaction.
-/// Returns an error for invalid data, incompatible files, or failed writes.
 #[cfg(test)]
-pub fn write_project(path: &Path, snapshot: &ProjectSnapshot) -> Result<(), ProjectError> {
-    validate_snapshot(snapshot)?;
-    let mut conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
-    validate(&conn)?;
-    conn.pragma_update(None, "foreign_keys", true)?;
-    save(&mut conn, snapshot)
-}
+#[path = "store_test_support.rs"]
+mod test_support;
+#[cfg(test)]
+pub use test_support::write_project;
 
 /// Saves snapshot atomically only when disk contents still match previous.
 /// Returns an error for conflicts, invalid data, or failed transactions.

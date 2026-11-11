@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generate an exploratory Rust LCOV report, excluding the separate project test file.
+# Generate an exploratory Rust LCOV report, excluding separated test-only files.
 # LLVM_COV and LLVM_PROFDATA must match rustc's LLVM major version.
 set -euo pipefail
 root="$(git rev-parse --show-toplevel)"
@@ -36,9 +36,9 @@ process.stdout.write([...bins][0] + '\n');
 NODE
 binary="$(cat "$tmp/binaries")"
 "$profdata" merge -sparse "$tmp"/*.profraw -o "$tmp/merged.profdata"
-"$cov" export -format=lcov -ignore-filename-regex='/project/tests\.rs$' -instr-profile="$tmp/merged.profdata" "$binary" "$root/src/desktop/src" > "$output"
+"$cov" export -format=lcov -ignore-filename-regex='/(project/tests|project/additional_tests|project/store_test_support|main_tests)\.rs$' -instr-profile="$tmp/merged.profdata" "$binary" "$root/src/desktop/src" > "$output"
 if ! grep -q '^SF:' "$output"; then
   echo 'Rust coverage report is empty' >&2
   exit 1
 fi
-echo 'Exploratory report excludes project/tests.rs but includes inline test code; platform cfg paths and unlinked code may be absent. Not a production coverage gate.' >&2
+echo 'Exploratory report excludes separated test-only files; platform cfg paths and unlinked code may be absent. Not a production coverage gate.' >&2
