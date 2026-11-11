@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
-const script = 'scripts/ci/smoke-linux-container.sh';
+const script = '.github/scripts/ci/smoke-linux-container.sh';
 
 test('rejects an unsupported Linux bundle type', () => {
   const result = spawnSync('bash', [script, 'other', '/missing'], { encoding: 'utf8' });

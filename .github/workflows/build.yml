@@ -28,7 +28,7 @@ jobs:
       - name: Require up-to-date base and new version
         run: |
           git merge-base --is-ancestor origin/main HEAD
-          node scripts/version.mjs check --base origin/main
+          node .github/scripts/version.mjs check --base origin/main
 
   test-macos-arm64:
     runs-on: macos-latest
@@ -41,7 +41,7 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - name: Test CI helper scripts
-        run: node --test scripts/tests/workflow-jobs.test.mjs scripts/tests/version.test.mjs scripts/tests/release.test.mjs scripts/tests/git-attributes.test.mjs scripts/coverage/check.test.mjs
+        run: node --test .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/coverage/check.test.mjs
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -77,7 +77,7 @@ jobs:
         run: npm run tauri -- build --bundles app
       - name: Check macOS project document icon
         if: runner.os == 'macOS'
-        run: python3 src/desktop/tests/check_macos_document_icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
+        run: python3 .github/scripts/tests/check_macos_document_icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
       - name: Archive macOS app
         if: runner.os == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent "src/desktop/target/release/bundle/macos/ATUS Desktop.app" "src/desktop/target/release/bundle/macos/atus-desktop-macos.zip"
@@ -100,7 +100,7 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - name: Test CI helper scripts
-        run: node --test scripts/tests/workflow-jobs.test.mjs scripts/tests/version.test.mjs scripts/tests/release.test.mjs scripts/tests/git-attributes.test.mjs scripts/coverage/check.test.mjs
+        run: node --test .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/coverage/check.test.mjs
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -136,7 +136,7 @@ jobs:
         run: npm run tauri -- build --bundles app
       - name: Check macOS project document icon
         if: runner.os == 'macOS'
-        run: python3 src/desktop/tests/check_macos_document_icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
+        run: python3 .github/scripts/tests/check_macos_document_icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
       - name: Archive macOS app
         if: runner.os == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent "src/desktop/target/release/bundle/macos/ATUS Desktop.app" "src/desktop/target/release/bundle/macos/atus-desktop-macos.zip"
@@ -159,7 +159,7 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - name: Test CI helper scripts
-        run: node --test scripts/tests/workflow-jobs.test.mjs scripts/tests/version.test.mjs scripts/tests/release.test.mjs scripts/tests/git-attributes.test.mjs scripts/coverage/check.test.mjs
+        run: node --test .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/coverage/check.test.mjs
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -195,7 +195,7 @@ jobs:
         run: npm run tauri -- build --bundles nsis
       - name: Check macOS project document icon
         if: runner.os == 'macOS'
-        run: python3 src/desktop/tests/check_macos_document_icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
+        run: python3 .github/scripts/tests/check_macos_document_icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
       - name: Archive macOS app
         if: runner.os == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent "src/desktop/target/release/bundle/macos/ATUS Desktop.app" "src/desktop/target/release/bundle/macos/atus-desktop-macos.zip"
@@ -218,16 +218,16 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - name: Test Ubuntu dependency setup
-        run: node --test scripts/tests/ubuntu-deps.test.mjs
+        run: node --test .github/scripts/tests/ubuntu-deps.test.mjs
       - name: Install Tauri system dependencies
         timeout-minutes: 15
         run: |
-          sudo scripts/ci/install-ubuntu-deps.sh
+          sudo .github/scripts/ci/install-ubuntu-deps.sh
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
       - name: Test CI helper scripts
-        run: node --test scripts/tests/workflow-jobs.test.mjs scripts/tests/version.test.mjs scripts/tests/release.test.mjs scripts/tests/git-attributes.test.mjs scripts/coverage/check.test.mjs
+        run: node --test .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/coverage/check.test.mjs
       - name: Lint, test, and build frontend
         working-directory: src/frontend
         run: |
@@ -236,7 +236,7 @@ jobs:
           npm run format:check
           npm run build
       - name: Require frontend line coverage above 90 percent
-        run: node scripts/coverage/check.mjs src/frontend/coverage/lcov.info
+        run: node .github/scripts/coverage/check.mjs src/frontend/coverage/lcov.info
       - name: Test Rust and C++ bridge
         run: cargo test --manifest-path src/desktop/Cargo.toml
       - name: Test C++ engine C ABI
@@ -246,8 +246,8 @@ jobs:
           /tmp/atus-mock-test
       - name: Require C++ line coverage above 90 percent
         run: |
-          scripts/coverage/cpp-llvm.sh /tmp/atus-cpp.lcov
-          node scripts/coverage/check.mjs /tmp/atus-cpp.lcov
+          .github/scripts/coverage/cpp-llvm.sh /tmp/atus-cpp.lcov
+          node .github/scripts/coverage/check.mjs /tmp/atus-cpp.lcov
 
   build-linux:
     needs: test-linux
@@ -262,34 +262,34 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - name: Test Ubuntu dependency setup
-        run: node --test scripts/tests/ubuntu-deps.test.mjs
+        run: node --test .github/scripts/tests/ubuntu-deps.test.mjs
       - name: Install Tauri system dependencies
         timeout-minutes: 15
         run: |
-          sudo scripts/ci/install-ubuntu-deps.sh
+          sudo .github/scripts/ci/install-ubuntu-deps.sh
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
       - name: Test Linux bundle verifier
-        run: python3 -m unittest discover -s scripts/tests -p 'test_verify_linux_bundles.py'
+        run: python3 -m unittest discover -s .github/scripts/tests -p 'test_verify_linux_bundles.py'
       - name: Build Linux bundles
         working-directory: src/frontend
         run: npm run tauri -- build --bundles deb,rpm,appimage
       - name: Check Linux bundles
         run: |
-          python3 scripts/verify-linux-bundles.py src/desktop/target/release/bundle
+          python3 .github/scripts/verify-linux-bundles.py src/desktop/target/release/bundle
           dpkg-deb --info src/desktop/target/release/bundle/deb/*.deb
           rpm -qpi src/desktop/target/release/bundle/rpm/*.rpm
       - name: Test isolated package smoke script
-        run: node --test scripts/tests/linux-smoke.test.mjs
+        run: node --test .github/scripts/tests/linux-smoke.test.mjs
       - name: Install and open Linux bundles in isolated systems
         run: |
           deb=(src/desktop/target/release/bundle/deb/*.deb)
           rpm=(src/desktop/target/release/bundle/rpm/*.rpm)
           appimage=(src/desktop/target/release/bundle/appimage/*.AppImage)
-          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" ubuntu:22.04 bash /workspace/scripts/ci/smoke-linux-container.sh deb "/workspace/${deb[0]}"
-          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" fedora:44 bash /workspace/scripts/ci/smoke-linux-container.sh rpm "/workspace/${rpm[0]}"
-          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" ubuntu:22.04 bash /workspace/scripts/ci/smoke-linux-container.sh appimage "/workspace/${appimage[0]}"
+          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" ubuntu:22.04 bash /workspace/.github/scripts/ci/smoke-linux-container.sh deb "/workspace/${deb[0]}"
+          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" fedora:44 bash /workspace/.github/scripts/ci/smoke-linux-container.sh rpm "/workspace/${rpm[0]}"
+          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" ubuntu:22.04 bash /workspace/.github/scripts/ci/smoke-linux-container.sh appimage "/workspace/${appimage[0]}"
       - uses: actions/upload-artifact@v4
         with:
           name: linux-bundles

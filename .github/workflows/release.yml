@@ -36,7 +36,7 @@ jobs:
         with:
           node-version: 22
       - name: Test release gate validation
-        run: node --test scripts/tests/release-gates.test.mjs scripts/tests/check-release-run.test.mjs scripts/tests/publish-release.test.mjs
+        run: node --test .github/scripts/tests/release-gates.test.mjs .github/scripts/tests/check-release-run.test.mjs .github/scripts/tests/publish-release.test.mjs
       - name: Verify trusted workflow run and required gates
         id: verified
         env:
@@ -47,7 +47,7 @@ jobs:
           [[ "$RUN_ID" =~ ^[0-9]+$ ]]
           gh api "repos/$REPOSITORY/actions/runs/$RUN_ID" > "$RUNNER_TEMP/run.json"
           gh api --paginate --slurp "repos/$REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" --jq '[.[].jobs[]]' > "$RUNNER_TEMP/jobs.json"
-          node scripts/check-release-run.mjs "$RUNNER_TEMP/run.json" "$RUNNER_TEMP/jobs.json"
+          node .github/scripts/check-release-run.mjs "$RUNNER_TEMP/run.json" "$RUNNER_TEMP/jobs.json"
           echo "sha=$(jq -r .head_sha "$RUNNER_TEMP/run.json")" >> "$GITHUB_OUTPUT"
       - name: Check out verified commit
         uses: actions/checkout@v4
@@ -56,8 +56,8 @@ jobs:
           fetch-depth: 0
       - name: Recheck release gates at verified commit
         run: |
-          node --test scripts/tests/release-gates.test.mjs scripts/tests/check-release-run.test.mjs scripts/tests/publish-release.test.mjs
-          node scripts/check-release-run.mjs "$RUNNER_TEMP/run.json" "$RUNNER_TEMP/jobs.json"
+          node --test .github/scripts/tests/release-gates.test.mjs .github/scripts/tests/check-release-run.test.mjs .github/scripts/tests/publish-release.test.mjs
+          node .github/scripts/check-release-run.mjs "$RUNNER_TEMP/run.json" "$RUNNER_TEMP/jobs.json"
       - name: Download artifacts from verified run
         env:
           GH_TOKEN: ${{ github.token }}
@@ -74,4 +74,4 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           RELEASE_RUN_JSON: ${{ runner.temp }}/run.json
           RELEASE_ARTIFACTS: ${{ runner.temp }}/artifacts
-        run: node scripts/publish-release.mjs
+        run: node .github/scripts/publish-release.mjs

@@ -10,7 +10,7 @@ test('refuses LLVM tools that do not match rustc before generating a report', ()
   const dir = mkdtempSync(join(tmpdir(), 'atus-rust-coverage-'));
   try {
     const output = join(dir, 'coverage.lcov');
-    const result = spawnSync('bash', ['scripts/coverage/rust-llvm.sh', output], {
+    const result = spawnSync('bash', ['.github/scripts/coverage/rust-llvm.sh', output], {
       encoding: 'utf8', env: { ...process.env, LLVM_COV: process.execPath },
     });
     assert.notEqual(result.status, 0);
@@ -29,7 +29,7 @@ test('excludes only the explicitly separated test files from LLVM export', () =>
     script('llvm-cov', 'if [ "$1" = "--version" ]; then echo "LLVM version 23.0.0"; else printf "%s\\n" "$@" > "$ATUS_ARG_LOG"; printf "SF:/project/src.rs\\nDA:1,1\\nLF:1\\nLH:1\\nend_of_record\\n"; fi');
     const log = join(dir, 'args');
     const output = join(dir, 'coverage.lcov');
-    const result = spawnSync('bash', ['scripts/coverage/rust-llvm.sh', output], {
+    const result = spawnSync('bash', ['.github/scripts/coverage/rust-llvm.sh', output], {
       encoding: 'utf8', env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, LLVM_COV: join(dir, 'llvm-cov'), LLVM_PROFDATA: join(dir, 'llvm-profdata'), ATUS_ARG_LOG: log },
     });
     assert.equal(result.status, 0, result.stderr);

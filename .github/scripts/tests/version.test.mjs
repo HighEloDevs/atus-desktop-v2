@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
 
-const cli = resolve('scripts/version.mjs');
+const cli = resolve('.github/scripts/version.mjs');
 function fixture(t) {
   const dir = mkdtempSync(join(tmpdir(), 'atus-version-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

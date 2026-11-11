@@ -56,7 +56,7 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 - Em `src/frontend/`, use `npm run lint` / `npm run lint:fix` e `npm run format:check` / `npm run format`. ESLint verifica TypeScript e regras de React; Prettier formata os arquivos do frontend. O CI executa as verificações sem modificá-los.
 - `.gitattributes` mantém arquivos de texto do frontend com finais de linha LF também no Windows, conforme exigido pelo Prettier.
 - O smoke desktop experimental usa a feature opt-in `desktop-e2e` e abre um driver local sem autenticação; siga `docs/testing/desktop-e2e.md` e não o use com dados reais. A feature não faz parte do build padrão e é recusada no perfil release convencional.
-- `scripts/coverage/rust-desktop-macos.sh` combina perfis Rust dos testes e do smoke no macOS; o relatório é exploratório e não comprova cobertura de código não ligado ou de outras plataformas.
+- `.github/scripts/coverage/rust-desktop-macos.sh` combina perfis Rust dos testes e do smoke no macOS; o relatório é exploratório e não comprova cobertura de código não ligado ou de outras plataformas.
 - O workflow de release está em preparação e bloqueia a publicação enquanto os gates completos não existirem; o fluxo e as validações pendentes estão em `docs/testing/release-rollout.md`.
 - Links dos perfis na página Sobre abrem no navegador padrão pelo plugin Tauri Opener; os endereços permitidos ficam em `src/desktop/capabilities/default.json`.
 - O atalho de nova análise é `Cmd+Option+N` no macOS e `Ctrl+Alt+N` nos demais sistemas. No desktop, o atalho e o cartão **Nova análise** em **Acesso rápido** criam um projeto em Documentos/ATUS/projects. O cartão **Abrir projeto** abre o seletor nativo, e os recentes exibem o caminho completo do arquivo.
@@ -70,7 +70,8 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 - `AGENTS.md`: contexto e instruções vivas do repositório.
 - `CONTRIBUTING.md`: orientações de contribuição, verificações e template de descrição de PR.
 - `README.md`: apresentação e estado inicial para pessoas colaboradoras.
-- `.github/workflows/`: build de verificação e empacotamento Tauri em macOS e Windows; os artefatos são de teste, não releases assinadas.
+- `.github/workflows/`: verificações, empacotamento e preparação de release; os artefatos são de teste, não releases assinadas.
+- `.github/scripts/`: utilitários e testes de CI, cobertura, empacotamento, versionamento e release.
 - `src/frontend/`: aplicação React; `components.json` configura shadcn/ui, `src/App.tsx` contém a homepage inicial e `src/styles/globals.css` os tokens e estilos globais; `src/components/ui/` para componentes shadcn de interface, `src/components/chart/` para o gráfico e sua personalização compartilhada com a sidebar, `features/` para funcionalidades, `hooks/`, `lib/` e `styles/` para recursos compartilhados, `public/` para assets estáticos e `tests/unit/` e `tests/integration/` para testes.
 - `src/desktop/`: núcleo desktop em Rust, com `src/`, ponte C++ em `build.rs` e teste da fronteira nativa em `src/main.rs`. O módulo `src/project/` mantém arquivos SQLite .atus versionados, gravação transacional, backup de migrations e detecção de edições concorrentes. O frontend integra abertura, recentes, salvamento automático e Salvar como em `src/features/projects/`.
 - `src/desktop/migrations/`: esquema inicial e migrações SQL numeradas, embutidos no binário. O Rust controla a ordem, o backup e a transação dos projetos existentes.
