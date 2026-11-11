@@ -18,8 +18,11 @@ Construir o ATUS Desktop v2, software científico gratuito e open source para es
 ## Convenções de linguagem
 
 - Escreva código, identificadores e nomes de arquivos e pastas em inglês. A interface permanece em português, conforme a orientação de produto.
+- Documente todos os módulos e classes e todas as funções e métodos públicos em inglês, no padrão da linguagem (JSDoc, rustdoc ou Doxygen). Descreva propósito, parâmetros, retorno, erros, efeitos colaterais e pré-condições relevantes ao contrato. Inclua exemplos de uso quando ajudarem a compreender a API e mantenha a documentação atualizada junto com a implementação.
 
 ## Princípios de implementação
+
+- Toda melhoria deve vir com um teste de regressão que cubra o comportamento alterado. Adicione ou atualize o teste na mesma mudança e execute as verificações relevantes.
 
 - Priorize correção numérica e paridade verificável antes de otimizações. Use fixtures, resultados de referência e tolerâncias absolutas/relativas justificadas; valide convergência e entradas inválidas.
 - Separe interface e cálculo por contrato explícito e versionado. A proposta inclui x/y, incertezas opcionais, expressão, parâmetros iniciais, método e opções na entrada; resultados, incertezas, diagnóstico, resíduos e matrizes disponíveis na saída. Unidades, ausências e erros ainda precisam ser definidos.
@@ -42,21 +45,30 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 
 ## Desenvolvimento
 
+- Siga [CONTRIBUTING.md](CONTRIBUTING.md) para contribuições e descrições de PR. Use o template de corpo documentado ali e em `.github/pull_request_template.md`, mantendo o escopo final e as evidências de verificação atualizados.
+
+- Crie sempre worktrees novas dentro de `.worktree/` na raiz do repositório, usando uma subpasta por worktree. Os artefatos locais do Superpowers e o diretório de worktrees ficam fora do Git.
+
 - Pré-requisitos: Node.js, npm, Rust/Cargo e dependências de sistema do Tauri. No macOS, as Command Line Tools são suficientes para desktop.
 - Em `src/frontend/`, execute `npm ci`, `npm run build`, `npm run tauri -- dev` e `npm run tauri -- build` (build de distribuição na plataforma atual). O Tauri usa a configuração em `src/desktop/`; o servidor Vite usa a porta 1420.
+- Em `src/frontend/`, execute `npm test` para verificar a renderização dos componentes de projetos.
 - Em `src/frontend/`, use `npm run lint` / `npm run lint:fix` e `npm run format:check` / `npm run format`. ESLint verifica TypeScript e regras de React; Prettier formata os arquivos do frontend. O CI executa as verificações sem modificá-los.
 - Links dos perfis na página Sobre abrem no navegador padrão pelo plugin Tauri Opener; os endereços permitidos ficam em `src/desktop/capabilities/default.json`.
-- O atalho de nova análise é `Cmd+Option+N` no macOS e `Ctrl+Alt+N` nos demais sistemas. O atalho e o acesso rápido abrem a tela de análise demonstrativa.
+- O atalho de nova análise é `Cmd+Option+N` no macOS e `Ctrl+Alt+N` nos demais sistemas. No desktop, o atalho e o cartão **Nova análise** em **Acesso rápido** criam um projeto em Documentos/ATUS/projects. O cartão **Abrir projeto** abre o seletor nativo, e os recentes exibem o caminho completo do arquivo.
+- No macOS, o pacote .app usa `src/desktop/Info.plist` para declarar a associação .atus e o ícone exibido no Finder. O aplicativo solicita confirmação antes de trocar uma análise aberta.
+- No macOS, **Arquivo** traz **Salvar projeto** (Cmd+S) e **Salvar como** (Cmd+Shift+S). Nas demais plataformas os comandos ficam no cabeçalho do projeto.
 - O Vite usa `--configLoader runner`: o carregador padrão ficou bloqueado neste ambiente com Node 26.
 - `org.atus.desktop` é identificador provisório; confirme antes de distribuir. A ponte inicial compila C++ via `cc`; ela retorna somente dados de demonstração. Execute `cargo test --manifest-path src/desktop/Cargo.toml` para verificar a integração.
 
 ## Estrutura atual
 
 - `AGENTS.md`: contexto e instruções vivas do repositório.
+- `CONTRIBUTING.md`: orientações de contribuição, verificações e template de descrição de PR.
 - `README.md`: apresentação e estado inicial para pessoas colaboradoras.
 - `.github/workflows/`: build de verificação e empacotamento Tauri em macOS e Windows; os artefatos são de teste, não releases assinadas.
 - `src/frontend/`: aplicação React; `components.json` configura shadcn/ui, `src/App.tsx` contém a homepage inicial e `src/styles/globals.css` os tokens e estilos globais; `src/components/ui/` para componentes shadcn de interface, `src/components/chart/` para o gráfico e sua personalização compartilhada com a sidebar, `features/` para funcionalidades, `hooks/`, `lib/` e `styles/` para recursos compartilhados, `public/` para assets estáticos e `tests/unit/` e `tests/integration/` para testes.
-- `src/desktop/`: núcleo desktop em Rust, com `src/`, ponte C++ em `build.rs` e teste da fronteira nativa em `src/main.rs`.
+- `src/desktop/`: núcleo desktop em Rust, com `src/`, ponte C++ em `build.rs` e teste da fronteira nativa em `src/main.rs`. O módulo `src/project/` mantém arquivos SQLite .atus versionados, gravação transacional, backup de migrations e detecção de edições concorrentes. O frontend integra abertura, recentes, salvamento automático e Salvar como em `src/features/projects/`.
+- `src/desktop/migrations/`: esquema inicial e migrações SQL numeradas, embutidos no binário. O Rust controla a ordem, o backup e a transação dos projetos existentes.
 - `src/scientific-engine/`: motor científico C++, com interfaces públicas em `include/`, implementação em `src/` e testes unitários e de integração em `tests/`.
 - `docs/decisions/`: decisões arquiteturais, incluindo o componente de gráficos com D3.
 - `docs/references/`: documentos originais de especificação e identidade.

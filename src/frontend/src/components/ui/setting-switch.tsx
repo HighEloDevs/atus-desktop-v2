@@ -1,9 +1,19 @@
+/**
+ * @module
+ * Labeled boolean setting control.
+ */
+
 type SettingSwitchProps = {
   label: string;
   value: boolean;
   onChange: (value: boolean) => void;
 };
 
+/**
+ * Renders a labeled boolean setting.
+ * @param props - Display label, current value, and change callback.
+ * @returns The rendered React element.
+ */
 export function SettingSwitch({ label, value, onChange }: SettingSwitchProps) {
   return (
     <button

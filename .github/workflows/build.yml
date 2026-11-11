@@ -37,6 +37,9 @@ jobs:
       - name: Lint frontend
         working-directory: src/frontend
         run: npm run lint
+      - name: Test frontend
+        working-directory: src/frontend
+        run: npm test
       - name: Check frontend formatting
         working-directory: src/frontend
         run: npm run format:check
@@ -45,6 +48,9 @@ jobs:
       - name: Build desktop bundle
         working-directory: src/frontend
         run: npm run tauri -- build --bundles ${{ matrix.bundle }}
+      - name: Check macOS project document icon
+        if: runner.os == 'macOS'
+        run: python3 src/desktop/tests/check_macos_document_icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
       - name: Archive macOS app
         if: runner.os == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent "src/desktop/target/release/bundle/macos/ATUS Desktop.app" "src/desktop/target/release/bundle/macos/atus-desktop-macos.zip"

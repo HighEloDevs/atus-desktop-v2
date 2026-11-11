@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Provisional fit service contract and illustrative mock.
+ */
+
 import { resolveFitParameters } from "./parse-fit-parameters";
 import type { ChartPoint } from "@/components/chart/Chart";
 

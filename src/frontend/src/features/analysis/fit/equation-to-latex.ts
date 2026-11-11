@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Conversion of model expressions to LaTeX fragments.
+ */
+
 const LATEX_FUNCTIONS = [
   "sin",
   "cos",
@@ -17,7 +22,8 @@ const LATEX_FUNCTIONS = [
 
 /**
  * Converts ATUS equation syntax (mathjs-compatible) to a KaTeX-ready LaTeX fragment.
- * Returns null for empty input.
+ * @param equation - Mathjs-compatible equation text.
+ * @returns A LaTeX fragment, or null for empty input.
  */
 export function equationToLatex(equation: string): string | null {
   const trimmed = equation.trim();

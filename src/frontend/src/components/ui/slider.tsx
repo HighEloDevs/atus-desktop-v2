@@ -1,9 +1,19 @@
+/**
+ * @module
+ * Accessible slider component.
+ */
+
 "use client";
 
 import * as React from "react";
 import { cn } from "cn";
 import { Slider as SliderPrimitive } from "radix-ui";
 
+/**
+ * Renders an accessible slider with thumbs for its current values.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function Slider({
   className,
   defaultValue,

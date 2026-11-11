@@ -1,3 +1,4 @@
+/** @file mock_analysis.h Fixed demonstration data exposed through the C ABI. */
 #ifndef ATUS_MOCK_ANALYSIS_H
 #define ATUS_MOCK_ANALYSIS_H
 
@@ -5,6 +6,7 @@
 extern "C" {
 #endif
 
+/** Fixed demonstration coefficients, metric, and five x/y points. */
 typedef struct {
     double slope;
     double intercept;
@@ -13,7 +15,7 @@ typedef struct {
     double y[5];
 } AtusMockAnalysis;
 
-/* Demonstration data only; does not perform a fit. */
+/** Returns owned fixed example data and illustrative statistics. Does not perform a fit. */
 AtusMockAnalysis atus_mock_analysis(void);
 
 #ifdef __cplusplus

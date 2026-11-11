@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Chart image export controls.
+ */
+
 import { useState, type RefObject } from "react";
 import html2canvas from "html2canvas";
 import { ChevronDown, Copy, Download, FileImage } from "lucide-react";
@@ -11,6 +16,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+/**
+ * Renders controls to export the referenced chart as an image.
+ * @param props - Chart element ref and export settings.
+ * @returns The rendered React element.
+ */
 export function ChartExportMenu({
   graphic,
   disabled,
@@ -54,7 +64,7 @@ export function ChartExportMenu({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="outline" size="sm" disabled={disabled || busy}>
-            <Download /> {busy ? "Exportando…" : "Salvar"} <ChevronDown />
+            <Download /> {busy ? "Exportando…" : "Exportar"} <ChevronDown />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64 p-1.5">

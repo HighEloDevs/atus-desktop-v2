@@ -5,3 +5,8 @@ target/
 
 *.tsbuildinfo
 src/desktop/gen/
+
+# Local worktrees and Superpowers artifacts
+/.worktree/
+/.superpowers/
+/docs/superpowers/

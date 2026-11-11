@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Fit configuration defaults and validation.
+ */
+
 import { FunctionInterpreter } from "./function-interpreter";
 import { resolveFitParameters } from "./parse-fit-parameters";
 
@@ -19,6 +24,11 @@ export const defaultFitConfig: FitConfig = {
   useSy: true,
 };
 
+/**
+ * Checks a model expression, parameter constraints, and x range before a fit.
+ * @param config - Configuration to validate.
+ * @returns A Portuguese validation message, or null when valid.
+ */
 export function validateFitConfig(config: FitConfig): string | null {
   if (!config.equation.trim()) return "Informe uma função de ajuste.";
   const expression = FunctionInterpreter.validate(config.equation);

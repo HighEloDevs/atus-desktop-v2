@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Parsing of localized numeric input.
+ */
+
 // Matches a normalized numeric token: sign, digits with optional dot
 // decimal, optional scientific notation exponent.
 const NUMERIC_PATTERN = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/;
@@ -5,7 +10,9 @@ const NUMERIC_PATTERN = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/;
 /**
  * Converts a numeric string to a number, accepting both decimal point
  * (en-US) and decimal comma (pt-BR), with optional thousands separators
- * and scientific notation. Returns NaN for malformed input.
+ * and scientific notation.
+ * @param value - Numeric token to parse.
+ * @returns The numeric value, or NaN for malformed input.
  *
  * Disambiguation by the LAST occurrence of "," vs ".":
  * - "1.234,56" → pt-BR (dots = thousands, comma = decimal) → 1234.56

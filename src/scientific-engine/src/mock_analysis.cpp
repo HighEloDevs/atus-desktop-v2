@@ -1,3 +1,4 @@
+/** @file mock_analysis.cpp Fixed demonstration data for the C ABI. */
 #include "mock_analysis.h"
 
 extern "C" AtusMockAnalysis atus_mock_analysis(void) {

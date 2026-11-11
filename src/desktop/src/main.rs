@@ -1,6 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+//! Desktop entry point and native demonstration bridge.
+
+mod project;
+
+use project::commands::*;
+#[cfg(target_os = "macos")]
+use project::{finder::take_finder_project, menu::project_menu_enabled};
 use serde::Serialize;
+use tauri::Manager;
 
 #[repr(C)]
 struct NativeMockAnalysis {
@@ -38,11 +46,46 @@ fn get_mock_analysis() -> MockAnalysis {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .manage(project::finder::FinderRequest::default())
+        .setup(|app| {
+            project::menu::install(app)?;
+            Ok(())
+        });
+    builder
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_mock_analysis])
-        .run(tauri::generate_context!())
-        .expect("failed to run ATUS Desktop");
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            get_mock_analysis,
+            project_create,
+            project_open,
+            project_save,
+            project_save_as,
+            project_list,
+            project_available,
+            #[cfg(target_os = "macos")]
+            project_menu_enabled,
+            #[cfg(target_os = "macos")]
+            take_finder_project
+        ])
+        .build(tauri::generate_context!())
+        .expect("failed to build ATUS Desktop")
+        .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = &event {
+                project::finder::receive(app, urls.clone());
+            }
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                if let Some(window) = app.get_webview_window("main") {
+                    api.prevent_exit();
+                    if let Err(error) = window.close() {
+                        eprintln!("Não foi possível solicitar o fechamento da janela: {error}");
+                    }
+                }
+            }
+        });
 }
 
 #[cfg(test)]

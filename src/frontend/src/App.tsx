@@ -1,16 +1,23 @@
-import { useEffect, useState } from "react";
-import { isTauri } from "@tauri-apps/api/core";
+/**
+ * @module
+ * Application navigation, project lifecycle, and desktop home screen.
+ */
+
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { ProjectQuickActions } from "@/features/projects/ProjectQuickActions";
+import { RecentProjects } from "@/features/projects/RecentProjects";
+import {
+  chooseProject,
+  newSnapshot,
+  projectClient,
+  rememberProject,
+  type OpenProject,
+} from "@/features/projects/project-client";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { AnalysisPage } from "@/features/analysis/AnalysisPage";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import {
-  ChevronRight,
-  CircleHelp,
-  FileClock,
-  FilePlus2,
-  FolderOpen,
-  House,
-  Info,
-} from "lucide-react";
+import { ChevronRight, CircleHelp, FileClock, House, Info } from "lucide-react";
 
 type Page = "home" | "about" | "analysis";
 
@@ -114,7 +121,39 @@ function App() {
   const [page, setPage] = useState<Page>("home");
   const [profileError, setProfileError] = useState(false);
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
-  const shortcut = isMac ? "⌘ ⌥ N" : "Ctrl + Alt + N";
+
+  const [project, setProject] = useState<OpenProject | null>(null);
+  const [projectError, setProjectError] = useState("");
+  const opening = useRef(false);
+  const [finderPath, setFinderPath] = useState<string | null>(null);
+  const runProjectAction = useCallback(
+    async (action: () => Promise<OpenProject | null>, replaces?: string) => {
+      if (opening.current) return;
+      opening.current = true;
+      setProjectError("");
+      try {
+        const opened = await action();
+        if (!opened) return;
+        setProject(opened);
+        setPage("analysis");
+        rememberProject(opened.path, replaces);
+      } catch (error) {
+        setProjectError(String(error));
+      } finally {
+        opening.current = false;
+      }
+    },
+    [],
+  );
+  const createProject = useCallback(() => {
+    if (!isTauri()) {
+      setPage("analysis");
+      return;
+    }
+    void runProjectAction(() => projectClient.create(newSnapshot()));
+  }, [runProjectAction]);
+  const openProject = (path: string, replaces?: string) =>
+    runProjectAction(() => projectClient.open(path), replaces);
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -133,14 +172,64 @@ function App() {
         event.code === "KeyN"
       ) {
         event.preventDefault();
-        setPage("analysis");
+        if (page !== "analysis") createProject();
       }
     }
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
+  }, [isMac, page, createProject]);
+
+  useEffect(() => {
+    if (!isTauri() || !isMac) return;
+    let active = true;
+    async function receive() {
+      if (!active) return;
+      try {
+        const path = await invoke<string | null>("take_finder_project");
+        if (active && path) setFinderPath(path);
+      } catch (error) {
+        if (active) setProjectError(String(error));
+      }
+    }
+    const listener = getCurrentWindow().listen("finder-project-requested", () => void receive());
+    void listener.then(receive).catch((error) => {
+      if (active) setProjectError(String(error));
+    });
+    return () => {
+      active = false;
+      void listener.then((unlisten) => unlisten()).catch(console.error);
+    };
   }, [isMac]);
 
-  if (page === "analysis") return <AnalysisPage onBack={() => setPage("home")} />;
+  const openFinderProject = useCallback(
+    async (path: string) => {
+      await runProjectAction(() => projectClient.open(path));
+      setFinderPath((pending) => (pending === path ? null : pending));
+    },
+    [runProjectAction],
+  );
+
+  useEffect(() => {
+    if (page === "analysis" || !finderPath) return;
+    const timer = window.setTimeout(() => void openFinderProject(finderPath), 0);
+    return () => clearTimeout(timer);
+  }, [page, finderPath, openFinderProject]);
+
+  if (page === "analysis")
+    return (
+      <AnalysisPage
+        key={project?.path}
+        project={project}
+        finderPath={finderPath}
+        projectError={projectError}
+        onOpenFinderProject={openFinderProject}
+        onCancelFinderProject={() => setFinderPath(null)}
+        onBack={() => {
+          setProject(null);
+          setPage("home");
+        }}
+      />
+    );
 
   return (
     <div className="app-shell bg-[#f7f7f3] text-[#20272c]">
@@ -159,66 +248,34 @@ function App() {
           <div className="mx-auto max-w-[1120px] p-6 sm:p-8">
             {page === "home" ? (
               <>
-                <div>
-                  <h1 className="text-[24px] font-semibold tracking-[-.04em]">Início</h1>
-                  <p className="mt-1 text-[13px] text-[#758078]">
-                    Acesse seus projetos e comece uma análise.
-                  </p>
+                <div className="border-b border-border pb-5">
+                  <h1 className="text-[28px] leading-tight font-semibold tracking-[-.045em]">
+                    Projetos
+                  </h1>
                 </div>
-                <section aria-labelledby="quick-actions" className="mt-8">
-                  <div className="mb-3 flex items-center gap-2">
-                    <h2 id="quick-actions" className="text-[13px] font-semibold">
-                      Acesso rápido
-                    </h2>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setPage("analysis")}
-                    aria-keyshortcuts={isMac ? "Meta+Alt+N" : "Control+Alt+N"}
-                    className="flex w-full max-w-[350px] items-start gap-3 rounded-md border border-[#d8ded7] bg-white p-4 text-left transition-colors hover:border-[#aab9ad] hover:bg-[#fafbf9]"
+                <ProjectQuickActions
+                  isMac={isMac}
+                  onCreate={createProject}
+                  onOpen={
+                    isTauri()
+                      ? () => {
+                          void runProjectAction(async () => {
+                            const path = await chooseProject();
+                            return path ? projectClient.open(path) : null;
+                          });
+                        }
+                      : undefined
+                  }
+                />
+                {projectError && (
+                  <p
+                    role="alert"
+                    className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
                   >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-[#f0f3ee] text-[#52625a]">
-                      <FilePlus2 size={17} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[13px] font-semibold">Nova análise</span>
-                      <span className="mt-1 block text-[12px] leading-5 text-[#7b887e]">
-                        Comece com um conjunto de dados.
-                      </span>
-                      <span className="mt-2 block text-[10px] text-[#7b887e]">
-                        Abrir demonstração
-                      </span>
-                    </span>
-                    <kbd className="whitespace-nowrap rounded border border-[#d8ded7] bg-[#f7f8f5] px-1.5 py-1 text-[10px] text-[#66716e]">
-                      {shortcut}
-                    </kbd>
-                  </button>
-                </section>
-                <section
-                  aria-labelledby="recent-heading"
-                  className="mt-8 overflow-hidden rounded-md border border-[#d8ded7] bg-white"
-                >
-                  <div className="flex h-12 items-center justify-between border-b border-[#e5e9e3] px-4">
-                    <h2 id="recent-heading" className="text-[13px] font-semibold">
-                      Projetos recentes
-                    </h2>
-                    <span className="text-[11px] text-[#909c93]">Em breve</span>
-                  </div>
-                  <div className="flex min-h-[230px] flex-col items-center justify-center px-6 py-10 text-center">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#f1f4ef] text-[#839087]">
-                      <FolderOpen size={20} strokeWidth={1.5} />
-                    </div>
-                    <h3 className="mt-4 text-[13px] font-semibold">
-                      Seus projetos aparecerão aqui
-                    </h3>
-                    <p className="mt-1.5 max-w-[340px] text-[12px] leading-5 text-[#7b887e]">
-                      O acesso a projetos recentes estará disponível em uma próxima etapa.
-                    </p>
-                  </div>
-                </section>
-                <p className="mt-5 text-[11px] text-[#8b978e]">
-                  A importação e a abertura de projetos ainda estão em desenvolvimento.
-                </p>
+                    {projectError}
+                  </p>
+                )}
+                {isTauri() && <RecentProjects onOpen={openProject} />}
               </>
             ) : (
               <section className="max-w-[980px]" aria-labelledby="about-title">

@@ -1,8 +1,18 @@
+/**
+ * @module
+ * Accessible checkbox component.
+ */
+
 import * as React from "react";
 import { cn } from "cn";
 import { CheckIcon } from "lucide-react";
 import { Checkbox as CheckboxPrimitive } from "radix-ui";
 
+/**
+ * Renders an accessible checkbox using Radix state and input props.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
 function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
   return (
     <CheckboxPrimitive.Root

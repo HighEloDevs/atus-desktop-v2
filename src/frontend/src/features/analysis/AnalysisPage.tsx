@@ -1,3 +1,12 @@
+/**
+ * @module
+ * Analysis workspace and its project editing state.
+ */
+
+import { FinderProjectDialog } from "@/features/projects/FinderProjectDialog";
+import { Button } from "@/components/ui/button";
+import { useProjectSave } from "@/features/projects/useProjectSave";
+import type { OpenProject } from "@/features/projects/project-client";
 import { useLayoutEffect, useRef, useState, type SetStateAction } from "react";
 import { FitControls } from "./fit/FitControls";
 import { defaultFitConfig, validateFitConfig, type FitConfig } from "./fit/fit-config";
@@ -15,11 +24,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChartExportMenu } from "@/components/chart/ChartExportMenu";
 import { ChartSettingsPanel } from "@/components/chart/ChartSettingsPanel";
-import { useChartSettings } from "@/components/chart/useChartSettings";
+import { useChartSettings, type ChartValues } from "@/components/chart/useChartSettings";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   Activity,
   ArrowLeft,
+  Check,
+  CircleAlert,
+  Save,
   Database,
   FileInput,
   FlaskConical,
@@ -76,24 +88,107 @@ function parseValidPoints(text: string, separator: SeparatorType) {
   return points;
 }
 
-export function AnalysisPage({ onBack }: { onBack: () => void }) {
-  const chartSettings = useChartSettings();
+type AnalysisState = {
+  chart?: ChartValues;
+  selectedId?: string | null;
+  tableId?: string | null;
+  editingText?: string | null;
+  separator?: SeparatorType;
+};
+
+/**
+ * Renders the analysis workspace and coordinates project editing.
+ * @param props - Current project, navigation callback, and Finder opening state and callbacks.
+ * @returns The rendered React element.
+ */
+export function AnalysisPage({
+  onBack,
+  project = null,
+  finderPath,
+  projectError,
+  onOpenFinderProject,
+  onCancelFinderProject,
+}: {
+  onBack: () => void;
+  project?: OpenProject | null;
+  finderPath: string | null;
+  projectError: string;
+  onOpenFinderProject: (path: string) => Promise<void>;
+  onCancelFinderProject: () => void;
+}) {
+  const [initialAnalysis] = useState(() =>
+    project
+      ? (project.snapshot.analyses[0] ?? {
+          id: crypto.randomUUID(),
+          kind: "analysis",
+          state: {},
+          datasets: [],
+        })
+      : undefined,
+  );
+  const initial = initialAnalysis?.state as AnalysisState | undefined;
+  const chartSettings = useChartSettings(initial?.chart);
   const graphicRef = useRef<HTMLDivElement>(null);
   const exampleNumber = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const sidebarContent = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef({ analysis: 0, visual: 0 });
+  const [openingFinderProject, setOpeningFinderProject] = useState(false);
+  const openingFinderRef = useRef(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [tableId, setTableId] = useState<string | null>(null);
-  const [editingText, setEditingText] = useState<string | null>(null);
+  const [tableId, setTableId] = useState<string | null>(initial?.tableId ?? null);
+  const [editingText, setEditingText] = useState<string | null>(initial?.editingText ?? null);
   const [editError, setEditError] = useState("");
-  const [separator, setSeparator] = useState<SeparatorType>("auto");
+  const [separator, setSeparator] = useState<SeparatorType>(initial?.separator ?? "auto");
   const [importError, setImportError] = useState("");
-  const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [datasets, setDatasets] = useState<Dataset[]>(
+    () =>
+      initialAnalysis?.datasets.map(({ id, name, points, state }) => ({
+        ...defaultFitConfig,
+        data: null,
+        linePoints: [],
+        color: "#f25a3c",
+        radius: 5,
+        symbol: "circle",
+        lineStyle: "solid",
+        lineWidth: 2,
+        visible: true,
+        fitState: "idle",
+        ...(state as Partial<Omit<Dataset, "id" | "name" | "points">>),
+        id,
+        name,
+        points: points.map(({ x, y, sx, sy }) => ({
+          x,
+          y,
+          sx: sx ?? undefined,
+          sy: sy ?? undefined,
+        })),
+      })) ?? [],
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(initial?.selectedId ?? null);
   const selected = datasets.find((item) => item.id === selectedId) ?? datasets[0];
   const data = selected;
+  const saving = useProjectSave(
+    project,
+    JSON.stringify(
+      initialAnalysis
+        ? [
+            {
+              ...initialAnalysis,
+              state: { chart: chartSettings, selectedId, tableId, editingText, separator },
+              datasets: datasets.map(({ id, name, points, ...state }) => ({
+                id,
+                name,
+                points,
+                state,
+              })),
+            },
+            ...(project?.snapshot.analyses.slice(1) ?? []),
+          ]
+        : [],
+    ),
+  );
   function updateSeries(id: string, updates: Partial<ChartSeries>) {
     setDatasets((items) => items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
   }
@@ -516,6 +611,32 @@ export function AnalysisPage({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="analysis-workspace flex h-screen min-h-0 bg-[#f7f7f3] text-[#20272c]">
+      <FinderProjectDialog
+        path={finderPath}
+        opening={openingFinderProject}
+        onCancel={onCancelFinderProject}
+        onOpen={(path) => {
+          if (openingFinderRef.current) return;
+          openingFinderRef.current = true;
+          setOpeningFinderProject(true);
+          void (async () => {
+            try {
+              if (await saving.canLeave()) await onOpenFinderProject(path);
+            } finally {
+              openingFinderRef.current = false;
+              setOpeningFinderProject(false);
+            }
+          })();
+        }}
+      />
+      {projectError && (
+        <p
+          role="alert"
+          className="fixed right-4 top-4 z-40 max-w-sm rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-md"
+        >
+          {projectError}
+        </p>
+      )}
       <Dialog.Root
         open={!!table}
         onOpenChange={(open) => {
@@ -601,25 +722,70 @@ export function AnalysisPage({ onBack }: { onBack: () => void }) {
       </Dialog.Root>
       {panelOpen && (
         <aside className="analysis-panel flex h-full w-[360px] shrink-0 flex-col border-r border-[#d8ded7] bg-[#f7f8f5]">
-          <div className="flex h-[70px] shrink-0 items-center gap-3 border-b border-[#d8ded7] px-4">
-            <button
-              type="button"
-              onClick={onBack}
-              aria-label="Voltar ao início"
-              className="rounded p-2 text-[#66716e] hover:bg-[#e9ece7]"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <div className="min-w-0 flex-1">
-              <span className="text-[11px] font-medium text-[#87938a]">Projeto</span>
-              <div className="flex items-center gap-2">
-                <h1 className="truncate text-[15px] font-semibold">Projeto sem título</h1>
-                <span className="rounded bg-[#fff3dc] px-1.5 py-0.5 text-[9px] font-semibold text-[#8c601d]">
-                  NÃO SALVO
-                </span>
+          <header className="border-b border-border bg-white px-3 py-3">
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => {
+                  void saving.canLeave().then((ok) => {
+                    if (ok) onBack();
+                  });
+                }}
+                aria-label="Voltar ao início"
+              >
+                <ArrowLeft aria-hidden="true" />
+              </Button>
+              <div className="min-w-0 flex-1">
+                <h1 className="truncate text-sm leading-5 font-semibold">
+                  {saving.project?.snapshot.name ?? "Projeto sem título"}
+                </h1>
+                <p
+                  role="status"
+                  className={`flex items-center gap-1.5 text-[11px] ${saving.error ? "text-red-800" : "text-muted-foreground"}`}
+                >
+                  {saving.error ? (
+                    <CircleAlert aria-hidden="true" size={12} />
+                  ) : saving.status === "Salvo" && saving.project ? (
+                    <Check aria-hidden="true" size={12} className="text-ring" />
+                  ) : null}
+                  {saving.project ? saving.status : "Não salvo"}
+                </p>
               </div>
+              {saving.project && !saving.usesNativeMenu && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      className="bg-white"
+                      aria-label="Comandos do projeto"
+                      title="Comandos do projeto"
+                    >
+                      <MoreHorizontal aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => void saving.flush()}>
+                      <Save aria-hidden="true" /> Salvar projeto
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => void saving.saveAs()}>
+                      <FileInput aria-hidden="true" /> Salvar como…
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
-          </div>
+            {saving.error && (
+              <p
+                role="alert"
+                className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
+              >
+                {saving.error}
+              </p>
+            )}
+          </header>
           <div className="border-b border-[#d8ded7] px-4 py-3">
             <div
               role="tablist"

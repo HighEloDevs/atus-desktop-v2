@@ -2,7 +2,7 @@
 
 O ATUS Desktop é uma ferramenta científica gratuita e de código aberto para análise de dados de física experimental. A v2 busca oferecer um fluxo simples e reproduzível, preservando e verificando as capacidades científicas relevantes da versão anterior.
 
-O projeto está em fase inicial. A stack escolhida é React, Tailwind CSS e shadcn para o frontend, Tauri com Rust para o desktop e C++ para o motor científico. A aplicação inclui uma tela de análise demonstrativa conectada a um motor C++ que retorna valores fixos; nenhum ajuste científico é realizado. O contrato científico definitivo e os detalhes de distribuição ainda serão definidos. O frontend inicial usa Tailwind CSS e shadcn/ui; importação e projetos ainda estão em desenvolvimento.
+O projeto está em fase inicial. A stack escolhida é React, Tailwind CSS e shadcn para o frontend, Tauri com Rust para o desktop e C++ para o motor científico. A aplicação inclui uma tela de análise demonstrativa conectada a um motor C++ que retorna valores fixos; nenhum ajuste científico é realizado. O contrato científico definitivo e os detalhes de distribuição ainda serão definidos. O frontend inicial usa Tailwind CSS e shadcn/ui; é possível importar séries e retomar análises em projetos SQLite `.atus`.
 
 ## Desenvolvimento
 
@@ -33,3 +33,10 @@ A especificação é um retrato inicial: seus critérios de aceite e estimativas
 ## Licença
 
 Consulte [LICENSE](LICENSE).
+
+
+No desktop, **Nova análise** cria um arquivo em `ATUS/projects` dentro da pasta Documentos do sistema. **Abrir projeto** aceita arquivos de outras pastas e os inclui nos recentes. As mudanças são gravadas automaticamente. **Salvar** antecipa a gravação e **Salvar como** cria uma cópia em um caminho livre. Se o arquivo mudar em outra instância, use **Salvar como** para preservar a edição atual. A primeira abertura de um arquivo v1 cria um backup ao lado dele e migra o esquema para v2. Resultados simulados continuam identificados como simulação.
+
+Para conferir a abertura na interface, crie uma análise e importe um CSV com pontos conhecidos. Use **Salvar como** para criar uma cópia `.atus` numa pasta temporária fora de Documentos/ATUS/projects. Volte ao início, escolha **Abrir projeto**, selecione a cópia e confira o nome da série, os pontos e as configurações. Volte ao início e reabra a mesma cópia em **Projetos recentes**. O teste Rust `project_commands_save_copy_and_reopen_without_the_original` verifica o retorno da abertura depois de remover o original.
+
+No macOS, o pacote `ATUS Desktop.app` associa a extensão `.atus` ao aplicativo. Abra o pacote pelo Finder (ou instale-o em Aplicativos) e dê dois cliques num `.atus`. Se já houver uma análise aberta, confirme a troca na janela do ATUS. Para gerar o pacote localmente, execute `npm run tauri -- build --debug --bundles app` em `src/frontend`.

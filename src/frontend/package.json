@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --configLoader runner --host 127.0.0.1 --port 1420 --strictPort",
+    "test": "node --test tests/integration",
     "build": "tsc -b && vite build --configLoader runner",
     "tauri": "cd ../desktop && tauri",
     "lint": "eslint . --max-warnings 0",
@@ -16,6 +17,7 @@
     "@fontsource-variable/inter": "^5.3.0",
     "@tailwindcss/vite": "^4.3.5",
     "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tauri-apps/plugin-opener": "^2.7.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -46,6 +48,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.14.0",
+    "jsdom": "^26.1.0",
     "prettier": "3.9.10",
     "typescript": "~5.9.0",
     "typescript-eslint": "^8.72.2",
