@@ -98,11 +98,12 @@ jobs:
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
+      - name: Test Ubuntu dependency setup
+        run: node --test scripts/tests/ubuntu-deps.test.mjs
       - name: Install Tauri system dependencies
         timeout-minutes: 15
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential clang llvm curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2 rpm
+          sudo scripts/ci/install-ubuntu-deps.sh
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
