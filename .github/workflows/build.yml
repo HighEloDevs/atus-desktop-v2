@@ -14,6 +14,22 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  version:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require up-to-date base and new version
+        run: |
+          git merge-base --is-ancestor origin/main HEAD
+          node scripts/version.mjs check --base origin/main
+
   build:
     strategy:
       fail-fast: false
@@ -85,7 +101,7 @@ jobs:
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2 rpm
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential clang llvm curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2 rpm
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -95,9 +111,11 @@ jobs:
         working-directory: src/frontend
         run: |
           npm run lint
-          npm test
+          npm run test:coverage
           npm run format:check
           npm run build
+      - name: Require frontend line coverage above 90 percent
+        run: node scripts/coverage/check.mjs src/frontend/coverage/lcov.info
       - name: Test Rust and C++ bridge
         run: cargo test --manifest-path src/desktop/Cargo.toml
       - name: Test C++ engine C ABI
@@ -105,6 +123,10 @@ jobs:
           cc -std=c11 -Isrc/scientific-engine/include -c src/scientific-engine/tests/mock_analysis_test.c -o /tmp/atus-mock-test.o
           c++ -std=c++17 -Isrc/scientific-engine/include src/scientific-engine/src/mock_analysis.cpp /tmp/atus-mock-test.o -o /tmp/atus-mock-test
           /tmp/atus-mock-test
+      - name: Require C++ line coverage above 90 percent
+        run: |
+          scripts/coverage/cpp-llvm.sh /tmp/atus-cpp.lcov
+          node scripts/coverage/check.mjs /tmp/atus-cpp.lcov
       - name: Test Linux bundle verifier
         run: python3 -m unittest discover -s scripts/tests -p 'test_verify_linux_bundles.py'
       - name: Build Linux bundles

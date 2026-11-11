@@ -101,3 +101,33 @@ it("clamps marker radius, line width and axis division counts to supported limit
   await setInput(inputs[6], "100");
   expect(values.ticks).toBe(20);
 });
+
+it("updates axis bounds and legend orientation from the chart controls", async () => {
+  await render({ section: "chart" });
+  const bounds = [...node.querySelectorAll('input[placeholder="Auto"]')];
+  const nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+  for (const [input, value] of bounds.map((input, index) => [
+    input,
+    ["1", "10", "2", "20"][index],
+  ])) {
+    await act(async () => {
+      nativeSet.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+  expect([values.xMin, values.xMax, values.yMin, values.yMax]).toEqual(["1", "10", "2", "20"]);
+  const horizontal = [...node.querySelectorAll('input[name="legend-orientation"]')][0];
+  await act(async () => horizontal.click());
+  expect(values.legendOrientation).toBe("horizontal");
+});
+
+it("updates the marker color", async () => {
+  await render({ section: "series" });
+  const input = node.querySelector('input[type="color"]');
+  const nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+  await act(async () => {
+    nativeSet.call(input, "#364cff");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(values.color).toBe("#364cff");
+});

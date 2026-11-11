@@ -4,6 +4,9 @@
 
 mod project;
 
+#[cfg(all(feature = "desktop-e2e", not(debug_assertions)))]
+compile_error!("The desktop-e2e feature is only permitted in debug builds");
+
 use project::commands::*;
 #[cfg(target_os = "macos")]
 use project::{finder::take_finder_project, menu::project_menu_enabled};
@@ -47,6 +50,8 @@ fn get_mock_analysis() -> MockAnalysis {
 
 fn main() {
     let builder = tauri::Builder::default();
+    #[cfg(feature = "desktop-e2e")]
+    let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
     #[cfg(target_os = "macos")]
     let builder = builder
         .manage(project::finder::FinderRequest::default())

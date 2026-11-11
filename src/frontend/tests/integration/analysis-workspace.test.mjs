@@ -46,11 +46,12 @@ afterEach(async () => {
   node.remove();
 });
 
-async function render() {
+async function render(project = null) {
   await act(async () =>
     root.render(
       createElement(AnalysisPage, {
         onBack,
+        project,
         finderPath: null,
         projectError: "",
         onOpenFinderProject: vi.fn(),
@@ -163,4 +164,88 @@ it("keeps separate imported series and collapses only the selected card", async 
   await act(async () => node.querySelector('button[aria-label="Recolher a.csv"]').click());
   expect(node.querySelector('input[aria-label="Função de ajuste de a.csv"]')).toBeNull();
   expect(node.querySelector('input[aria-label="Função de ajuste de b.csv"]')).not.toBeNull();
+});
+
+it("edits a table from a simulated snapshot and rejects invalid changes", async () => {
+  const project = {
+    path: "/saved.atus",
+    snapshot: {
+      id: "p",
+      name: "Salvo",
+      created_at: "2024",
+      updated_at: "2024",
+      analyses: [
+        {
+          id: "analysis",
+          kind: "analysis",
+          state: { tableId: "d", selectedId: "d" },
+          datasets: [
+            { id: "d", name: "Salvos", state: {}, points: [{ x: 1, y: 2, sy: 0.2, sx: 0.1 }] },
+          ],
+        },
+      ],
+    },
+  };
+  await render(project);
+  const dialog = document.querySelector('[role="dialog"]');
+  expect(dialog.textContent).toContain("Dados: Salvos");
+  expect(dialog.textContent).toContain("0,2");
+  await act(async () =>
+    [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Editar dados").click(),
+  );
+  const input = dialog.querySelector('textarea[aria-label="Editar pontos"]');
+  expect(input.value).toContain("1; 2; 0.2; 0.1");
+  const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
+  await act(async () => {
+    set.call(input, "1; 2; -1; 0");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () =>
+    [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Salvar dados").click(),
+  );
+  expect(dialog.querySelector('[role="alert"]').textContent).toContain(
+    "incertezas não podem ser negativas",
+  );
+  await act(async () => {
+    set.call(input, "3; 4; 0.3; 0.1\n5; 6; 0; 0");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () =>
+    [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Salvar dados").click(),
+  );
+  expect(dialog.querySelector("textarea")).toBeNull();
+  expect(dialog.textContent).toContain("0,3");
+  expect(node.querySelector('[data-testid="chart"]').textContent).toBe("Salvos:2:0");
+});
+
+it("switches to visualization controls and preserves imported datasets", async () => {
+  await render();
+  await importFiles([{ name: "a.csv", size: 10, text: async () => "1;2\n2;3" }]);
+  await act(async () => button("Personalização").click());
+  expect(node.textContent).toContain("Intervalo do eixo X");
+  expect(node.textContent).toContain("Linha de ajuste");
+  expect(node.querySelector('[data-testid="chart"]').textContent).toBe("a.csv:2:0");
+  await act(async () => button("Análise").click());
+  expect(node.querySelector('input[aria-label="Função de ajuste de a.csv"]')).not.toBeNull();
+});
+
+it("replaces imported data and reports invalid replacement files", async () => {
+  await render();
+  await importFiles([{ name: "a.csv", size: 10, text: async () => "1;2\n2;3" }]);
+  const fileInput = node.querySelector('input[type="file"]:not([multiple])');
+  Object.defineProperty(fileInput, "files", {
+    value: [{ name: "new.csv", size: 10, text: async () => "3;4\n5;6\n7;8" }],
+    configurable: true,
+  });
+  await act(async () => fileInput.dispatchEvent(new Event("change", { bubbles: true })));
+  expect(node.querySelector('[data-testid="chart"]').textContent).toBe("a.csv:3:0");
+  Object.defineProperty(fileInput, "files", {
+    value: [{ name: "bad.csv", size: 10, text: async () => "1;2;-1" }],
+    configurable: true,
+  });
+  await act(async () => fileInput.dispatchEvent(new Event("change", { bubbles: true })));
+  expect(node.querySelector('[role="alert"]').textContent).toContain(
+    "incertezas não podem ser negativas",
+  );
+  expect(node.querySelector('[data-testid="chart"]').textContent).toBe("a.csv:3:0");
 });

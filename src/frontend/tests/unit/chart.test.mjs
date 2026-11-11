@@ -88,3 +88,47 @@ it("shows point values and uncertainties in the tooltip", async () => {
   await act(async () => point.dispatchEvent(new MouseEvent("mouseout", { bubbles: true })));
   expect(node.textContent).not.toContain("σx: 0,5");
 });
+
+it("renders diamond markers, hides grid and legend, and dims non-selected series", async () => {
+  const series = [{ ...visible, symbol: "diamond", linePoints: [], points: [{ x: 3, y: 4 }] }];
+  function Dimmed() {
+    const settings = useChartSettings({ grid: false, legend: false });
+    const graphicRef = useRef(null);
+    return createElement(Chart, {
+      series,
+      label: "Séries",
+      settings,
+      graphicRef,
+      highlightedSeriesId: "other",
+    });
+  }
+  await act(async () => root.render(createElement(Dimmed)));
+  const svg = node.querySelector('svg[role="img"]');
+  const marker = svg.querySelector('rect[fill="#123456"]');
+  expect(marker.getAttribute("transform")).toContain("rotate(45");
+  expect(marker.closest("g[opacity]").getAttribute("opacity")).toBe("0.15");
+  expect(svg.querySelectorAll('line[stroke="#e8ece7"]')).toHaveLength(0);
+  expect(node.textContent).not.toContain("Primeira");
+});
+
+it("moves the legend within the chart bounds when dragged", async () => {
+  await act(async () => root.render(createElement(Harness)));
+  const legend = [...node.querySelectorAll("div")].find(
+    (element) =>
+      element.className.includes?.("cursor-grab") && element.textContent.includes("Primeira"),
+  );
+  expect(legend).toBeDefined();
+  legend.setPointerCapture = () => {};
+  legend.getBoundingClientRect = () => ({ left: 20, top: 20, width: 100, height: 40 });
+  legend.parentElement.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 480 });
+  const event = (type, x, y) => {
+    const e = new MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: y });
+    Object.defineProperty(e, "pointerId", { value: 1 });
+    return e;
+  };
+  await act(async () => legend.dispatchEvent(event("pointerdown", 30, 30)));
+  await act(async () => legend.dispatchEvent(event("pointermove", 300, 250)));
+  expect(legend.style.left).not.toBe("100%");
+  expect(legend.style.top).not.toBe("50%");
+  await act(async () => legend.dispatchEvent(event("pointerup", 300, 250)));
+});
