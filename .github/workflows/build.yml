@@ -506,17 +506,48 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  release-artifacts:
-    needs: [release-version, build-linux, build-windows, build-macos-intel, build-macos-arm64]
+  publish-release:
+    needs: [build-linux, build-windows, build-macos-intel, build-macos-arm64]
+    # Each build job needs its test and integration jobs, which need release-version, so a successful build implies they passed.
     # Require each result explicitly: failure() and cancelled() ignore a cancelled or skipped dependency.
-    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-version.result == 'success' && needs.build-linux.result == 'success' && needs.build-windows.result == 'success' && needs.build-macos-intel.result == 'success' && needs.build-macos-arm64.result == 'success' }}
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-linux.result == 'success' && needs.build-windows.result == 'success' && needs.build-macos-intel.result == 'success' && needs.build-macos-arm64.result == 'success' }}
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    concurrency:
+      group: atus-release
+      queue: max
     steps:
-      - name: Confirm all release packages were generated
-        run: echo 'All platform build jobs succeeded.'
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test release scripts
+        run: node --test .github/scripts/tests/release-gates.test.mjs .github/scripts/tests/publish-release.test.mjs .github/scripts/tests/release.test.mjs
+      - name: Verify release gates
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: node .github/scripts/release-gates.mjs
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/artifacts
+          pattern: '*-{bundles,installer,app}'
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_RUN_JSON: ${{ runner.temp }}/run.json
+          RELEASE_ARTIFACTS: ${{ runner.temp }}/artifacts
+        run: |
+          printf '{"head_sha":"%s"}\n' "$GITHUB_SHA" > "$RELEASE_RUN_JSON"
+          node .github/scripts/publish-release.mjs
 
   summary:
-    needs: [check-version, release-version, integration-macos-intel, integration-macos-arm64, test-macos-arm64, build-macos-arm64, test-macos-intel, build-macos-intel, integration-windows, test-windows, build-windows, integration-linux, test-linux, build-linux, release-artifacts]
+    needs: [publish-release]
     if: ${{ always() }}
     runs-on: ubuntu-22.04
     continue-on-error: true

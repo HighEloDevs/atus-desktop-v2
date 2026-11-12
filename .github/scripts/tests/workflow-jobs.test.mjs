@@ -1,5 +1,5 @@
 /** Check the desktop workflow exposes each supported platform separately. */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -31,15 +31,6 @@ test('main pushes validate version against the previous commit before release', 
   assert.ok(job.includes("github.event_name == 'push'"));
   assert.ok(job.includes("github.ref == 'refs/heads/main'"));
   assert.ok(job.includes('check --base HEAD^'));
-});
-
-test('release artifact gate waits for every platform package', () => {
-  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
-  const job = workflow.split('  release-artifacts:\n')[1]?.split(/^  [\w-]+:/m)[0];
-  assert.ok(job);
-  for (const platform of ['linux', 'windows', 'macos-intel', 'macos-arm64']) {
-    assert.ok(job.includes(`build-${platform}`));
-  }
 });
 
 test('desktop smoke jobs cover both macOS architectures', () => {
@@ -141,8 +132,7 @@ test('every test and integration job records its results and the summary job is 
   const summary = workflow.split('  summary:\n')[1];
   assert.ok(summary.includes('continue-on-error: true'));
   assert.ok(summary.includes('if: ${{ always() }}'));
-  const all = [...workflow.matchAll(/^  ([a-z][\w-]*):\n(?:    .*\n)*?    (?:runs-on|needs):/gm)].map((m) => m[1]).filter((n) => n !== 'summary');
-  for (const name of all) assert.ok(new RegExp(`needs: \\[[^\\]]*\\b${name}\\b`).test(summary), `summary must wait for ${name}`);
+  assert.match(summary, /^ {4}needs: \[publish-release\]$/m);
   assert.equal((workflow.match(/GITHUB_STEP_SUMMARY/g) ?? []).length, 1);
 });
 
@@ -157,14 +147,6 @@ test('macOS test and integration jobs run for pull requests only when they targe
   }
 });
 
-test('release workflow does not combine gh api --slurp with --jq', () => {
-  const workflow = readFileSync('.github/workflows/release.yml', 'utf8').replaceAll('\r\n', '\n');
-  const calls = workflow.split('\n').filter((line) => line.includes('--slurp'));
-  assert.ok(calls.length > 0);
-  for (const call of calls) assert.doesNotMatch(call, /--(jq|template)\b|\s-q\s/, 'gh api rejects --slurp with --jq');
-  assert.ok(calls.every((call) => call.includes('| jq ')), 'filter slurped pages with jq');
-});
-
 test('package jobs and the release gate survive the skipped pull-request version check', () => {
   const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
   // A skipped ancestor (check-version on pushes, release-version on dispatch) skips dependents
@@ -172,17 +154,6 @@ test('package jobs and the release gate survive the skipped pull-request version
   for (const name of ['build-linux', 'build-windows', 'build-macos-intel', 'build-macos-arm64']) {
     const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
     assert.match(job, /^ {4}if: \$\{\{ !failure\(\) && !cancelled\(\) && /m, name);
-  }
-});
-
-test('release artifact gate requires every package job to have succeeded', () => {
-  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
-  const job = workflow.split('  release-artifacts:\n')[1].split(/^  [\w-]+:/m)[0];
-  // failure() and cancelled() ignore a cancelled or skipped dependency, so check each result.
-  assert.match(job, /^ {4}if: \$\{\{ !cancelled\(\) && /m);
-  assert.doesNotMatch(job, /!failure\(\)/);
-  for (const name of ['release-version', 'build-linux', 'build-windows', 'build-macos-intel', 'build-macos-arm64']) {
-    assert.ok(job.includes(`needs.${name}.result == 'success'`), name);
   }
 });
 
@@ -199,6 +170,36 @@ test('Windows smoke waits for the asynchronous NSIS uninstaller', () => {
   const script = readFileSync('.github/scripts/ci/smoke-windows-installer.ps1', 'utf8').replaceAll('\r\n', '\n');
   const wait = script.indexOf('Start-Sleep -Milliseconds 500', script.indexOf('Start-Process -FilePath $uninstaller'));
   assert.ok(wait > 0 && wait < script.indexOf("throw 'Application remained installed after uninstall.'"));
+});
+
+test('releases are published by a job of the build workflow, not by a separate workflow', () => {
+  assert.equal(existsSync('.github/workflows/release.yml'), false);
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const job = workflow.split('  publish-release:\n')[1].split(/^  [\w-]+:/m)[0];
+  assert.match(job, /^ {4}if: \$\{\{ !cancelled\(\) && github\.event_name == 'push' && github\.ref == 'refs\/heads\/main' && needs\.build-linux\.result == 'success'/m);
+  assert.match(job, /^ {4}permissions:\n {6}contents: write$/m);
+  for (const name of ['build-linux', 'build-windows', 'build-macos-intel', 'build-macos-arm64']) {
+    assert.ok(job.includes(`needs.${name}.result == 'success'`), name);
+  }
+  assert.ok(job.includes('release-gates.mjs') && job.includes('publish-release.mjs'));
+  // Write access to repository contents must stay confined to this job.
+  assert.equal([...workflow.matchAll(/contents: write/g)].length, 1);
+});
+
+test('job dependencies form test/integration -> build -> publish -> summary', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  assert.doesNotMatch(workflow, /release-artifacts/);
+  const needs = (name) => {
+    const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
+    return job.match(/^ {4}needs: \[([^\]]*)\]$/m)?.[1].split(',').map((item) => item.trim()).sort();
+  };
+  const platforms = ['linux', 'windows', 'macos-intel', 'macos-arm64'];
+  for (const platform of platforms) {
+    for (const kind of ['test', 'integration']) assert.deepEqual(needs(`${kind}-${platform}`), ['check-version', 'release-version'], `${kind}-${platform}`);
+    assert.deepEqual(needs(`build-${platform}`), [`integration-${platform}`, `test-${platform}`].sort(), `build-${platform}`);
+  }
+  assert.deepEqual(needs('publish-release'), platforms.map((platform) => `build-${platform}`).sort());
+  assert.deepEqual(needs('summary'), ['publish-release']);
 });
 
 test('macOS jobs use explicit runner labels, a job timeout and an architecture check', () => {
