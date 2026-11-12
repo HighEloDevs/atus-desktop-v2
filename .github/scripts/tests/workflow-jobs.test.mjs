@@ -113,3 +113,9 @@ test('helper script tests run on Linux; Windows keeps the checkout and formattin
   assert.ok(job('test-windows').includes('git-attributes.test.mjs'));
   assert.ok(job('test-windows').includes('npm run format:check'));
 });
+
+test('Linux desktop smoke retries temporary directory removal while helper processes exit', () => {
+  const runner = readFileSync('.github/scripts/desktop-e2e/run-linux.sh', 'utf8');
+  assert.match(runner, /rmSync\(process\.argv\[1\], \{[^}]*maxRetries: \d+[^}]*retryDelay: \d+/);
+  assert.match(runner, /Warning: could not fully remove/);
+});

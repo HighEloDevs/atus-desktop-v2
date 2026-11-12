@@ -30,7 +30,9 @@ cleanup() {
   [[ -z "$vite_pid" ]] || kill "$vite_pid" 2>/dev/null || true
   [[ -z "$app_pid" ]] || wait "$app_pid" 2>/dev/null || true
   [[ -z "$vite_pid" ]] || wait "$vite_pid" 2>/dev/null || true
-  node -e 'require("node:fs").rmSync(process.argv[1], { recursive: true, force: true })' "$test_dir"
+  # WebKit helper processes may still write caches briefly after the app exits, so retry the removal.
+  node -e 'require("node:fs").rmSync(process.argv[1], { recursive: true, force: true, maxRetries: 10, retryDelay: 300 })' "$test_dir" \
+    || echo "Warning: could not fully remove $test_dir" >&2
 }
 trap cleanup EXIT
 
