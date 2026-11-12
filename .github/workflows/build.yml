@@ -58,6 +58,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
+          shared-key: debug-macos-intel
+          save-if: false
           cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
@@ -80,6 +82,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
+          shared-key: debug-macos-arm64
           cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
@@ -104,6 +107,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
+          shared-key: coverage-macos-arm64
           cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
@@ -134,6 +138,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
+          shared-key: release-macos-arm64
           cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
@@ -174,6 +179,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
+          shared-key: debug-macos-intel
           cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
@@ -199,6 +205,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
+          shared-key: release-macos-intel
           cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
@@ -241,6 +248,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
+          shared-key: debug-windows
+          save-if: false
           cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
@@ -268,6 +277,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
+          shared-key: debug-windows
           cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
@@ -296,6 +306,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
+          shared-key: release-windows
           cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
@@ -343,6 +354,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
+          shared-key: debug-linux
+          save-if: false
           cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
@@ -374,6 +387,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
+          shared-key: debug-linux
           cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
@@ -422,6 +436,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
+          shared-key: release-linux
           cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
