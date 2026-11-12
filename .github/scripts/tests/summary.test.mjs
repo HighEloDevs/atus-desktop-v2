@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildSummary, formatSeconds, loadResults, parseCargoOutput, parseLog, parseSpecOutput, parseVitestJson } from '../summary/summary.mjs';
+import { buildSummary, formatSeconds, loadResults, parseCargoOutput, parseLog, parseSpecOutput, parseTapOutput, parseVitestJson } from '../summary/summary.mjs';
 
 const cargo = `running 3 tests
 test project::tests::saves ... \u001b[32mok\u001b[0m
@@ -33,6 +33,40 @@ test('parses spec results and drops the repeated failure recap', () => {
   assert.deepEqual(tests.map((t) => [t.name, t.status, t.duration]), [
     ['opens the window', 'passed', 12.5], ['saves a project', 'failed', 3.2], ['skipped on purpose', 'skipped', 0.1],
   ]);
+});
+
+const tap = `TAP version 13
+# Subtest: the native application shows the new analysis action
+ok 1 - the native application shows the new analysis action
+  ---
+  duration_ms: 27.95
+  type: 'test'
+  ...
+# Subtest: creates, saves and reopens a project
+not ok 2 - creates, saves and reopens a project
+  ---
+  duration_ms: 435.5
+  failureType: 'testCodeFailure'
+  ...
+# Subtest: the Finder request opens a confirmation
+ok 3 - the Finder request opens a confirmation # SKIP
+    # Subtest: nested step
+    ok 1 - nested step
+ok 4 - /repo/tests/desktop/smoke.e2e.mjs
+# tests 4
+# pass 2
+`;
+
+test('parses Node TAP output (the Node 22 default outside a terminal), including skips and durations', () => {
+  const tests = parseTapOutput(tap);
+  assert.deepEqual(tests.map((t) => [t.name, t.status, t.duration]), [
+    ['the native application shows the new analysis action', 'passed', 27.95],
+    ['creates, saves and reopens a project', 'failed', 435.5],
+    ['the Finder request opens a confirmation', 'skipped', null],
+    ['nested step', 'passed', null],
+  ]);
+  assert.equal(parseLog(tap).length, 4);
+  assert.equal(parseLog(spec).length, 3);
 });
 
 test('parses a Vitest JSON report', () => {

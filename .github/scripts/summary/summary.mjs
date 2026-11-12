@@ -52,6 +52,31 @@ export function parseSpecOutput(text) {
 }
 
 /**
+ * Parse TAP version 13 output, the default `node --test` reporter on Node 22 when not attached to a terminal.
+ * File-level entries (names that are script paths) are ignored; `# SKIP` marks a skipped test and the
+ * `duration_ms` field of the YAML block that follows each result gives the duration.
+ * @param {string} text Log text.
+ * @returns {Array<Omit<TestResult, 'suite'>>} One entry per `ok` / `not ok` line, in order.
+ */
+export function parseTapOutput(text) {
+  const found = [];
+  let current = null;
+  for (const line of stripAnsi(text).split(/\r?\n/)) {
+    const result = /^\s*(not ok|ok) \d+ - (.+?)(\s+# (SKIP|TODO)\b.*)?\s*$/.exec(line);
+    if (result) {
+      current = null;
+      if (/\.(mjs|cjs|js|ts)$/.test(result[2])) continue;
+      current = { name: result[2], status: result[4] ? 'skipped' : result[1] === 'ok' ? 'passed' : 'failed', duration: null };
+      found.push(current);
+      continue;
+    }
+    const duration = current && /^\s*duration_ms: ([\d.]+)\s*$/.exec(line);
+    if (duration) { current.duration = Number(duration[1]); current = null; }
+  }
+  return found;
+}
+
+/**
  * Parse a Vitest JSON report (Jest-compatible `testResults` layout).
  * @param {unknown} report Parsed JSON document.
  * @returns {Array<Omit<TestResult, 'suite'>>} One entry per assertion.
@@ -70,13 +95,13 @@ export function parseVitestJson(report) {
 }
 
 /**
- * Parse any recorded text log (cargo and/or spec lines) and drop duplicate names.
+ * Parse any recorded text log (cargo, Node `spec` and/or TAP lines) and drop duplicate names.
  * @param {string} text Log text.
  * @returns {Array<Omit<TestResult, 'suite'>>} Unique tests; the first occurrence wins.
  */
 export function parseLog(text) {
   const seen = new Set();
-  return [...parseCargoOutput(text), ...parseSpecOutput(text)].filter((test) => !seen.has(test.name) && seen.add(test.name));
+  return [...parseCargoOutput(text), ...parseSpecOutput(text), ...parseTapOutput(text)].filter((test) => !seen.has(test.name) && seen.add(test.name));
 }
 
 /**
