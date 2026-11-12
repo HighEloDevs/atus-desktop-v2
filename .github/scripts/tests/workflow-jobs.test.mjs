@@ -36,9 +36,9 @@ test('main pushes validate version against the previous commit before release', 
 test('desktop smoke jobs cover both macOS architectures', () => {
   const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
   assert.doesNotMatch(workflow, /^  coverage-rust:$/m);
-  assert.match(workflow, /^  test-macos-arm64:\n(?:    .*\n)*?    runs-on: macos-latest$/m);
+  assert.match(workflow, /^  test-macos-arm64:\n(?:    .*\n)*?    runs-on: macos-15$/m);
   assert.match(workflow, /^  integration-macos-intel:\n(?:    .*\n)*?    runs-on: macos-15-intel$/m);
-  assert.match(workflow, /^  integration-macos-arm64:\n(?:    .*\n)*?    runs-on: macos-latest$/m);
+  assert.match(workflow, /^  integration-macos-arm64:\n(?:    .*\n)*?    runs-on: macos-15$/m);
   // arm64 coverage gate plus the plain smoke on each macOS architecture.
   assert.equal((workflow.match(/\.github\/scripts\/coverage\/rust-desktop-macos\.sh/g) ?? []).length, 3);
   assert.equal((workflow.match(/rust-desktop-macos\.sh --no-coverage/g) ?? []).length, 2);
@@ -200,4 +200,15 @@ test('job dependencies form test/integration -> build -> publish -> summary', ()
   }
   assert.deepEqual(needs('publish-release'), platforms.map((platform) => `build-${platform}`).sort());
   assert.deepEqual(needs('summary'), ['publish-release']);
+});
+
+test('macOS jobs use explicit runner labels, a job timeout and an architecture check', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  assert.doesNotMatch(workflow, /macos-latest/);
+  for (const [name, arch] of [['integration-macos-intel', 'x86_64'], ['test-macos-intel', 'x86_64'], ['build-macos-intel', 'x86_64'],
+    ['integration-macos-arm64', 'arm64'], ['test-macos-arm64', 'arm64'], ['build-macos-arm64', 'arm64']]) {
+    const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
+    assert.match(job, /^ {4}timeout-minutes: \d+$/m, name);
+    assert.ok(job.includes(`test "$(uname -m)" = ${arch}`), name);
+  }
 });

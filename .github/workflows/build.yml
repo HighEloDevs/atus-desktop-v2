@@ -50,7 +50,10 @@ jobs:
     needs: [check-version, release-version]
     if: ${{ !failure() && !cancelled() && (github.event_name != 'pull_request' || github.base_ref == 'main') }}
     runs-on: macos-15-intel
+    timeout-minutes: 30
     steps:
+      - name: Require a x86_64 runner
+        run: test "$(uname -m)" = x86_64
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -73,8 +76,11 @@ jobs:
   integration-macos-arm64:
     needs: [check-version, release-version]
     if: ${{ !failure() && !cancelled() && (github.event_name != 'pull_request' || github.base_ref == 'main') }}
-    runs-on: macos-latest
+    runs-on: macos-15
+    timeout-minutes: 30
     steps:
+      - name: Require a arm64 runner
+        run: test "$(uname -m)" = arm64
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -97,8 +103,11 @@ jobs:
   test-macos-arm64:
     needs: [check-version, release-version]
     if: ${{ !failure() && !cancelled() && (github.event_name != 'pull_request' || github.base_ref == 'main') }}
-    runs-on: macos-latest
+    runs-on: macos-15
+    timeout-minutes: 30
     steps:
+      - name: Require a arm64 runner
+        run: test "$(uname -m)" = arm64
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -131,8 +140,11 @@ jobs:
   build-macos-arm64:
     needs: [test-macos-arm64, integration-macos-arm64]
     if: ${{ !failure() && !cancelled() && github.event_name != 'pull_request' }}
-    runs-on: macos-latest
+    runs-on: macos-15
+    timeout-minutes: 30
     steps:
+      - name: Require a arm64 runner
+        run: test "$(uname -m)" = arm64
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -171,7 +183,10 @@ jobs:
     needs: [check-version, release-version]
     if: ${{ !failure() && !cancelled() && (github.event_name != 'pull_request' || github.base_ref == 'main') }}
     runs-on: macos-15-intel
+    timeout-minutes: 30
     steps:
+      - name: Require a x86_64 runner
+        run: test "$(uname -m)" = x86_64
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -198,7 +213,10 @@ jobs:
     needs: [test-macos-intel, integration-macos-intel]
     if: ${{ !failure() && !cancelled() && github.event_name != 'pull_request' }}
     runs-on: macos-15-intel
+    timeout-minutes: 30
     steps:
+      - name: Require a x86_64 runner
+        run: test "$(uname -m)" = x86_64
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
