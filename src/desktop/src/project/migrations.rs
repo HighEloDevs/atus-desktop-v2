@@ -63,3 +63,84 @@ pub fn migrate(path: &Path) -> Result<(), ProjectError> {
     tx.commit()?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::project::store::{create_project, read_project};
+    use crate::project::test_support::empty_project;
+
+    #[test]
+    fn migration_backs_up_v1_and_preserves_snapshot() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("project.atus");
+        let snapshot = empty_project();
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        connection.execute_batch(INITIAL_SCHEMA).unwrap();
+        connection
+            .execute(
+                "INSERT INTO project VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![
+                    snapshot.id,
+                    snapshot.name,
+                    snapshot.created_at,
+                    snapshot.updated_at
+                ],
+            )
+            .unwrap();
+        drop(connection);
+        migrate(&path).unwrap();
+        migrate(&path).unwrap();
+        assert_eq!(read_project(&path).unwrap(), snapshot);
+        let backups: Vec<_> = std::fs::read_dir(directory.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("project.atus.backup-v1-")
+            })
+            .collect();
+        assert_eq!(backups.len(), 1);
+        let backup = rusqlite::Connection::open(backups[0].path()).unwrap();
+        let version: i32 = backup
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 1);
+    }
+
+    #[test]
+    fn future_and_failed_migrations_preserve_original() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("project.atus");
+        create_project(&path, &empty_project()).unwrap();
+        for version in [99, 1] {
+            let connection = rusqlite::Connection::open(&path).unwrap();
+            connection
+                .pragma_update(None, "user_version", version)
+                .unwrap();
+            drop(connection);
+            let original = std::fs::read(&path).unwrap();
+            // At v1 the conflicting index makes the migration fail after the backup.
+            assert!(migrate(&path).is_err());
+            assert_eq!(std::fs::read(&path).unwrap(), original);
+        }
+    }
+
+    #[test]
+    fn migration_rejects_unrelated_sqlite_without_altering_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("other.atus");
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE notes (body TEXT); INSERT INTO notes VALUES ('preserve');",
+        )
+        .unwrap();
+        drop(conn);
+        let before = std::fs::read(&path).unwrap();
+        let error = migrate(&path).unwrap_err().to_string();
+        assert!(error.contains("não é um projeto ATUS"));
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+}

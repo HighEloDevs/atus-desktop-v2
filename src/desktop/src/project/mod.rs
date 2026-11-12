@@ -12,7 +12,4 @@ pub mod model;
 pub mod store;
 
 #[cfg(test)]
-mod tests;
-
-#[cfg(test)]
-mod additional_tests;
+mod test_support;
