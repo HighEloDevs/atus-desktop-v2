@@ -13,13 +13,17 @@ Construir o ATUS Desktop v2, software científico gratuito e open source para es
 - `docs/references/atus-desktop-v2-especificacoes-0.1.pdf`: plano inicial de 08/11/2026, com catálogo AT-01 a AT-22, critérios de aceite propostos, dependências e referências do legado. É um documento de trabalho, não uma lista de funcionalidades concluídas ou decisões aprovadas.
 - `docs/references/atus-recorte-brandbook-1.0.html`: proposta de identidade ATUS / Recorte, com princípios visuais, componentes e assets. O mockup é demonstrativo e não é a aplicação implementada.
 - Legado: `HighEloDevs/Analysis-Tool-for-Undergrad-Students`, snapshot de referência `ab7673488849838a8a317279f8b4f1e611148734`. O inventário ainda precisa de validação funcional.
-- A estrutura inicial contém apenas diretórios com `.gitkeep`: ainda não há código da aplicação, dependências, comandos de build, testes implementados ou workflows configurados. Atualize esta seção quando existirem.
+- Fundação inicial com Tauri 2, Rust e frontend React/TypeScript com Vite, Tailwind CSS 4 e shadcn/ui. A homepage e a sidebar são iniciais; a seção Sobre resume a história e equipe da página atusweb.com.br/about, com funcionalidades futuras sinalizadas; priorize uma interface compacta de aplicativo desktop em vez de uma página editorial; a tela de análise usa uma área de trabalho com painel de configuração e um componente de gráfico D3 com pontos e controles de visualização, pode carregar dados fixos do protótipo C++ e há um teste da ponte; o gráfico permite importar CSV/TXT/DAT e sobrepor e personalizar séries, com identidade simples para um conjunto, cards expansíveis para vários e menu de ações na aba Análise; o exemplo C++ continua usando dados fixos; o motor científico real ainda não foi implementado. A interface oferece um serviço mock em `features/analysis/fit/fit-service.ts`, que desenha uma diagonal ilustrativa e não avalia equações nem calcula ajustes; seu contrato é provisório. A interface interpreta expressões com mathjs, mostra prévia LaTeX e aceita parâmetros, intervalo em X e opções de incerteza; o mock usa somente o intervalo, sem calcular o modelo. O painel sob o gráfico mostra resultados fictícios identificados como simulação; parâmetros, incertezas e métricas não são resultados científicos. O empacotamento para macOS e Windows está configurado; os artefatos são de teste e não assinados.
 
 ## Convenções de linguagem
 
 - Escreva código, identificadores e nomes de arquivos e pastas em inglês. A interface permanece em português, conforme a orientação de produto.
+- Documente todos os módulos e classes e todas as funções e métodos públicos em inglês, no padrão da linguagem (JSDoc, rustdoc ou Doxygen). Descreva propósito, parâmetros, retorno, erros, efeitos colaterais e pré-condições relevantes ao contrato. Inclua exemplos de uso quando ajudarem a compreender a API e mantenha a documentação atualizada junto com a implementação.
 
 ## Princípios de implementação
+
+- Toda melhoria deve vir com um teste de regressão que cubra o comportamento alterado. Adicione ou atualize o teste na mesma mudança e execute as verificações relevantes.
+- Em Rust, os testes unitários ficam em `#[cfg(test)] mod tests` no fim do arquivo testado, sempre como último item e com o `}` final na coluna 0; fixtures compartilhadas ficam em `project/test_support.rs`. O relatório de cobertura remove esses blocos (`.github/scripts/coverage/rust-strip-tests.mjs`). Consulte `docs/decisions/0005-inline-rust-tests.md`.
 
 - Priorize correção numérica e paridade verificável antes de otimizações. Use fixtures, resultados de referência e tolerâncias absolutas/relativas justificadas; valide convergência e entradas inválidas.
 - Separe interface e cálculo por contrato explícito e versionado. A proposta inclui x/y, incertezas opcionais, expressão, parâmetros iniciais, método e opções na entrada; resultados, incertezas, diagnóstico, resíduos e matrizes disponíveis na saída. Unidades, ausências e erros ainda precisam ser definidos.
@@ -30,7 +34,7 @@ Construir o ATUS Desktop v2, software científico gratuito e open source para es
 
 ## Arquitetura e prioridades
 
-A stack escolhida para o projeto é React, Tailwind CSS e shadcn no frontend; Tauri e Rust no núcleo desktop; e C++ no motor científico. A especificação original apresentava alternativas em avaliação; esta escolha atualiza aquela proposta. Os detalhes de integração entre Rust e C++, o contrato e as bibliotecas científicas permanecem em aberto e devem ser documentados com evidências e justificativas antes de sua adoção.
+A stack escolhida para o projeto é React, Tailwind CSS e shadcn no frontend; Tauri e Rust no núcleo desktop; e C++ no motor científico. A especificação original apresentava alternativas em avaliação; esta escolha atualiza aquela proposta. A ponte C ABI atual é apenas um protótipo de dados fixos; o contrato científico e as bibliotecas permanecem em aberto. Consulte `docs/decisions/0001-mock-cpp-bridge.md`.
 
 Registre decisões arquiteturais relevantes em `docs/decisions/`, com contexto, alternativas, critérios, experimento quando aplicável, decisão e consequências.
 
@@ -40,14 +44,40 @@ A sequência proposta é fundação (AT-01, AT-19, AT-20), primeiro fluxo (AT-02
 
 Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A base é grafite `#20272C` sobre papel `#F7F7F3`, com coral `#F25A3C` para foco e atenção e cobalto `#364CFF` para análise, seleção e séries. Preserve proporções da marca e confira o contraste real: branco sobre coral não é adequado para texto pequeno. Inter Display, Inter e fonte monoespaçada são as referências tipográficas. Use linguagem clara, objetiva e acessível em português na interface.
 
+## Desenvolvimento
+
+- O workflow `Build desktop` executa nos PRs os jobs `test-*` (unitários, integração de frontend e cobertura; lint e formatação só em `test-linux`) e `integration-*` (smoke do app desktop real). Todos dependem de `check-version`/`release-version` e só rodam se elas passarem ou forem puladas; os jobs de macOS (`test-macos-*`, `integration-macos-*`) rodam em PRs somente quando a base é `main` (e sempre em push na `main` e execução manual). A cobertura Rust (que precisa do smoke para passar de 90%: só com testes unitários mede ~74%) roda em `test-macos-arm64`; os `integration-macos-*` rodam o mesmo smoke sem instrumentação (`rust-desktop-macos.sh --no-coverage`). Os jobs que compilam Rust restauram o cache do Cargo com `Swatinem/rust-cache`, um por job (chave padrão; PRs também gravam). Compartilhar o cache entre `test-*` e `integration-*` foi medido e piorou os `test-*` (a feature `desktop-e2e` altera as features das dependências), então não use `shared-key`. Os testes dos scripts de CI rodam só em `test-linux` (o Windows mantém o teste de `.gitattributes` e `format:check`). Cada `build-*` espera seu `integration-*`. Os jobs `test-*` e `integration-*` gravam a saída dos testes com `.github/scripts/summary/record.sh` e a enviam como artefato de um dia (`results-<job>`); o job `summary` (não bloqueante, `continue-on-error`) gera a única summary da execução, em `.github/scripts/summary/summary.mjs`: uma seção por job (jobs com falha primeiro) e uma tabela de testes com as falhas no topo. Testes Rust são lidos da saída de texto do `cargo test`, os do Node dos reporters `spec` ou TAP (o padrão do Node 22 no CI é TAP) e os do Vitest do relatório JSON. Os jobs `build-*` geram pacotes após os testes em pushes para `main` ou execução manual; os artefatos expiram em três dias. Em Ubuntu, exige cobertura de linhas superior a 90% para o frontend (Vitest/V8, incluindo arquivos não exercitados) e para o motor C++ demonstrativo. PRs para `main` verificam também o aumento e a sincronização da versão. O job `coverage-rust` passou no CI em macOS Apple Silicon, com inventário das fontes e inclusão de código não ligado; `desktop-macos-intel` passou no CI; `desktop-linux` e `desktop-windows` estão em validação. Caminhos condicionais de outras plataformas não são cobertos pelo relatório. Os smokes de instalador Windows e pacote macOS Apple Silicon passaram nos runners; o pacote macOS Intel ainda está em validação. Testes desktop Linux/Windows completos e publicação automática ainda não são gates. Consulte `docs/decisions/0004-ci-platform-investigation.md`. A `main` possui rulesets separadas para CI e revisão; a regra de revisão não exige aprovações por ora (`required_approving_review_count: 0`, decisão provisória, a reavaliar) e mantém o bypass em PRs por maintainers e administradores. Como o GitHub não deixa o autor aprovar o próprio PR, exigir aprovação travaria PRs de maintainers; reativá-la depende de revisão por outra pessoa ou de mecanismo adicional.
+- Siga [CONTRIBUTING.md](CONTRIBUTING.md) para contribuições e descrições de PR. Use o template de corpo documentado ali e em `.github/pull_request_template.md`, mantendo o escopo final e as evidências de verificação atualizados.
+
+- Crie sempre worktrees novas dentro de `.worktree/` na raiz do repositório, usando uma subpasta por worktree. Os artefatos locais do Superpowers e o diretório de worktrees ficam fora do Git.
+
+- Pré-requisitos: Node.js, npm, Rust/Cargo e dependências de sistema do Tauri. No macOS, as Command Line Tools são suficientes para desktop.
+- Em `src/frontend/`, execute `npm ci`, `npm run build`, `npm run tauri -- dev` e `npm run tauri -- build` (build de distribuição na plataforma atual). O Tauri usa a configuração em `src/desktop/`; o servidor Vite usa a porta 1420.
+- Em `src/frontend/`, execute `npm test` para verificar a renderização dos componentes de projetos.
+- Em `src/frontend/`, use `npm run lint` / `npm run lint:fix` e `npm run format:check` / `npm run format`. ESLint verifica TypeScript e regras de React; Prettier formata os arquivos do frontend. O CI executa as verificações sem modificá-los.
+- `.gitattributes` mantém arquivos de texto do frontend com finais de linha LF também no Windows, conforme exigido pelo Prettier.
+- O smoke desktop experimental usa a feature opt-in `desktop-e2e` e abre um driver local sem autenticação; siga `docs/testing/desktop-e2e.md` e não o use com dados reais. A feature não faz parte do build padrão e é recusada no perfil release convencional.
+- `.github/scripts/coverage/rust-desktop-macos.sh` combina perfis Rust dos testes e do smoke no macOS; o coletor inclui código não ligado no alvo e verifica o inventário de fontes; caminhos condicionais de outras plataformas não são cobertos por esse relatório.
+- O workflow de release está em preparação e bloqueia a publicação enquanto os gates completos não existirem; `release-version` e `release-artifacts` verificam versão e builds após push para `main`. O fluxo e as validações pendentes estão em `docs/testing/release-rollout.md`.
+- Links dos perfis na página Sobre abrem no navegador padrão pelo plugin Tauri Opener; os endereços permitidos ficam em `src/desktop/capabilities/default.json`.
+- O atalho de nova análise é `Cmd+Option+N` no macOS e `Ctrl+Alt+N` nos demais sistemas. No desktop, o atalho e o cartão **Nova análise** em **Acesso rápido** criam um projeto em Documentos/ATUS/projects. O cartão **Abrir projeto** abre o seletor nativo, e os recentes exibem o caminho completo do arquivo.
+- No macOS, o pacote .app usa `src/desktop/Info.plist` para declarar a associação .atus e o ícone exibido no Finder. O aplicativo solicita confirmação antes de trocar uma análise aberta.
+- No macOS, **Arquivo** traz **Salvar projeto** (Cmd+S) e **Salvar como** (Cmd+Shift+S). Nas demais plataformas os comandos ficam no cabeçalho do projeto.
+- O Vite usa `--configLoader runner`: o carregador padrão ficou bloqueado neste ambiente com Node 26.
+- `org.atus.desktop` é identificador provisório; confirme antes de distribuir. A ponte inicial compila C++ via `cc`; ela retorna somente dados de demonstração. Execute `cargo test --manifest-path src/desktop/Cargo.toml` para verificar a integração.
+
 ## Estrutura atual
 
 - `AGENTS.md`: contexto e instruções vivas do repositório.
+- `CONTRIBUTING.md`: orientações de contribuição, verificações e template de descrição de PR.
 - `README.md`: apresentação e estado inicial para pessoas colaboradoras.
-- `.github/workflows/`: futuros workflows de automação.
-- `src/frontend/`: aplicação React; `src/components/ui/` para componentes de interface, `features/` para funcionalidades, `hooks/`, `lib/` e `styles/` para recursos compartilhados, `public/` para assets estáticos e `tests/unit/` e `tests/integration/` para testes.
-- `src/desktop/`: núcleo desktop em Rust, com `src/` e diretórios de testes unitários e de integração em `tests/`.
+- `.github/workflows/`: verificações, empacotamento e preparação de release; os artefatos são de teste, não releases assinadas.
+- `.github/rulesets/`: definições versionadas das regras aplicadas à `main`; alterações exigem sincronização explícita no GitHub.
+- `.github/scripts/`: utilitários e testes de CI, cobertura, empacotamento, versionamento e release.
+- `src/frontend/`: aplicação React; `components.json` configura shadcn/ui, `src/App.tsx` contém a homepage inicial e `src/styles/globals.css` os tokens e estilos globais; `src/components/ui/` para componentes shadcn de interface, `src/components/chart/` para o gráfico e sua personalização compartilhada com a sidebar, `features/` para funcionalidades, `hooks/`, `lib/` e `styles/` para recursos compartilhados, `public/` para assets estáticos e `tests/unit/` e `tests/integration/` para testes.
+- `src/desktop/`: núcleo desktop em Rust, com `src/`, ponte C++ em `build.rs` e teste da fronteira nativa em `src/main.rs`. O módulo `src/project/` mantém arquivos SQLite .atus versionados, gravação transacional, backup de migrations e detecção de edições concorrentes. O frontend integra abertura, recentes, salvamento automático e Salvar como em `src/features/projects/`.
+- `src/desktop/migrations/`: esquema inicial e migrações SQL numeradas, embutidos no binário. O Rust controla a ordem, o backup e a transação dos projetos existentes.
 - `src/scientific-engine/`: motor científico C++, com interfaces públicas em `include/`, implementação em `src/` e testes unitários e de integração em `tests/`.
-- `docs/decisions/`: futuras decisões arquiteturais.
+- `docs/decisions/`: decisões arquiteturais, incluindo o componente de gráficos com D3.
 - `docs/references/`: documentos originais de especificação e identidade.
 - `LICENSE`: licença do repositório; preserve seu conteúdo.

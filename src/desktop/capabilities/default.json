@@ -1,0 +1,21 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-capability",
+  "description": "Allow project dialogs, window closing and team profile links.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-destroy",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-confirm",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://www.linkedin.com/in/willian-gama-maximo-85297017b/" },
+        { "url": "https://www.linkedin.com/in/leoeiji/" },
+        { "url": "https://www.linkedin.com/in/ferrarigui/" }
+      ]
+    }
+  ]
+}

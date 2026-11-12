@@ -1,0 +1,13 @@
+node_modules/
+dist/
+src/frontend/coverage/
+target/
+.DS_Store
+
+*.tsbuildinfo
+src/desktop/gen/
+
+# Local worktrees and Superpowers artifacts
+/.worktree/
+/.superpowers/
+/docs/superpowers/
