@@ -21,7 +21,7 @@ $vitePath = Join-Path $frontend 'node_modules/vite/bin/vite.js'
 if (-not (Test-Path -LiteralPath $appPath -PathType Leaf) -or -not (Test-Path -LiteralPath $vitePath -PathType Leaf)) {
     throw 'Build the desktop-e2e debug binary and install frontend dependencies first.'
 }
-$node = (Get-Command node -CommandType Application -ErrorAction Stop).Source
+$node = (Get-Command node -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
 # Check both loopback ports before starting or contacting any server.
 foreach ($port in @(1420, 4455)) {
     $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $port)

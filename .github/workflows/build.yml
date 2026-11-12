@@ -97,7 +97,7 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - name: Test CI helper scripts
-        run: node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/coverage/check.test.mjs
+        run: node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/tests/windows-node-path.test.mjs .github/scripts/coverage/check.test.mjs
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -160,7 +160,7 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - name: Test CI helper scripts
-        run: node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/coverage/check.test.mjs
+        run: node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/tests/windows-node-path.test.mjs .github/scripts/coverage/check.test.mjs
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -244,7 +244,7 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - name: Test CI helper scripts
-        run: node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/coverage/check.test.mjs
+        run: node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/tests/windows-node-path.test.mjs .github/scripts/coverage/check.test.mjs
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -342,7 +342,7 @@ jobs:
         working-directory: src/frontend
         run: npm ci
       - name: Test CI helper scripts
-        run: node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/coverage/check.test.mjs
+        run: node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/tests/windows-node-path.test.mjs .github/scripts/coverage/check.test.mjs
       - name: Lint, test, and build frontend
         working-directory: src/frontend
         run: |
