@@ -45,7 +45,24 @@ export function missingAssets(files, assets, digests) {
     return matches.length === 0;
   });
 }
+/**
+ * Select the release with a given tag from a list of releases.
+ * The get-release-by-tag endpoint never returns drafts, so drafts must be found by listing releases.
+ * @param {Array<{tag_name: string}>} releases Releases as returned by `GET /repos/{repo}/releases`.
+ * @param {string} tag Tag name, such as `v0.2.0`.
+ * @returns {object|null} The matching release, or null when there is none.
+ * @throws {Error} When several releases share the tag.
+ */
+export function pickRelease(releases, tag) {
+  const matches = releases.filter((release) => release.tag_name === tag);
+  if (matches.length > 1) throw new Error(`Several releases use tag ${tag}`);
+  return matches[0] ?? null;
+}
 function gh(args) { return execFileSync('gh', args, { encoding: 'utf8' }); }
+function findRelease(repository, tag) {
+  const pages = JSON.parse(gh(['api', '--paginate', '--slurp', `repos/${repository}/releases?per_page=100`]));
+  return pickRelease(pages.flat(), tag);
+}
 function apiOptional(path) {
   const result = spawnSync('gh', ['api', path], { encoding: 'utf8' });
   if (result.status === 0) return JSON.parse(result.stdout);
@@ -72,7 +89,7 @@ export function publish({ run, artifacts, repository }) {
   writeFileSync(join(directory, 'SHA256SUMS'), formatChecksums(manifest));
   const ref = apiOptional(`repos/${repository}/git/ref/tags/${tag}`);
   if (ref && (ref.object.type !== 'commit' || ref.object.sha !== sha)) throw new Error('Tag points to another object');
-  const existing = apiOptional(`repos/${repository}/releases/tags/${tag}`);
+  const existing = findRelease(repository, tag);
   if (existing && (!existing.draft || (!ref && existing.target_commitish !== sha))) throw new Error('Release exists or draft target does not match');
   if (!existing) {
     if (ref) throw new Error('Tag already exists without matching draft');
@@ -87,13 +104,13 @@ export function publish({ run, artifacts, repository }) {
   }
   if (!verifiedRef || verifiedRef.object.type !== 'commit' || verifiedRef.object.sha !== sha) throw new Error('Created tag does not match commit');
   const files = [...names, 'manifest.json', 'SHA256SUMS'];
-  const draft = apiOptional(`repos/${repository}/releases/tags/${tag}`);
+  const draft = findRelease(repository, tag);
   if (!draft?.draft) throw new Error('Expected draft release');
   const digests = Object.fromEntries(files.map((name) => [name, createHash('sha256').update(readFileSync(join(directory, name))).digest('hex')]));
   for (const name of missingAssets(files, draft.assets, digests)) {
     gh(['release', 'upload', tag, '--repo', repository, join(directory, name)]);
   }
-  const release = apiOptional(`repos/${repository}/releases/tags/${tag}`);
+  const release = findRelease(repository, tag);
   if (!release?.draft || release.prerelease !== isPrerelease || release.assets.length !== files.length || files.some((name) => !release.assets.some((asset) => asset.name === name && asset.state === 'uploaded'))) throw new Error('Draft assets do not match expected inventory');
   for (const name of files) {
     const asset = release.assets.find((item) => item.name === name);
