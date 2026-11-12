@@ -1,0 +1,2 @@
+# Keep frontend source compatible with Prettier on every operating system.
+/src/frontend/** text=auto eol=lf

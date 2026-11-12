@@ -3,6 +3,7 @@
 use super::{migrations, model::ProjectSnapshot, store};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+#[cfg(not(feature = "desktop-e2e"))]
 use tauri::Manager;
 
 #[derive(Serialize)]
@@ -12,7 +13,13 @@ pub struct OpenProject {
     snapshot: ProjectSnapshot,
 }
 
-fn project_directory(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub(super) fn project_directory(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    #[cfg(feature = "desktop-e2e")]
+    {
+        let _ = app;
+        return super::e2e::test_project_directory();
+    }
+    #[cfg(not(feature = "desktop-e2e"))]
     app.path()
         .document_dir()
         .map(|path| path.join("ATUS").join("projects"))
@@ -36,9 +43,17 @@ fn check_extension(path: &Path) -> Result<(), String> {
 #[tauri::command]
 pub async fn project_create(
     app: tauri::AppHandle,
-    mut snapshot: ProjectSnapshot,
+    snapshot: ProjectSnapshot,
 ) -> Result<OpenProject, String> {
     let directory = project_directory(&app)?;
+    create_project_in(&directory, snapshot)
+}
+
+/// Creates a project in the given directory using the first available name.
+pub(super) fn create_project_in(
+    directory: &Path,
+    mut snapshot: ProjectSnapshot,
+) -> Result<OpenProject, String> {
     std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
     for number in 1..=10_000 {
         let name = if number == 1 {
@@ -126,6 +141,11 @@ pub async fn project_save_as(
 #[tauri::command]
 pub async fn project_list(app: tauri::AppHandle) -> Result<Vec<PathBuf>, String> {
     let directory = project_directory(&app)?;
+    list_projects_in(&directory)
+}
+
+/// Lists project files from a directory, returning an empty list when it is absent.
+pub(super) fn list_projects_in(directory: &Path) -> Result<Vec<PathBuf>, String> {
     let entries = match std::fs::read_dir(directory) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),

@@ -4,7 +4,14 @@
 
 mod project;
 
+#[cfg(all(feature = "desktop-e2e", not(debug_assertions)))]
+compile_error!("The desktop-e2e feature is only permitted in debug builds");
+
 use project::commands::*;
+#[cfg(feature = "desktop-e2e")]
+use project::e2e::project_test_directory;
+#[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
+use project::e2e::project_test_finder;
 #[cfg(target_os = "macos")]
 use project::{finder::take_finder_project, menu::project_menu_enabled};
 use serde::Serialize;
@@ -47,6 +54,8 @@ fn get_mock_analysis() -> MockAnalysis {
 
 fn main() {
     let builder = tauri::Builder::default();
+    #[cfg(feature = "desktop-e2e")]
+    let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
     #[cfg(target_os = "macos")]
     let builder = builder
         .manage(project::finder::FinderRequest::default())
@@ -65,6 +74,10 @@ fn main() {
             project_save_as,
             project_list,
             project_available,
+            #[cfg(feature = "desktop-e2e")]
+            project_test_directory,
+            #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
+            project_test_finder,
             #[cfg(target_os = "macos")]
             project_menu_enabled,
             #[cfg(target_os = "macos")]
@@ -89,16 +102,5 @@ fn main() {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn mock_crosses_cpp_boundary() {
-        let result = get_mock_analysis();
-        assert_eq!(result.slope, 1.2);
-        assert_eq!(result.intercept, 0.5);
-        assert_eq!(result.r_squared, 0.994);
-        assert_eq!(result.x, [0.0, 1.0, 2.0, 3.0, 4.0]);
-        assert_eq!(result.y, [0.5, 1.8, 2.8, 4.2, 5.3]);
-    }
-}
+#[path = "main_tests.rs"]
+mod tests;

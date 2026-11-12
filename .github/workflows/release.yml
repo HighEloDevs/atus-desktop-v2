@@ -1,0 +1,77 @@
+name: Release desktop
+
+on:
+  workflow_run:
+    workflows: [Build desktop]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful main-branch Build desktop run ID
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: atus-release
+  queue: max
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test release gate validation
+        run: node --test .github/scripts/tests/release-gates.test.mjs .github/scripts/tests/check-release-run.test.mjs .github/scripts/tests/publish-release.test.mjs
+      - name: Verify trusted workflow run and required gates
+        id: verified
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+        run: |
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          gh api "repos/$REPOSITORY/actions/runs/$RUN_ID" > "$RUNNER_TEMP/run.json"
+          gh api --paginate --slurp "repos/$REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" --jq '[.[].jobs[]]' > "$RUNNER_TEMP/jobs.json"
+          node .github/scripts/check-release-run.mjs "$RUNNER_TEMP/run.json" "$RUNNER_TEMP/jobs.json"
+          echo "sha=$(jq -r .head_sha "$RUNNER_TEMP/run.json")" >> "$GITHUB_OUTPUT"
+      - name: Check out verified commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.verified.outputs.sha }}
+          fetch-depth: 0
+      - name: Recheck release gates at verified commit
+        run: |
+          node --test .github/scripts/tests/release-gates.test.mjs .github/scripts/tests/check-release-run.test.mjs .github/scripts/tests/publish-release.test.mjs
+          node .github/scripts/check-release-run.mjs "$RUNNER_TEMP/run.json" "$RUNNER_TEMP/jobs.json"
+      - name: Download artifacts from verified run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+        run: |
+          mkdir "$RUNNER_TEMP/artifacts"
+          for artifact in linux-bundles windows-installer macos-arm64-app macos-intel-app; do
+            gh run download "$RUN_ID" --repo "$REPOSITORY" --name "$artifact" --dir "$RUNNER_TEMP/artifacts/$artifact"
+          done
+      - name: Publish verified release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_RUN_JSON: ${{ runner.temp }}/run.json
+          RELEASE_ARTIFACTS: ${{ runner.temp }}/artifacts
+        run: node .github/scripts/publish-release.mjs

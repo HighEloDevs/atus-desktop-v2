@@ -1,25 +1,12 @@
 import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
+import { test } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createServer } from "vite";
-
-let server;
-before(async () => {
-  server = await createServer({
-    configFile: false,
-    esbuild: { jsx: "automatic" },
-    optimizeDeps: { noDiscovery: true },
-    server: { middlewareMode: true, watch: null },
-    appType: "custom",
-  });
-});
-after(async () => server?.close());
+import { ProjectQuickActions } from "../../src/features/projects/ProjectQuickActions.tsx";
+import { ProjectFilePath } from "../../src/features/projects/ProjectFilePath.tsx";
+import { EmptyRecentProjects } from "../../src/features/projects/EmptyRecentProjects.tsx";
 
 test("quick access offers two described actions and only advertises the implemented shortcut", async () => {
-  const { ProjectQuickActions } = await server.ssrLoadModule(
-    "/src/features/projects/ProjectQuickActions.tsx",
-  );
   for (const [isMac, shortcut] of [
     [true, "Meta+Alt+N"],
     [false, "Control+Alt+N"],
@@ -39,9 +26,6 @@ test("quick access offers two described actions and only advertises the implemen
 });
 
 test("project path includes the filename and extension in the visible text", async () => {
-  const { ProjectFilePath } = await server.ssrLoadModule(
-    "/src/features/projects/ProjectFilePath.tsx",
-  );
   for (const path of [
     "/Users/test/Experimentos/Queda livre.atus",
     "C:\\Projetos\\Queda livre.atus",
@@ -52,9 +36,6 @@ test("project path includes the filename and extension in the visible text", asy
 });
 
 test("the empty state explains how projects appear without adding duplicate actions", async () => {
-  const { EmptyRecentProjects } = await server.ssrLoadModule(
-    "/src/features/projects/EmptyRecentProjects.tsx",
-  );
   const html = renderToStaticMarkup(createElement(EmptyRecentProjects));
   assert.match(html, /Nenhum projeto recente/);
   assert.match(html, /análises que você criar ou abrir aparecerão aqui/);
