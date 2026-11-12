@@ -13,6 +13,14 @@ import { defaultFitConfig, validateFitConfig, type FitConfig } from "./fit/fit-c
 import { ResultsPanel } from "./fit/ResultsPanel";
 import { mockFitService, type FitResponse } from "./fit/fit-service";
 import { textParser, type SeparatorType } from "./data-import/text-data-parser";
+import { SeparatorDialog } from "./data-import/SeparatorDialog";
+import { SeparatorSelect } from "./data-import/SeparatorSelect";
+import {
+  MAX_IMPORT_BYTES,
+  readClipboardText,
+  ClipboardReadError,
+} from "./clipboard/read-clipboard-text";
+import { useClipboardShortcuts, type ClipboardShortcut } from "./clipboard/clipboard-shortcuts";
 import { Chart, type ChartSeries } from "@/components/chart/Chart";
 import { Dialog } from "radix-ui";
 import {
@@ -70,6 +78,25 @@ type MockAnalysis = {
 const format = (value: number) =>
   new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(value);
 
+/** Parsed data that is readable but invalid, so a different separator cannot fix it. */
+class DataValidationError extends Error {}
+
+/** Where imported text goes: a new dataset or the data of an existing one. */
+type ImportTarget = { kind: "create" } | { kind: "replace"; id: string };
+
+/** Text whose parsing failed and that waits for the user to choose a separator. */
+type PendingImport = { name: string; text: string; target: ImportTarget; error: string };
+
+const CLIPBOARD_NAME = "Dados colados do clipboard";
+
+/**
+ * Parses text into points and checks that values and uncertainties are usable.
+ * @param text - Delimited text.
+ * @param separator - Selected or automatic separator.
+ * @returns The parsed points.
+ * @throws {DataValidationError} When values are not finite or uncertainties are negative.
+ * @throws {Error} When the text cannot be parsed with the separator.
+ */
 function parseValidPoints(text: string, separator: SeparatorType) {
   const points = textParser.parse(text, { separator });
   if (
@@ -83,7 +110,9 @@ function parseValidPoints(text: string, separator: SeparatorType) {
         (p.sy ?? 0) < 0,
     )
   ) {
-    throw new Error("Os dados devem ser finitos e as incertezas não podem ser negativas.");
+    throw new DataValidationError(
+      "Os dados devem ser finitos e as incertezas não podem ser negativas.",
+    );
   }
   return points;
 }
@@ -142,6 +171,10 @@ export function AnalysisPage({
   const [editError, setEditError] = useState("");
   const [separator, setSeparator] = useState<SeparatorType>(initial?.separator ?? "auto");
   const [importError, setImportError] = useState("");
+  const [importNotice, setImportNotice] = useState("");
+  const [pendingImports, setPendingImports] = useState<PendingImport[]>([]);
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+  const modifier = isMac ? "⌘" : "Ctrl";
   const [datasets, setDatasets] = useState<Dataset[]>(
     () =>
       initialAnalysis?.datasets.map(({ id, name, points, state }) => ({
@@ -235,50 +268,17 @@ export function AnalysisPage({
     if (sidebarContent.current) sidebarContent.current.scrollTop = scrollPositions.current[mode];
   }, [mode, panelOpen]);
 
-  async function importFiles(files: FileList | null) {
-    if (!files) return;
-    const errors: string[] = [];
-    for (const file of Array.from(files)) {
-      try {
-        if (file.size > 1024 * 1024) throw new Error("O arquivo excede 1 MB.");
-        const points = parseValidPoints(await file.text(), separator);
-        const id = crypto.randomUUID();
-        setDatasets((items) => [
-          ...items,
-          {
-            id,
-            name: file.name,
-            data: null,
-            ...defaultFitConfig,
-            fitState: "idle",
-            points,
-            linePoints: [],
-            color: ["#f25a3c", "#364cff", "#16835d", "#a04cb0"][items.length % 4],
-            radius: 5,
-            symbol: "circle",
-            lineStyle: "solid",
-            lineWidth: 2,
-            visible: true,
-          },
-        ]);
-        setSelectedId(id);
-      } catch (error) {
-        errors.push(
-          `${file.name}: ${error instanceof Error ? error.message : "Não foi possível importar."}`,
-        );
-      }
-    }
-    setImportError(errors.join(" "));
-  }
-
-  async function replaceData(file: File | undefined, targetId: string) {
-    if (!file) return;
-    try {
-      if (file.size > 1024 * 1024) throw new Error("O arquivo excede 1 MB.");
-      const points = parseValidPoints(await file.text(), separator);
+  /**
+   * Applies parsed text to a new dataset or to the data of an existing one.
+   * Replacing keeps the fit configuration and clears the previous fit output.
+   * @throws When the text cannot be parsed or its values are invalid.
+   */
+  function commitImport(name: string, text: string, target: ImportTarget, sep: SeparatorType) {
+    const points = parseValidPoints(text, sep);
+    if (target.kind === "replace") {
       setDatasets((items) =>
         items.map((item) =>
-          item.id === targetId
+          item.id === target.id
             ? {
                 ...item,
                 points,
@@ -291,11 +291,153 @@ export function AnalysisPage({
             : item,
         ),
       );
-      setImportError("");
+      return;
+    }
+    const id = crypto.randomUUID();
+    setDatasets((items) => [
+      ...items,
+      {
+        id,
+        name,
+        data: null,
+        ...defaultFitConfig,
+        fitState: "idle",
+        points,
+        linePoints: [],
+        color: ["#f25a3c", "#364cff", "#16835d", "#a04cb0"][items.length % 4],
+        radius: 5,
+        symbol: "circle",
+        lineStyle: "solid",
+        lineWidth: 2,
+        visible: true,
+      },
+    ]);
+    setSelectedId(id);
+  }
+
+  /** Runs an import and describes the failure, if any; `validation` failures skip the dialog. */
+  function tryImport(name: string, text: string, target: ImportTarget, sep: SeparatorType) {
+    try {
+      commitImport(name, text, target, sep);
+      return null;
+    } catch (error) {
+      return {
+        message: error instanceof Error ? error.message : "Não foi possível importar.",
+        validation: error instanceof DataValidationError,
+      };
+    }
+  }
+
+  /** Reads files, enforcing the size limit, and imports each one with the selected separator. */
+  async function readImportFile(file: File) {
+    if (file.size > MAX_IMPORT_BYTES) throw new Error("O arquivo excede 1 MB.");
+    return file.text();
+  }
+
+  async function importFiles(files: FileList | null) {
+    if (!files) return;
+    const errors: string[] = [];
+    const queue: PendingImport[] = [];
+    for (const file of Array.from(files)) {
+      const target: ImportTarget = { kind: "create" };
+      try {
+        const text = await readImportFile(file);
+        const failure = tryImport(file.name, text, target, separator);
+        if (!failure) continue;
+        if (failure.validation) errors.push(`${file.name}: ${failure.message}`);
+        else queue.push({ name: file.name, text, target, error: failure.message });
+      } catch (error) {
+        errors.push(
+          `${file.name}: ${error instanceof Error ? error.message : "Não foi possível importar."}`,
+        );
+      }
+    }
+    setImportNotice("");
+    setImportError(errors.join(" "));
+    if (queue.length) setPendingImports((items) => [...items, ...queue]);
+  }
+
+  async function replaceData(file: File | undefined, targetId: string) {
+    if (!file) return;
+    const target: ImportTarget = { kind: "replace", id: targetId };
+    try {
+      const text = await readImportFile(file);
+      const failure = tryImport(file.name, text, target, separator);
+      setImportNotice("");
+      if (failure && !failure.validation) {
+        setImportError("");
+        setPendingImports((items) => [
+          ...items,
+          { name: file.name, text, target, error: failure.message },
+        ]);
+      } else setImportError(failure?.message ?? "");
     } catch (error) {
       setImportError(
         error instanceof Error ? error.message : "Não foi possível substituir os dados.",
       );
+    }
+  }
+
+  /** Imports clipboard text as a new dataset or into dataset N (1-based) of the list. */
+  async function importFromClipboard(shortcut: ClipboardShortcut) {
+    let target: ImportTarget = { kind: "create" };
+    let replaced: ChartSeries | undefined;
+    if (shortcut.kind === "replace") {
+      replaced = datasets[shortcut.index - 1];
+      if (!replaced) {
+        setImportNotice("");
+        setImportError(`Não há conjunto de dados ${shortcut.index}.`);
+        return;
+      }
+      target = { kind: "replace", id: replaced.id };
+    }
+    let text: string;
+    try {
+      text = await readClipboardText();
+    } catch (error) {
+      setImportNotice("");
+      setImportError(
+        error instanceof ClipboardReadError
+          ? error.message
+          : "Não foi possível ler a área de transferência.",
+      );
+      return;
+    }
+    const failure = tryImport(CLIPBOARD_NAME, text, target, separator);
+    setImportNotice("");
+    if (!failure) {
+      setImportError("");
+      setImportNotice(
+        replaced
+          ? `Dados do conjunto ${shortcut.kind === "replace" ? shortcut.index : ""} ("${replaced.name}") substituídos com sucesso.`
+          : "Dados colados importados com sucesso.",
+      );
+    } else if (failure.validation) {
+      setImportError(`${CLIPBOARD_NAME}: ${failure.message}`);
+    } else {
+      setImportError("");
+      setPendingImports((items) => [
+        ...items,
+        { name: CLIPBOARD_NAME, text, target, error: failure.message },
+      ]);
+    }
+  }
+
+  /** Retries the first pending import with the separator chosen in the dialog. */
+  function retryPendingImport(sep: SeparatorType) {
+    const current = pendingImports[0];
+    if (!current) return;
+    const failure = tryImport(current.name, current.text, current.target, sep);
+    if (!failure) {
+      setPendingImports((items) => items.slice(1));
+      setImportError("");
+      setImportNotice(`Dados de "${current.name}" importados com sucesso.`);
+    } else if (failure.validation) {
+      setPendingImports((items) => items.slice(1));
+      setImportNotice("");
+      setImportError(`${current.name}: ${failure.message}`);
+    } else {
+      setPendingImports((items) => [{ ...items[0], error: failure.message }, ...items.slice(1)]);
     }
   }
 
@@ -608,9 +750,24 @@ export function AnalysisPage({
     </div>
   );
   const table = datasets.find((item) => item.id === tableId);
+  useClipboardShortcuts(
+    (shortcut) => void importFromClipboard(shortcut),
+    isMac,
+    pendingImports.length === 0 && !table && finderPath === null,
+  );
 
   return (
     <div className="analysis-workspace flex h-screen min-h-0 bg-[#f7f7f3] text-[#20272c]">
+      {pendingImports[0] && (
+        <SeparatorDialog
+          key={`${pendingImports[0].name}:${pendingImports[0].text.length}`}
+          name={pendingImports[0].name}
+          error={pendingImports[0].error}
+          initialSeparator={separator}
+          onRetry={retryPendingImport}
+          onCancel={() => setPendingImports((items) => items.slice(1))}
+        />
+      )}
       <FinderProjectDialog
         path={finderPath}
         opening={openingFinderProject}
@@ -831,18 +988,11 @@ export function AnalysisPage({
                     )}
                   </h2>
                   <div className="flex gap-1 text-[#a4aea6]">
-                    <select
-                      aria-label="Separador de importação"
+                    <SeparatorSelect
+                      label="Separador de importação"
                       value={separator}
-                      onChange={(event) => setSeparator(event.target.value as SeparatorType)}
-                      className="rounded border border-[#d8ded7] bg-white text-[11px] text-[#35443a]"
-                    >
-                      <option value="auto">Automático</option>
-                      <option value=",">Vírgula</option>
-                      <option value=";">Ponto e vírgula</option>
-                      <option value={"\t"}>Tabulação</option>
-                      <option value=" ">Espaço</option>
-                    </select>
+                      onChange={setSeparator}
+                    />
                     <input
                       ref={fileInput}
                       type="file"
@@ -871,6 +1021,11 @@ export function AnalysisPage({
                     <p className="mt-1 text-[11px] leading-5 text-[#87938a]">
                       Arquivos CSV, TXT ou DAT, com até 1 MB cada.
                     </p>
+                    <p className="mt-2 text-[11px] leading-5 text-[#87938a]">
+                      <kbd className="font-sans font-semibold">{modifier} B</kbd> adiciona do
+                      clipboard e <kbd className="font-sans font-semibold">{modifier} 1–9</kbd>{" "}
+                      substitui o conjunto.
+                    </p>
                     <button
                       type="button"
                       onClick={() => fileInput.current?.click()}
@@ -887,6 +1042,13 @@ export function AnalysisPage({
                     {importError}
                   </p>
                 )}
+                <p
+                  role="status"
+                  data-testid="import-notice"
+                  className="mt-3 text-[12px] text-[#35443a] empty:hidden"
+                >
+                  {importNotice}
+                </p>
                 {status === "error" && (
                   <p role="alert" className="mt-3 text-[12px] leading-5 text-[#a43d35]">
                     Não foi possível carregar o exemplo. Abra o aplicativo desktop e tente
