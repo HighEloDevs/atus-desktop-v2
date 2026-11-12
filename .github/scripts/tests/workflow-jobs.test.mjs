@@ -143,3 +143,20 @@ test('Cargo caches are shared per architecture with a single writer per key', ()
   assert.ok(workflow.split('  test-macos-arm64:\n')[1].includes('shared-key: coverage-macos-arm64'));
   assert.ok(workflow.split('  integration-macos-arm64:\n')[1].includes('shared-key: debug-macos-arm64'));
 });
+
+test('every test and integration job records its results and the summary job is the only report writer', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const names = [...workflow.matchAll(/^  ((?:test|integration)-[\w-]+):$/gm)].map((m) => m[1]);
+  assert.equal(names.length, 8);
+  for (const name of names) {
+    const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
+    assert.ok(job.includes('record.sh'), `${name} must record its test output`);
+    assert.match(job, /- uses: \.\/\.github\/actions\/upload-test-logs\n\s+if: \$\{\{ always\(\) \}\}\n*$/, name);
+  }
+  const summary = workflow.split('  summary:\n')[1];
+  assert.ok(summary.includes('continue-on-error: true'));
+  assert.ok(summary.includes('if: ${{ always() }}'));
+  const all = [...workflow.matchAll(/^  ([a-z][\w-]*):\n(?:    .*\n)*?    (?:runs-on|needs):/gm)].map((m) => m[1]).filter((n) => n !== 'summary');
+  for (const name of all) assert.ok(new RegExp(`needs: \\[[^\\]]*\\b${name}\\b`).test(summary), `summary must wait for ${name}`);
+  assert.equal((workflow.match(/GITHUB_STEP_SUMMARY/g) ?? []).length, 1);
+});

@@ -3,7 +3,9 @@ name: Build desktop
 on:
   push:
     branches: [main]
+
   pull_request:
+
   workflow_dispatch:
 
 permissions:
@@ -14,6 +16,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+
   check-version:
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-22.04
@@ -64,7 +67,9 @@ jobs:
         working-directory: src/frontend
         run: npm ci
       - name: Run desktop smoke on macOS Intel
-        run: .github/scripts/coverage/rust-desktop-macos.sh --no-coverage
+        run: bash .github/scripts/summary/record.sh smoke .github/scripts/coverage/rust-desktop-macos.sh --no-coverage
+      - uses: ./.github/actions/upload-test-logs
+        if: ${{ always() }}
 
   integration-macos-arm64:
     needs: [check-version, release-version]
@@ -87,7 +92,9 @@ jobs:
         working-directory: src/frontend
         run: npm ci
       - name: Run desktop smoke on macOS Apple Silicon
-        run: .github/scripts/coverage/rust-desktop-macos.sh --no-coverage
+        run: bash .github/scripts/summary/record.sh smoke .github/scripts/coverage/rust-desktop-macos.sh --no-coverage
+      - uses: ./.github/actions/upload-test-logs
+        if: ${{ always() }}
 
   test-macos-arm64:
     needs: [check-version, release-version]
@@ -113,14 +120,16 @@ jobs:
         run: npm ci
       - name: Test frontend
         working-directory: src/frontend
-        run: npm test
+        run: bash ../../.github/scripts/summary/record.sh frontend npm test -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/test-logs/frontend.vitest.json"
       - name: Verify Rust coverage collector
-        run: node --test .github/scripts/coverage/rust-inventory.test.mjs .github/scripts/coverage/rust-desktop-macos.test.mjs
+        run: bash .github/scripts/summary/record.sh ci-scripts node --test .github/scripts/coverage/rust-inventory.test.mjs .github/scripts/coverage/rust-desktop-macos.test.mjs
       - name: Test Rust and C++ bridge with coverage, including desktop smoke
         run: |
           llvm_bin="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin"
-          LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" .github/scripts/coverage/rust-desktop-macos.sh "$RUNNER_TEMP/rust.lcov"
+          LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" bash .github/scripts/summary/record.sh rust-coverage .github/scripts/coverage/rust-desktop-macos.sh "$RUNNER_TEMP/rust.lcov"
           node .github/scripts/coverage/check.mjs "$RUNNER_TEMP/rust.lcov"
+      - uses: ./.github/actions/upload-test-logs
+        if: ${{ always() }}
 
   build-macos-arm64:
     needs: [test-macos-arm64, integration-macos-arm64]
@@ -162,7 +171,6 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-
   test-macos-intel:
     needs: [check-version, release-version]
     if: ${{ !failure() && !cancelled() }}
@@ -186,9 +194,11 @@ jobs:
         run: npm ci
       - name: Test frontend
         working-directory: src/frontend
-        run: npm test
+        run: bash ../../.github/scripts/summary/record.sh frontend npm test -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/test-logs/frontend.vitest.json"
       - name: Test Rust and C++ bridge
-        run: cargo test --manifest-path src/desktop/Cargo.toml
+        run: bash .github/scripts/summary/record.sh rust cargo test --manifest-path src/desktop/Cargo.toml
+      - uses: ./.github/actions/upload-test-logs
+        if: ${{ always() }}
 
   build-macos-intel:
     needs: [test-macos-intel, integration-macos-intel]
@@ -230,7 +240,6 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-
   integration-windows:
     needs: [check-version, release-version]
     if: ${{ !failure() && !cancelled() }}
@@ -257,7 +266,10 @@ jobs:
         run: cargo build --manifest-path src/desktop/Cargo.toml --features desktop-e2e
       - name: Run desktop smoke on Windows
         timeout-minutes: 10
-        run: .github/scripts/desktop-e2e/run-windows.ps1
+        shell: bash
+        run: bash .github/scripts/summary/record.sh smoke pwsh -File .github/scripts/desktop-e2e/run-windows.ps1
+      - uses: ./.github/actions/upload-test-logs
+        if: ${{ always() }}
 
   test-windows:
     needs: [check-version, release-version]
@@ -272,7 +284,8 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - name: Test checkout line endings
-        run: node --test .github/scripts/tests/git-attributes.test.mjs
+        shell: bash
+        run: bash .github/scripts/summary/record.sh ci-scripts node --test .github/scripts/tests/git-attributes.test.mjs
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
@@ -283,13 +296,17 @@ jobs:
         working-directory: src/frontend
         run: npm ci
       - name: Test frontend
+        shell: bash
         working-directory: src/frontend
-        run: npm test
+        run: bash ../../.github/scripts/summary/record.sh frontend npm test -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/test-logs/frontend.vitest.json"
       - name: Check frontend formatting
         working-directory: src/frontend
         run: npm run format:check
       - name: Test Rust and C++ bridge
-        run: cargo test --manifest-path src/desktop/Cargo.toml
+        shell: bash
+        run: bash .github/scripts/summary/record.sh rust cargo test --manifest-path src/desktop/Cargo.toml
+      - uses: ./.github/actions/upload-test-logs
+        if: ${{ always() }}
 
   build-windows:
     needs: [test-windows, integration-windows]
@@ -335,7 +352,6 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-
   integration-linux:
     needs: [check-version, release-version]
     if: ${{ !failure() && !cancelled() }}
@@ -363,7 +379,9 @@ jobs:
         run: cargo build --manifest-path src/desktop/Cargo.toml --features desktop-e2e
       - name: Run desktop smoke on Linux
         timeout-minutes: 10
-        run: xvfb-run -a .github/scripts/desktop-e2e/run-linux.sh
+        run: bash .github/scripts/summary/record.sh smoke xvfb-run -a .github/scripts/desktop-e2e/run-linux.sh
+      - uses: ./.github/actions/upload-test-logs
+        if: ${{ always() }}
 
   test-linux:
     needs: [check-version, release-version]
@@ -378,7 +396,7 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - name: Test Ubuntu dependency setup
-        run: node --test .github/scripts/tests/ubuntu-deps.test.mjs
+        run: bash .github/scripts/summary/record.sh ci-scripts node --test .github/scripts/tests/ubuntu-deps.test.mjs
       - name: Install Tauri system dependencies
         timeout-minutes: 15
         run: |
@@ -393,27 +411,32 @@ jobs:
         working-directory: src/frontend
         run: npm ci
       - name: Test CI helper scripts
-        run: node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/tests/windows-node-path.test.mjs .github/scripts/coverage/check.test.mjs
+        run: bash .github/scripts/summary/record.sh ci-scripts node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/tests/windows-node-path.test.mjs .github/scripts/coverage/check.test.mjs .github/scripts/tests/summary.test.mjs
       - name: Lint, test, and build frontend
         working-directory: src/frontend
         run: |
           npm run lint
-          npm run test:coverage
+          bash ../../.github/scripts/summary/record.sh frontend npm run test:coverage -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/test-logs/frontend.vitest.json"
           npm run format:check
           npm run build
       - name: Require frontend line coverage above 90 percent
         run: node .github/scripts/coverage/check.mjs src/frontend/coverage/lcov.info
       - name: Test Rust and C++ bridge
-        run: cargo test --manifest-path src/desktop/Cargo.toml
+        run: bash .github/scripts/summary/record.sh rust cargo test --manifest-path src/desktop/Cargo.toml
       - name: Test C++ engine C ABI
         run: |
           cc -std=c11 -Isrc/scientific-engine/include -c src/scientific-engine/tests/mock_analysis_test.c -o /tmp/atus-mock-test.o
           c++ -std=c++17 -Isrc/scientific-engine/include src/scientific-engine/src/mock_analysis.cpp /tmp/atus-mock-test.o -o /tmp/atus-mock-test
-          /tmp/atus-mock-test
+          mkdir -p "$RUNNER_TEMP/test-logs"
+          if /tmp/atus-mock-test; then result=ok; else result=FAILED; fi
+          echo "test mock_analysis_c_abi ... $result" | tee -a "$RUNNER_TEMP/test-logs/cpp.log"
+          [ "$result" = ok ]
       - name: Require C++ line coverage above 90 percent
         run: |
           .github/scripts/coverage/cpp-llvm.sh /tmp/atus-cpp.lcov
           node .github/scripts/coverage/check.mjs /tmp/atus-cpp.lcov
+      - uses: ./.github/actions/upload-test-logs
+        if: ${{ always() }}
 
   build-linux:
     needs: [test-linux, integration-linux]
@@ -478,3 +501,30 @@ jobs:
     steps:
       - name: Confirm all release packages were generated
         run: echo 'All platform build jobs succeeded.'
+
+  summary:
+    needs: [check-version, release-version, integration-macos-intel, integration-macos-arm64, test-macos-arm64, build-macos-arm64, test-macos-intel, build-macos-intel, integration-windows, test-windows, build-windows, integration-linux, test-linux, build-linux, release-artifacts]
+    if: ${{ always() }}
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: results-*
+          path: results
+      - name: Fetch job results
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" --jq '.jobs[]' | jq -s '.' > jobs.json
+      - name: Write the run summary
+        run: |
+          mkdir -p results
+          node .github/scripts/summary/summary.mjs jobs.json results >> "$GITHUB_STEP_SUMMARY"
