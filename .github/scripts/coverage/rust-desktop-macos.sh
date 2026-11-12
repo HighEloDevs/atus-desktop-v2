@@ -127,7 +127,8 @@ if kill -0 "$app_pid" 2>/dev/null; then echo 'Test application did not exit; no 
 wait "$app_pid"; app_pid=''
 if (( coverage )); then
 "$profdata" merge -sparse "$tmp"/profiles/*.profraw -o "$tmp/merged.profdata"
-"$cov" export -format=lcov -ignore-filename-regex='/(project/tests|project/additional_tests|project/menu_tests|project/e2e|project/store_test_support|main_tests)\.rs$' -instr-profile="$tmp/merged.profdata" src/desktop/target/debug/atus-desktop -object "$(cat "$tmp/binary")" "$root/src/desktop/src" > "$output"
+"$cov" export -format=lcov -ignore-filename-regex='/(project/e2e|project/test_support)\.rs$' -instr-profile="$tmp/merged.profdata" src/desktop/target/debug/atus-desktop -object "$(cat "$tmp/binary")" "$root/src/desktop/src" > "$output"
+node .github/scripts/coverage/rust-strip-tests.mjs "$output"
 grep -q '^SF:' "$output" || { echo 'Rust coverage report is empty.' >&2; exit 1; }
 node .github/scripts/coverage/rust-inventory.mjs "$root/src/desktop/src" "$output" .github/scripts/coverage/rust-source-inventory.json
 echo 'Exploratory macOS report: other platform cfg paths may be absent; not a multiplatform coverage gate.' >&2

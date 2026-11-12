@@ -119,7 +119,7 @@ jobs:
         working-directory: src/frontend
         run: bash ../../.github/scripts/summary/record.sh frontend npm test -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/test-logs/frontend.vitest.json"
       - name: Verify Rust coverage collector
-        run: bash .github/scripts/summary/record.sh ci-scripts node --test .github/scripts/coverage/rust-inventory.test.mjs .github/scripts/coverage/rust-desktop-macos.test.mjs
+        run: bash .github/scripts/summary/record.sh ci-scripts node --test .github/scripts/coverage/rust-inventory.test.mjs .github/scripts/coverage/rust-strip-tests.test.mjs .github/scripts/coverage/rust-desktop-macos.test.mjs
       - name: Test Rust and C++ bridge with coverage, including desktop smoke
         run: |
           llvm_bin="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin"
