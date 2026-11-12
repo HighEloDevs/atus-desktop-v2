@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { REQUIRED_RELEASE_GATES, requireReleaseGates } from '../release-gates.mjs';
 
 const sha = 'a'.repeat(40);
-const passing = () => [...new Set(REQUIRED_RELEASE_GATES.map((name) => ({ 'coverage-frontend': 'test-linux', 'coverage-cpp': 'test-linux', 'coverage-rust': 'test-macos-arm64', 'integration-macos-arm64': 'test-macos-arm64', 'install-windows': 'build-windows', 'install-macos-arm64': 'build-macos-arm64', 'install-linux-deb': 'build-linux', 'install-linux-rpm': 'build-linux', 'install-linux-appimage': 'build-linux' })[name] ?? name))].map((name) => ({ name, sha, conclusion: 'success' }));
+const passing = () => [...new Set(REQUIRED_RELEASE_GATES.map((name) => ({ 'coverage-frontend': 'test-linux', 'coverage-cpp': 'test-linux', 'coverage-rust': 'test-macos-arm64', 'install-windows': 'build-windows', 'install-macos-arm64': 'build-macos-arm64', 'install-linux-deb': 'build-linux', 'install-linux-rpm': 'build-linux', 'install-linux-appimage': 'build-linux' })[name] ?? name))].map((name) => ({ name, sha, conclusion: 'success' }));
 
 test('accepts only complete successful results from the release commit', () => {
   assert.doesNotThrow(() => requireReleaseGates(passing(), sha));

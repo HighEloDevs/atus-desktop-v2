@@ -49,6 +49,9 @@
             "context": "test-macos-intel"
           },
           {
+            "context": "integration-macos-arm64"
+          },
+          {
             "context": "integration-macos-intel"
           }
         ]

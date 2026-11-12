@@ -46,13 +46,3 @@ test('--no-coverage builds without instrumentation flags', () => {
   assert.doesNotMatch(plain, /instrument-coverage|link-dead-code/);
 });
 
-test('--unit-only requires an output, requires macOS and never starts the app or smoke', () => {
-  const missing = spawnSync('bash', ['.github/scripts/coverage/rust-desktop-macos.sh', '--unit-only'], { encoding: 'utf8' });
-  assert.notEqual(missing.status, 0);
-  assert.match(missing.stderr, /Usage:/);
-  const script = readFileSync('.github/scripts/coverage/rust-desktop-macos.sh', 'utf8');
-  const unitBranch = script.split('if (( unit_only )); then\n')[1].split('\nfi\n')[0];
-  assert.match(unitBranch, /exit 0/);
-  assert.ok(script.indexOf('if (( unit_only )); then\n  "$profdata"') < script.indexOf('vite.js'));
-  assert.match(script, /if \(\( ! unit_only \)\); then\ncargo rustc .*--bin atus-desktop/);
-});

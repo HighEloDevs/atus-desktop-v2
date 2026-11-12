@@ -45,7 +45,7 @@ jobs:
 
   integration-macos-intel:
     needs: [check-version, release-version]
-    if: ${{ !failure() && !cancelled() && (github.event_name != 'pull_request' || github.base_ref == 'main') }}
+    if: ${{ !failure() && !cancelled() }}
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +63,28 @@ jobs:
         working-directory: src/frontend
         run: npm ci
       - name: Run desktop smoke on macOS Intel
+        run: .github/scripts/coverage/rust-desktop-macos.sh --no-coverage
+
+  integration-macos-arm64:
+    needs: [check-version, release-version]
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.7.8
+        with:
+          workspaces: src/desktop
+          cache-on-failure: true
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci
+      - name: Run desktop smoke on macOS Apple Silicon
         run: .github/scripts/coverage/rust-desktop-macos.sh --no-coverage
 
   test-macos-arm64:
@@ -96,15 +118,9 @@ jobs:
           llvm_bin="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin"
           LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" .github/scripts/coverage/rust-desktop-macos.sh "$RUNNER_TEMP/rust.lcov"
           node .github/scripts/coverage/check.mjs "$RUNNER_TEMP/rust.lcov"
-      - name: Measure Rust coverage from unit tests only (informational)
-        continue-on-error: true
-        run: |
-          llvm_bin="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin"
-          LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" .github/scripts/coverage/rust-desktop-macos.sh --unit-only "$RUNNER_TEMP/rust-unit.lcov"
-          node .github/scripts/coverage/check.mjs "$RUNNER_TEMP/rust-unit.lcov"
 
   build-macos-arm64:
-    needs: test-macos-arm64
+    needs: [test-macos-arm64, integration-macos-arm64]
     if: github.event_name != 'pull_request'
     runs-on: macos-latest
     steps:

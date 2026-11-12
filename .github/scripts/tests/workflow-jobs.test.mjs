@@ -19,8 +19,7 @@ test('platform tests run independently and packages run only after tests outside
   for (const platform of ['linux', 'windows', 'macos-intel', 'macos-arm64']) {
     assert.match(workflow, new RegExp(`^  test-${platform}:$`, 'm'));
     const job = workflow.split(`  build-${platform}:\n`)[1].split(/^  [\w-]+:/m)[0];
-    const integration = platform === 'macos-arm64' ? '' : `, integration-${platform}`;
-    assert.ok(job.includes(integration ? `needs: [test-${platform}${integration}]` : `needs: test-${platform}`), platform);
+    assert.ok(job.includes(`needs: [test-${platform}, integration-${platform}]`), platform);
     assert.ok(job.includes("github.event_name != 'pull_request'"));
   }
 });
@@ -48,8 +47,10 @@ test('desktop smoke jobs cover both macOS architectures', () => {
   assert.doesNotMatch(workflow, /^  coverage-rust:$/m);
   assert.match(workflow, /^  test-macos-arm64:\n(?:    .*\n)*?    runs-on: macos-latest$/m);
   assert.match(workflow, /^  integration-macos-intel:\n(?:    .*\n)*?    runs-on: macos-15-intel$/m);
-  // arm64 gate, arm64 unit-only measurement and the Intel smoke.
+  assert.match(workflow, /^  integration-macos-arm64:\n(?:    .*\n)*?    runs-on: macos-latest$/m);
+  // arm64 coverage gate plus the plain smoke on each macOS architecture.
   assert.equal((workflow.match(/\.github\/scripts\/coverage\/rust-desktop-macos\.sh/g) ?? []).length, 3);
+  assert.equal((workflow.match(/rust-desktop-macos\.sh --no-coverage/g) ?? []).length, 2);
 });
 
 test('package builds check platform applications before uploading', () => {
@@ -79,7 +80,7 @@ test('Windows desktop smoke runs only after building the test application', () =
 test('test and integration jobs wait for the version checks and skip only when they are skipped', () => {
   const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
   const names = [...workflow.matchAll(/^  ((?:test|integration)-[\w-]+):$/gm)].map((m) => m[1]);
-  assert.deepEqual(names.sort(), ['integration-linux', 'integration-macos-intel', 'integration-windows', 'test-linux', 'test-macos-arm64', 'test-macos-intel', 'test-windows']);
+  assert.deepEqual(names.sort(), ['integration-linux', 'integration-macos-arm64', 'integration-macos-intel', 'integration-windows', 'test-linux', 'test-macos-arm64', 'test-macos-intel', 'test-windows']);
   for (const name of names) {
     const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
     assert.ok(job.includes('needs: [check-version, release-version]'), name);
@@ -87,18 +88,20 @@ test('test and integration jobs wait for the version checks and skip only when t
   }
 });
 
-test('Intel desktop smoke runs without coverage instrumentation and only for PRs to main', () => {
+test('macOS integration smoke runs without coverage instrumentation and without PR restrictions', () => {
   const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
-  const job = workflow.split('  integration-macos-intel:\n')[1].split(/^  [\w-]+:/m)[0];
-  assert.ok(job.includes('rust-desktop-macos.sh --no-coverage'));
-  assert.ok(!job.includes('llvm-tools-preview'));
-  assert.ok(job.includes("github.base_ref == 'main'"));
+  for (const name of ['integration-macos-intel', 'integration-macos-arm64']) {
+    const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
+    assert.ok(job.includes('rust-desktop-macos.sh --no-coverage'), name);
+    assert.ok(!job.includes('llvm-tools-preview'), name);
+    assert.ok(!job.includes('base_ref'), name);
+  }
 });
 
 test('every Rust-compiling job restores the Cargo cache from the desktop workspace', () => {
   const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
   const names = [...workflow.matchAll(/^  ((?:test|integration|build)-[\w-]+):$/gm)].map((m) => m[1]);
-  assert.equal(names.length, 11);
+  assert.equal(names.length, 12);
   for (const name of names) {
     const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
     assert.match(job, /uses: Swatinem\/rust-cache@v2\.\d+\.\d+\n\s+with:\n\s+workspaces: src\/desktop/, name);
