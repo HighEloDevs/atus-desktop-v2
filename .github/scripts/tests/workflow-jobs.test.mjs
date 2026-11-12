@@ -131,13 +131,14 @@ test('Cargo caches are shared per architecture with a single writer per key', ()
     const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
     const key = /shared-key: ([\w-]+)/.exec(job)?.[1];
     assert.ok(key, `${name} has no shared-key`);
+    // The e2e build is a superset of the test build, so integration-* writes debug-* and test-* only reads.
     if (!/save-if: false/.test(job)) writers.set(key, [...(writers.get(key) ?? []), name]);
-    else assert.ok(!name.startsWith('build-') && !name.startsWith('test-'), `${name} must write its cache`);
+    else assert.ok(/^test-(linux|windows|macos-intel)$/.test(name), `${name} must write its cache`);
   }
   for (const [key, who] of writers) assert.equal(who.length, 1, `${key} has several writers: ${who}`);
   for (const plat of ['linux', 'windows', 'macos-intel']) {
-    assert.ok(workflow.split(`  test-${plat}:\n`)[1].includes(`shared-key: debug-${plat}`));
-    assert.ok(workflow.split(`  integration-${plat}:\n`)[1].includes(`shared-key: debug-${plat}`));
+    assert.ok(workflow.split(`  test-${plat}:\n`)[1].includes(`shared-key: dev-${plat}`));
+    assert.ok(workflow.split(`  integration-${plat}:\n`)[1].includes(`shared-key: dev-${plat}`));
   }
   assert.ok(workflow.split('  test-macos-arm64:\n')[1].includes('shared-key: coverage-macos-arm64'));
   assert.ok(workflow.split('  integration-macos-arm64:\n')[1].includes('shared-key: debug-macos-arm64'));
