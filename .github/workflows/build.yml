@@ -48,7 +48,7 @@ jobs:
 
   integration-macos-intel:
     needs: [check-version, release-version]
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && (github.event_name != 'pull_request' || github.base_ref == 'main') }}
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
@@ -72,7 +72,7 @@ jobs:
 
   integration-macos-arm64:
     needs: [check-version, release-version]
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && (github.event_name != 'pull_request' || github.base_ref == 'main') }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -96,7 +96,7 @@ jobs:
 
   test-macos-arm64:
     needs: [check-version, release-version]
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && (github.event_name != 'pull_request' || github.base_ref == 'main') }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -169,7 +169,7 @@ jobs:
 
   test-macos-intel:
     needs: [check-version, release-version]
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && (github.event_name != 'pull_request' || github.base_ref == 'main') }}
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4

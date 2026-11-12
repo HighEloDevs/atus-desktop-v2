@@ -88,13 +88,12 @@ test('test and integration jobs wait for the version checks and skip only when t
   }
 });
 
-test('macOS integration smoke runs without coverage instrumentation and without PR restrictions', () => {
+test('macOS integration smoke runs without coverage instrumentation', () => {
   const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
   for (const name of ['integration-macos-intel', 'integration-macos-arm64']) {
     const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
     assert.ok(job.includes('rust-desktop-macos.sh --no-coverage'), name);
     assert.ok(!job.includes('llvm-tools-preview'), name);
-    assert.ok(!job.includes('base_ref'), name);
   }
 });
 
@@ -145,4 +144,15 @@ test('every test and integration job records its results and the summary job is 
   const all = [...workflow.matchAll(/^  ([a-z][\w-]*):\n(?:    .*\n)*?    (?:runs-on|needs):/gm)].map((m) => m[1]).filter((n) => n !== 'summary');
   for (const name of all) assert.ok(new RegExp(`needs: \\[[^\\]]*\\b${name}\\b`).test(summary), `summary must wait for ${name}`);
   assert.equal((workflow.match(/GITHUB_STEP_SUMMARY/g) ?? []).length, 1);
+});
+
+test('macOS test and integration jobs run for pull requests only when they target main', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const guard = "if: ${{ !failure() && !cancelled() && (github.event_name != 'pull_request' || github.base_ref == 'main') }}";
+  for (const name of ['test-macos-arm64', 'test-macos-intel', 'integration-macos-arm64', 'integration-macos-intel']) {
+    assert.ok(workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0].includes(guard), name);
+  }
+  for (const name of ['test-linux', 'test-windows', 'integration-linux', 'integration-windows']) {
+    assert.ok(!workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0].includes('base_ref'), name);
+  }
 });
