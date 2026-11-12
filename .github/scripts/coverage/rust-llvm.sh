@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generate an exploratory Rust LCOV report, excluding separated test-only files.
+# Generate an exploratory Rust LCOV report, excluding test-only files and inline test modules.
 # LLVM_COV and LLVM_PROFDATA must match rustc's LLVM major version.
 set -euo pipefail
 root="$(git rev-parse --show-toplevel)"
@@ -36,9 +36,10 @@ process.stdout.write([...bins][0] + '\n');
 NODE
 binary="$(cat "$tmp/binaries")"
 "$profdata" merge -sparse "$tmp"/*.profraw -o "$tmp/merged.profdata"
-"$cov" export -format=lcov -ignore-filename-regex='/(project/tests|project/additional_tests|project/menu_tests|project/e2e|project/store_test_support|main_tests)\.rs$' -instr-profile="$tmp/merged.profdata" "$binary" "$root/src/desktop/src" > "$output"
+"$cov" export -format=lcov -ignore-filename-regex='/(project/e2e|project/test_support)\.rs$' -instr-profile="$tmp/merged.profdata" "$binary" "$root/src/desktop/src" > "$output"
+node .github/scripts/coverage/rust-strip-tests.mjs "$output"
 if ! grep -q '^SF:' "$output"; then
   echo 'Rust coverage report is empty' >&2
   exit 1
 fi
-echo 'Exploratory report excludes separated test-only files; platform cfg paths and unlinked code may be absent. Not a production coverage gate.' >&2
+echo 'Exploratory report excludes test-only files and inline test modules; platform cfg paths and unlinked code may be absent. Not a production coverage gate.' >&2

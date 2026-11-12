@@ -23,6 +23,7 @@ Construir o ATUS Desktop v2, software científico gratuito e open source para es
 ## Princípios de implementação
 
 - Toda melhoria deve vir com um teste de regressão que cubra o comportamento alterado. Adicione ou atualize o teste na mesma mudança e execute as verificações relevantes.
+- Em Rust, os testes unitários ficam em `#[cfg(test)] mod tests` no fim do arquivo testado, sempre como último item e com o `}` final na coluna 0; fixtures compartilhadas ficam em `project/test_support.rs`. O relatório de cobertura remove esses blocos (`.github/scripts/coverage/rust-strip-tests.mjs`). Consulte `docs/decisions/0005-inline-rust-tests.md`.
 
 - Priorize correção numérica e paridade verificável antes de otimizações. Use fixtures, resultados de referência e tolerâncias absolutas/relativas justificadas; valide convergência e entradas inválidas.
 - Separe interface e cálculo por contrato explícito e versionado. A proposta inclui x/y, incertezas opcionais, expressão, parâmetros iniciais, método e opções na entrada; resultados, incertezas, diagnóstico, resíduos e matrizes disponíveis na saída. Unidades, ausências e erros ainda precisam ser definidos.

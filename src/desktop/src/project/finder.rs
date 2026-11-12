@@ -35,3 +35,28 @@ pub(super) fn last_project_path(urls: Vec<tauri::Url>) -> Option<PathBuf> {
 pub fn take_finder_project(request: State<'_, FinderRequest>) -> Option<PathBuf> {
     request.0.lock().unwrap().take()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finder_selects_last_atus_file_and_ignores_other_urls() {
+        let temp = tempfile::tempdir().unwrap();
+        let first = temp.path().join("first.atus");
+        let last = temp.path().join("Análise.ATUS");
+        let other = temp.path().join("ignore.txt");
+        let urls = vec![
+            tauri::Url::from_file_path(&first).unwrap(),
+            tauri::Url::parse("https://example.org/unrelated.atus").unwrap(),
+            tauri::Url::from_file_path(&last).unwrap(),
+            tauri::Url::from_file_path(&other).unwrap(),
+        ];
+        assert_eq!(last_project_path(urls), Some(last));
+        assert_eq!(
+            last_project_path(vec![tauri::Url::from_file_path(other).unwrap()]),
+            None
+        );
+        assert_eq!(last_project_path(Vec::new()), None);
+    }
+}

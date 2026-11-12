@@ -1,7 +1,7 @@
 {
-  "testOnly": ["main_tests.rs", "project/additional_tests.rs", "project/e2e.rs", "project/menu_tests.rs", "project/store_test_support.rs", "project/tests.rs"],
+  "testOnly": ["project/e2e.rs", "project/test_support.rs"],
   "noExecutableLines": {
-    "project/mod.rs": "b9c2243a902d5e50f97af428b0c2a99e3485aa7ee4675e79d6df764d6b3bb50c",
+    "project/mod.rs": "480715ce9f7d06094ca0d89455d498ebf083de9f790b95ee05520bacdcbff9e0",
     "project/model.rs": "708a34cea6b6d309bb31b91a5763a6fc3b976054ae1a1ba2751b8ac5b958803e"
   }
 }

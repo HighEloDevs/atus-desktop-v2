@@ -44,8 +44,16 @@ pub(super) fn validate_test_directory(path: &Path, temp: &Path) -> Result<PathBu
     Ok(path)
 }
 
+/// Returns the isolated project directory configured for desktop integration tests.
+/// Fails if the test directory is missing or invalid.
+#[cfg(feature = "desktop-e2e")]
+#[tauri::command]
+pub async fn project_test_directory(app: tauri::AppHandle) -> Result<PathBuf, String> {
+    super::commands::project_directory(&app)
+}
+
 #[cfg(all(test, feature = "desktop-e2e"))]
-mod e2e_directory_tests {
+mod tests {
     use super::validate_test_directory;
     use std::path::Path;
 
@@ -86,12 +94,4 @@ mod e2e_directory_tests {
         std::os::unix::fs::symlink(&outside_file, &link).unwrap();
         assert!(super::validate_finder_test_path(&link, isolated.path()).is_err());
     }
-}
-
-/// Returns the isolated project directory configured for desktop integration tests.
-/// Fails if the test directory is missing or invalid.
-#[cfg(feature = "desktop-e2e")]
-#[tauri::command]
-pub async fn project_test_directory(app: tauri::AppHandle) -> Result<PathBuf, String> {
-    super::commands::project_directory(&app)
 }
