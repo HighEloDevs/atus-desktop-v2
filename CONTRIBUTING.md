@@ -2,9 +2,21 @@
 
 Consulte o [README](README.md) para preparar o ambiente e o [AGENTS.md](AGENTS.md) para as convenções e o estado atual do projeto.
 
+## Fluxo de branches: tudo passa pela `staging`
+
+```text
+sua branch ──PR──▶ staging ──PR de promoção──▶ main ──▶ release
+```
+
+- **Nenhuma mudança vai direto para a `main`.** Crie sua branch a partir da `staging` e abra o PR com base `staging`. O PR de promoção `staging` → `main` é o único aceito pela `main`: o check `check-source-branch` falha para qualquer outra origem.
+- Os PRs para a `staging` rodam os testes de Linux e Windows (`test-linux`, `test-windows`). Os de macOS e a verificação de versão rodam no PR de promoção.
+- A `main` publica uma release a cada merge, então o aumento de versão (`node .github/scripts/version.mjs bump <versão>` sincroniza os arquivos; `check --base origin/main` confere) entra na `staging` por PR antes da promoção.
+- Correções urgentes seguem o mesmo caminho: PR para a `staging` e, em seguida, a promoção.
+- Ambas as branches são protegidas por rulesets versionadas em `.github/rulesets/`: PR obrigatório, checks obrigatórios, sem push direto, sem force push e sem exclusão. Alterar uma ruleset exige sincronizar o arquivo com o GitHub.
+
 ## Mudanças e testes
 
-- Crie worktrees em `.worktree/` na raiz do repositório.
+- Crie worktrees em `.worktree/` na raiz do repositório, a partir da `staging`.
 - Escreva código e identificadores em inglês e textos da interface em português.
 - Inclua ou atualize um teste de regressão que cubra cada melhoria e execute as verificações relevantes.
 - Registre decisões arquiteturais em `docs/decisions/` e atualize o contexto do projeto no `AGENTS.md` quando necessário.

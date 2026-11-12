@@ -17,6 +17,20 @@ concurrency:
 
 jobs:
 
+  check-source-branch:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Require staging as the only source of changes to main
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if [ "$HEAD_REF" != "staging" ] || [ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::Pull requests into main must come from the staging branch of this repository. Open the pull request against staging instead."
+            exit 1
+          fi
+
   check-version:
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-22.04

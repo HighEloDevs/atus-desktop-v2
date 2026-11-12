@@ -1,3 +1,5 @@
+<!-- Base do PR: `staging`. Só o PR de promoção `staging` → `main` usa `main` como base (veja o fluxo no CONTRIBUTING.md). -->
+
 ## Problema e resultado
 
 <!-- Descreva o problema e o comportamento final. Use um exemplo concreto quando ajudar. -->

@@ -212,3 +212,27 @@ test('macOS jobs use explicit runner labels, a job timeout and an architecture c
     assert.ok(job.includes(`test "$(uname -m)" = ${arch}`), name);
   }
 });
+
+test('pull requests into main are accepted only from the staging branch of this repository', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const job = workflow.split('  check-source-branch:\n')[1]?.split(/^  [\w-]+:/m)[0];
+  assert.ok(job);
+  assert.ok(job.includes("github.event_name == 'pull_request'"));
+  assert.ok(job.includes("github.base_ref == 'main'"));
+  assert.ok(job.includes('HEAD_REF: ${{ github.head_ref }}'));
+  assert.ok(job.includes('HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}'));
+  assert.ok(job.includes('"$HEAD_REF" != "staging"'));
+  assert.ok(job.includes('"$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY"'));
+  // Branch names are attacker-controlled: they must reach the shell through env, never inline.
+  assert.doesNotMatch(job.split('run:')[1], /\$\{\{/);
+});
+
+test('only pull requests into main run the macOS jobs, so staging gates on Linux and Windows', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  for (const platform of ['linux', 'windows']) {
+    const job = workflow.split(`  test-${platform}:\n`)[1].split(/^  [\w-]+:/m)[0];
+    assert.doesNotMatch(job, /github\.base_ref/, platform);
+  }
+  const macos = workflow.split('  test-macos-arm64:\n')[1].split(/^  [\w-]+:/m)[0];
+  assert.ok(macos.includes("github.base_ref == 'main'"));
+});
