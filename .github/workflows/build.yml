@@ -490,7 +490,8 @@ jobs:
 
   release-artifacts:
     needs: [release-version, build-linux, build-windows, build-macos-intel, build-macos-arm64]
-    if: ${{ !failure() && !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    # Require each result explicitly: failure() and cancelled() ignore a cancelled or skipped dependency.
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-version.result == 'success' && needs.build-linux.result == 'success' && needs.build-windows.result == 'success' && needs.build-macos-intel.result == 'success' && needs.build-macos-arm64.result == 'success' }}
     runs-on: ubuntu-22.04
     steps:
       - name: Confirm all release packages were generated
