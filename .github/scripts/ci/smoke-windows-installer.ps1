@@ -61,8 +61,13 @@ try {
         try {
             $remove = Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait -PassThru
             if ($remove.ExitCode -ne 0) { throw "Uninstaller exited with $($remove.ExitCode)." }
+            # NSIS runs the real uninstaller from a temporary copy and can return before it finishes, so wait for the removal.
+            for ($attempt = 0; $attempt -lt 60; $attempt++) {
+                $remaining = @(Get-ItemProperty -Path $uninstallRoot -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'ATUS Desktop' })
+                if (-not (Test-Path -LiteralPath (Join-Path $installDir 'atus-desktop.exe')) -and $remaining.Count -eq 0) { break }
+                Start-Sleep -Milliseconds 500
+            }
             if (Test-Path -LiteralPath (Join-Path $installDir 'atus-desktop.exe')) { throw 'Application remained installed after uninstall.' }
-            $remaining = @(Get-ItemProperty -Path $uninstallRoot -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'ATUS Desktop' })
             if ($remaining.Count -ne 0) { throw 'Application registry entry remained after uninstall.' }
             Write-Output 'Application uninstalled.'
         } catch { if ($null -eq $failure) { $failure = $_ } else { Write-Warning "Uninstall failed: $_" } }

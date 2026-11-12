@@ -156,3 +156,36 @@ test('macOS test and integration jobs run for pull requests only when they targe
     assert.ok(!workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0].includes('base_ref'), name);
   }
 });
+
+test('release workflow does not combine gh api --slurp with --jq', () => {
+  const workflow = readFileSync('.github/workflows/release.yml', 'utf8').replaceAll('\r\n', '\n');
+  const calls = workflow.split('\n').filter((line) => line.includes('--slurp'));
+  assert.ok(calls.length > 0);
+  for (const call of calls) assert.doesNotMatch(call, /--(jq|template)\b|\s-q\s/, 'gh api rejects --slurp with --jq');
+  assert.ok(calls.every((call) => call.includes('| jq ')), 'filter slurped pages with jq');
+});
+
+test('package jobs and the release gate survive the skipped pull-request version check', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  // A skipped ancestor (check-version on pushes, release-version on dispatch) skips dependents
+  // unless their condition calls a status function.
+  for (const name of ['build-linux', 'build-windows', 'build-macos-intel', 'build-macos-arm64', 'release-artifacts']) {
+    const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
+    assert.match(job, /^ {4}if: \$\{\{ !failure\(\) && !cancelled\(\) && /m, name);
+  }
+});
+
+test('pre-release versions are packaged as RPM Version plus Release', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const job = workflow.split('  build-linux:\n')[1].split(/^  [\w-]+:/m)[0];
+  assert.ok(job.includes('--bundles deb,appimage'));
+  assert.ok(job.includes('"release":"0.%s"'), 'RPM release carries the pre-release identifier');
+  assert.ok(job.includes('--bundles rpm --config'));
+  assert.doesNotMatch(job, /--bundles deb,rpm/);
+});
+
+test('Windows smoke waits for the asynchronous NSIS uninstaller', () => {
+  const script = readFileSync('.github/scripts/ci/smoke-windows-installer.ps1', 'utf8').replaceAll('\r\n', '\n');
+  const wait = script.indexOf('Start-Sleep -Milliseconds 500', script.indexOf('Start-Process -FilePath $uninstaller'));
+  assert.ok(wait > 0 && wait < script.indexOf("throw 'Application remained installed after uninstall.'"));
+});

@@ -130,7 +130,7 @@ jobs:
 
   build-macos-arm64:
     needs: [test-macos-arm64, integration-macos-arm64]
-    if: github.event_name != 'pull_request'
+    if: ${{ !failure() && !cancelled() && github.event_name != 'pull_request' }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -196,7 +196,7 @@ jobs:
 
   build-macos-intel:
     needs: [test-macos-intel, integration-macos-intel]
-    if: github.event_name != 'pull_request'
+    if: ${{ !failure() && !cancelled() && github.event_name != 'pull_request' }}
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
@@ -300,7 +300,7 @@ jobs:
 
   build-windows:
     needs: [test-windows, integration-windows]
-    if: github.event_name != 'pull_request'
+    if: ${{ !failure() && !cancelled() && github.event_name != 'pull_request' }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -426,7 +426,7 @@ jobs:
 
   build-linux:
     needs: [test-linux, integration-linux]
-    if: github.event_name != 'pull_request'
+    if: ${{ !failure() && !cancelled() && github.event_name != 'pull_request' }}
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -453,7 +453,16 @@ jobs:
         run: python3 -m unittest discover -s .github/scripts/tests -p 'test_verify_linux_bundles.py'
       - name: Build Linux bundles
         working-directory: src/frontend
-        run: npm run tauri -- build --bundles deb,rpm,appimage
+        run: |
+          npm run tauri -- build --bundles deb,appimage
+          # RPM versions cannot contain '-': ship pre-releases as Version 1.2.3 with Release 0.rc.1.
+          version="$(node -p "require('../desktop/tauri.conf.json').version")"
+          if [[ "$version" == *-* ]]; then
+            printf '{"version":"%s","bundle":{"linux":{"rpm":{"release":"0.%s"}}}}\n' "${version%%-*}" "${version#*-}" > "$RUNNER_TEMP/rpm.conf.json"
+            npm run tauri -- build --bundles rpm --config "$RUNNER_TEMP/rpm.conf.json"
+          else
+            npm run tauri -- build --bundles rpm
+          fi
       - name: Check Linux bundles
         run: |
           python3 .github/scripts/verify-linux-bundles.py src/desktop/target/release/bundle
@@ -481,7 +490,7 @@ jobs:
 
   release-artifacts:
     needs: [release-version, build-linux, build-windows, build-macos-intel, build-macos-arm64]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: ${{ !failure() && !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-22.04
     steps:
       - name: Confirm all release packages were generated
