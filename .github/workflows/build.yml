@@ -453,7 +453,16 @@ jobs:
         run: python3 -m unittest discover -s .github/scripts/tests -p 'test_verify_linux_bundles.py'
       - name: Build Linux bundles
         working-directory: src/frontend
-        run: npm run tauri -- build --bundles deb,rpm,appimage
+        run: |
+          npm run tauri -- build --bundles deb,appimage
+          # RPM versions cannot contain '-': ship pre-releases as Version 1.2.3 with Release 0.rc.1.
+          version="$(node -p "require('../desktop/tauri.conf.json').version")"
+          if [[ "$version" == *-* ]]; then
+            printf '{"version":"%s","bundle":{"linux":{"rpm":{"release":"0.%s"}}}}\n' "${version%%-*}" "${version#*-}" > "$RUNNER_TEMP/rpm.conf.json"
+            npm run tauri -- build --bundles rpm --config "$RUNNER_TEMP/rpm.conf.json"
+          else
+            npm run tauri -- build --bundles rpm
+          fi
       - name: Check Linux bundles
         run: |
           python3 .github/scripts/verify-linux-bundles.py src/desktop/target/release/bundle

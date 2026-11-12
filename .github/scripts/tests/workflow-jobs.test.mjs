@@ -174,3 +174,18 @@ test('package jobs and the release gate survive the skipped pull-request version
     assert.match(job, /^ {4}if: \$\{\{ !failure\(\) && !cancelled\(\) && /m, name);
   }
 });
+
+test('pre-release versions are packaged as RPM Version plus Release', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const job = workflow.split('  build-linux:\n')[1].split(/^  [\w-]+:/m)[0];
+  assert.ok(job.includes('--bundles deb,appimage'));
+  assert.ok(job.includes('"release":"0.%s"'), 'RPM release carries the pre-release identifier');
+  assert.ok(job.includes('--bundles rpm --config'));
+  assert.doesNotMatch(job, /--bundles deb,rpm/);
+});
+
+test('Windows smoke waits for the asynchronous NSIS uninstaller', () => {
+  const script = readFileSync('.github/scripts/ci/smoke-windows-installer.ps1', 'utf8').replaceAll('\r\n', '\n');
+  const wait = script.indexOf('Start-Sleep -Milliseconds 500', script.indexOf('Start-Process -FilePath $uninstaller'));
+  assert.ok(wait > 0 && wait < script.indexOf("throw 'Application remained installed after uninstall.'"));
+});
