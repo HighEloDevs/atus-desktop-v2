@@ -488,19 +488,11 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  release-artifacts:
-    needs: [release-version, build-linux, build-windows, build-macos-intel, build-macos-arm64]
-    # Require each result explicitly: failure() and cancelled() ignore a cancelled or skipped dependency.
-    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-version.result == 'success' && needs.build-linux.result == 'success' && needs.build-windows.result == 'success' && needs.build-macos-intel.result == 'success' && needs.build-macos-arm64.result == 'success' }}
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Confirm all release packages were generated
-        run: echo 'All platform build jobs succeeded.'
-
   publish-release:
-    needs: [release-version, release-artifacts, test-linux, test-macos-arm64, integration-linux, integration-windows, integration-macos-arm64, integration-macos-intel, build-linux, build-windows, build-macos-intel, build-macos-arm64]
-    # release-artifacts already requires every package job to have succeeded; the gate script below checks the rest.
-    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-artifacts.result == 'success' }}
+    needs: [build-linux, build-windows, build-macos-intel, build-macos-arm64]
+    # Each build job needs its test and integration jobs, which need release-version, so a successful build implies they passed.
+    # Require each result explicitly: failure() and cancelled() ignore a cancelled or skipped dependency.
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-linux.result == 'success' && needs.build-windows.result == 'success' && needs.build-macos-intel.result == 'success' && needs.build-macos-arm64.result == 'success' }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -537,7 +529,7 @@ jobs:
           node .github/scripts/publish-release.mjs
 
   summary:
-    needs: [check-version, release-version, integration-macos-intel, integration-macos-arm64, test-macos-arm64, build-macos-arm64, test-macos-intel, build-macos-intel, integration-windows, test-windows, build-windows, integration-linux, test-linux, build-linux, release-artifacts, publish-release]
+    needs: [publish-release]
     if: ${{ always() }}
     runs-on: ubuntu-22.04
     continue-on-error: true

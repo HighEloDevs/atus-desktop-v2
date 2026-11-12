@@ -1,23 +1,11 @@
-/** Validate the results of the jobs a release depends on before it may be published. */
+/**
+ * Validate the results of the jobs a release depends on before it may be published.
+ * Each build job needs its test and integration jobs (which need release-version), so the four
+ * package jobs are the only direct dependencies of the publishing job.
+ */
 export const REQUIRED_RELEASE_GATES = Object.freeze([
-  'release-version', 'release-artifacts', 'coverage-rust', 'coverage-frontend',
-  'coverage-cpp', 'integration-linux', 'integration-windows', 'integration-macos-arm64',
-  'integration-macos-intel', 'install-linux-deb', 'install-linux-rpm',
-  'install-linux-appimage', 'install-windows', 'install-macos-arm64',
-  'install-macos-intel',
+  'build-linux', 'build-windows', 'build-macos-intel', 'build-macos-arm64',
 ]);
-
-const JOB_EVIDENCE = Object.freeze({
-  'coverage-frontend': 'test-linux',
-  'coverage-cpp': 'test-linux',
-  'coverage-rust': 'test-macos-arm64',
-  'install-windows': 'build-windows',
-  'install-macos-arm64': 'build-macos-arm64',
-  'install-macos-intel': 'build-macos-intel',
-  'install-linux-deb': 'build-linux',
-  'install-linux-rpm': 'build-linux',
-  'install-linux-appimage': 'build-linux',
-});
 
 /**
  * Require each named release gate to finish successfully for the same commit.
@@ -29,7 +17,7 @@ const JOB_EVIDENCE = Object.freeze({
 export function requireReleaseGates(jobs, sha) {
   if (!Array.isArray(jobs) || !/^[a-f0-9]{40}$/.test(sha)) throw new Error('Invalid release gate input');
   for (const name of REQUIRED_RELEASE_GATES) {
-    const matching = jobs.filter((job) => job?.name === (JOB_EVIDENCE[name] ?? name));
+    const matching = jobs.filter((job) => job?.name === name);
     if (matching.length !== 1 || matching[0].conclusion !== 'success' || matching[0].sha !== sha) {
       throw new Error(`Release gate not satisfied: ${name}`);
     }
