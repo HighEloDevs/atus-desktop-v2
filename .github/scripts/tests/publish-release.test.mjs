@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { missingAssets, prerelease, selectArtifacts } from '../publish-release.mjs';
+import { missingAssets, pickRelease, prerelease, selectArtifacts } from '../publish-release.mjs';
 
 test('recognizes stable and RC versions and rejects ambiguous versions', () => {
   assert.equal(prerelease('0.2.0'), false);
@@ -26,4 +26,17 @@ test('resumes matching draft assets without overwriting conflicting uploads', ()
   assert.deepEqual(missingAssets(['a', 'b'], [asset], { a: digest, b: digest }), ['b']);
   assert.throws(() => missingAssets(['a'], [{ ...asset, digest: `sha256:${'b'.repeat(64)}` }], { a: digest }));
   assert.throws(() => missingAssets(['a'], [asset, asset], { a: digest }));
+});
+
+test('finds a draft release by tag in the release list', () => {
+  const draft = { id: 1, tag_name: 'v0.2.0-rc.5', draft: true };
+  assert.equal(pickRelease([{ id: 2, tag_name: 'v0.2.0-rc.4' }, draft], 'v0.2.0-rc.5'), draft);
+  assert.equal(pickRelease([{ id: 2, tag_name: 'v0.2.0-rc.4' }], 'v0.2.0-rc.5'), null);
+  assert.equal(pickRelease([], 'v0.2.0-rc.5'), null);
+  assert.throws(() => pickRelease([draft, { ...draft, id: 3 }], 'v0.2.0-rc.5'), /Several releases/);
+});
+
+test('publish never looks releases up through the tag endpoint, which hides drafts', async () => {
+  const { readFileSync } = await import('node:fs');
+  assert.doesNotMatch(readFileSync('.github/scripts/publish-release.mjs', 'utf8'), /releases\/tags/);
 });
