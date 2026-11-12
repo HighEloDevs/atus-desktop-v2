@@ -1,4 +1,4 @@
-# 0006 — Leitura do clipboard pela API padrão do navegador
+# 0006 — Leitura do clipboard pelo plugin nativo, com a API do navegador como alternativa
 
 ## Contexto
 
@@ -11,10 +11,12 @@ O atus-web importa dados colados com `Cmd/Ctrl+B` (novo conjunto) e `Cmd/Ctrl+1�
 
 ## Decisão
 
-Usar `navigator.clipboard.readText()`, por ser a opção mais global e agnóstica a sistema operacional. Não foi feito um experimento prévio nos webviews. O texto passa pelo mesmo caminho da importação de arquivo (mesmo parser, mesmo limite de 1 MB e mesmo diálogo de separador em caso de falha).
+Ler pelo `tauri-plugin-clipboard-manager` (permissão `clipboard-manager:allow-read-text`) quando o app roda no Tauri, e por `navigator.clipboard.readText()` no navegador (modo de desenvolvimento e testes). `readClipboardText` é o ponto único dessa escolha. O texto passa pelo mesmo caminho da importação de arquivo (mesmo parser, mesmo limite de 1 MB e mesmo diálogo de separador em caso de falha).
+
+A primeira versão usava só a API do navegador, por ser a mais agnóstica a sistema. Em execução real no macOS, o WKWebView mostrou um balão com o botão "Colar" a cada atalho, o que quebra o fluxo direto. O plugin lê pelo núcleo nativo e não exibe esse aviso.
 
 ## Consequências
 
-- Em alguns webviews (por exemplo WKWebView) a leitura pode pedir permissão ou mostrar um aviso de "Colar". Isso ainda não foi observado em execução real e deve ser verificado manualmente em cada sistema.
-- Se o comportamento atrapalhar o fluxo, reavaliar o plugin `clipboard-manager` em outra mudança, mantendo `readClipboardText` como ponto único de troca.
+- Uma dependência a mais (crate e pacote npm) e uma permissão em `capabilities/default.json`; somente a leitura de texto é liberada.
 - Falhas de leitura aparecem como erro compreensível, sem encerrar a interface.
+- Windows e Linux ainda não foram verificados manualmente.

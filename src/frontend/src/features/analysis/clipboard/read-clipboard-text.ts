@@ -3,6 +3,9 @@
  * Reads text data from the system clipboard for the analysis import flow.
  */
 
+import { isTauri } from "@tauri-apps/api/core";
+import { readText } from "@tauri-apps/plugin-clipboard-manager";
+
 /** Maximum size, in bytes, accepted for imported text (files and clipboard). */
 export const MAX_IMPORT_BYTES = 1024 * 1024;
 
@@ -27,7 +30,11 @@ export class ClipboardReadError extends Error {
 }
 
 /**
- * Reads the clipboard text through the standard browser Clipboard API.
+ * Reads the clipboard text.
+ *
+ * In the desktop app it goes through the native Tauri clipboard plugin, which reads directly
+ * without the "Paste" prompt that WKWebView shows for `navigator.clipboard.readText()`. In a
+ * plain browser it uses the standard Clipboard API.
  *
  * @returns The clipboard text, untrimmed.
  * @throws {ClipboardReadError} When the API is unavailable or denied (`denied`), the text is
@@ -38,7 +45,7 @@ export class ClipboardReadError extends Error {
 export async function readClipboardText(): Promise<string> {
   let text: string;
   try {
-    text = await navigator.clipboard.readText();
+    text = isTauri() ? await readText() : await navigator.clipboard.readText();
   } catch {
     throw new ClipboardReadError("denied");
   }
