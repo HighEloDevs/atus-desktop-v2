@@ -164,3 +164,13 @@ test('release workflow does not combine gh api --slurp with --jq', () => {
   for (const call of calls) assert.doesNotMatch(call, /--(jq|template)\b|\s-q\s/, 'gh api rejects --slurp with --jq');
   assert.ok(calls.every((call) => call.includes('| jq ')), 'filter slurped pages with jq');
 });
+
+test('package jobs and the release gate survive the skipped pull-request version check', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  // A skipped ancestor (check-version on pushes, release-version on dispatch) skips dependents
+  // unless their condition calls a status function.
+  for (const name of ['build-linux', 'build-windows', 'build-macos-intel', 'build-macos-arm64', 'release-artifacts']) {
+    const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
+    assert.match(job, /^ {4}if: \$\{\{ !failure\(\) && !cancelled\(\) && /m, name);
+  }
+});
