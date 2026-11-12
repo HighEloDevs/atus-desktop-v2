@@ -1,5 +1,5 @@
 /** Check the desktop workflow exposes each supported platform separately. */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -157,14 +157,6 @@ test('macOS test and integration jobs run for pull requests only when they targe
   }
 });
 
-test('release workflow does not combine gh api --slurp with --jq', () => {
-  const workflow = readFileSync('.github/workflows/release.yml', 'utf8').replaceAll('\r\n', '\n');
-  const calls = workflow.split('\n').filter((line) => line.includes('--slurp'));
-  assert.ok(calls.length > 0);
-  for (const call of calls) assert.doesNotMatch(call, /--(jq|template)\b|\s-q\s/, 'gh api rejects --slurp with --jq');
-  assert.ok(calls.every((call) => call.includes('| jq ')), 'filter slurped pages with jq');
-});
-
 test('package jobs and the release gate survive the skipped pull-request version check', () => {
   const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
   // A skipped ancestor (check-version on pushes, release-version on dispatch) skips dependents
@@ -199,4 +191,18 @@ test('Windows smoke waits for the asynchronous NSIS uninstaller', () => {
   const script = readFileSync('.github/scripts/ci/smoke-windows-installer.ps1', 'utf8').replaceAll('\r\n', '\n');
   const wait = script.indexOf('Start-Sleep -Milliseconds 500', script.indexOf('Start-Process -FilePath $uninstaller'));
   assert.ok(wait > 0 && wait < script.indexOf("throw 'Application remained installed after uninstall.'"));
+});
+
+test('releases are published by a job of the build workflow, not by a separate workflow', () => {
+  assert.equal(existsSync('.github/workflows/release.yml'), false);
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const job = workflow.split('  publish-release:\n')[1].split(/^  [\w-]+:/m)[0];
+  assert.match(job, /^ {4}if: \$\{\{ !cancelled\(\) && github\.event_name == 'push' && github\.ref == 'refs\/heads\/main' && needs\.release-artifacts\.result == 'success' \}\}$/m);
+  assert.match(job, /^ {4}permissions:\n {6}contents: write$/m);
+  for (const name of ['release-version', 'release-artifacts', 'test-linux', 'test-macos-arm64', 'integration-linux', 'integration-windows', 'integration-macos-arm64', 'integration-macos-intel', 'build-linux', 'build-windows', 'build-macos-intel', 'build-macos-arm64']) {
+    assert.match(job, new RegExp(`needs: \\[[^\\]]*\\b${name}\\b`), name);
+  }
+  assert.ok(job.includes('release-gates.mjs') && job.includes('publish-release.mjs'));
+  // Write access to repository contents must stay confined to this job.
+  assert.equal([...workflow.matchAll(/contents: write/g)].length, 1);
 });

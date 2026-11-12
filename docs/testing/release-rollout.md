@@ -1,6 +1,6 @@
 # Publicação automática: desenho de ativação
 
-A publicação automática permanece desativada. O CI atual ainda não oferece cobertura Rust de produção com denominador comprovado, nem testes completos dos pacotes instalados e dos fluxos desktop em todas as plataformas. As versões RC também precisam de um mapeamento validado para cada instalador. Publicar enquanto essas condições não existem daria à release garantias que não foram verificadas.
+A publicação automática está ativa para cada merge na `main` (pré-release para RC, pacotes não assinados), embora as validações abaixo ainda estejam pendentes. O CI atual ainda não oferece cobertura Rust de produção com denominador comprovado, nem testes completos dos pacotes instalados e dos fluxos desktop em todas as plataformas. As versões RC também precisam de um mapeamento validado para cada instalador. Publicar enquanto essas condições não existem daria à release garantias que não foram verificadas.
 
 ## Fluxo previsto
 
@@ -24,9 +24,9 @@ Os nomes finais de jobs e arquivos de release dependem dos resultados dos testes
 
 ## Workflow de release
 
-`Release desktop` recebe o resultado de `Build desktop` na `main` ou um ID informado manualmente. Ele consulta a execução com permissões limitadas e exige todos os gates nomeados em `.github/scripts/release-gates.mjs` antes de baixar artefatos da mesma execução. A cobertura de frontend e C++ usa o resultado de `test-linux`, e a instalação Linux usa `build-linux`; `release-version` e `release-artifacts` validam versão e empacotamento após o push. A cobertura Rust e o smoke desktop no macOS Apple Silicon fazem parte do job `test-macos-arm64`; `integration-macos-intel` passou e `integration-linux` está em validação. Os testes de instalador Windows e pacote macOS Apple Silicon passaram em runners. O job `integration-windows` está em validação; o gate de ordenação nativa de RC ainda não existe: até serem implementados o fluxo falha antes de criar tags ou releases.
+A publicação é o último job do `Build desktop` (`publish-release`), executado só em push na `main`, quando `release-artifacts` passou, e com `contents: write` apenas nele. O job verifica todos os gates nomeados em `.github/scripts/release-gates.mjs` contra o contexto `needs` da própria execução, o que também vale para re-execuções parciais, e baixa os artefatos da mesma execução. A cobertura de frontend e C++ usa o resultado de `test-linux`, a cobertura Rust usa `test-macos-arm64`, e a instalação de cada plataforma usa o `build-*` correspondente. Decisão: o gate `native-version-order` foi removido da lista, então cada merge na `main` publica uma release, marcada como pré-release para versões RC, com pacotes não assinados e com a ordem de versão nativa de RC ainda não validada (ver abaixo).
 
-Após os gates, o workflow confere o inventário, a versão, o SHA e os hashes, cria ou retoma um rascunho e só publica após validar os arquivos enviados. As validações de RC, de publicação concorrente e de recuperação em um repositório de teste continuam necessárias antes da ativação efetiva.
+Após os gates, o job confere o inventário, a versão, o SHA e os hashes, cria ou retoma um rascunho e só publica após validar os arquivos enviados. As validações de RC, de publicação concorrente e de recuperação em um repositório de teste continuam necessárias antes da ativação efetiva.
 
 As publicações usam `concurrency.queue: max` e não cancelam as anteriores; o GitHub limita essa fila a 100 execuções pendentes, e novas execuções acima desse limite podem ser canceladas. A operação deve monitorar falhas e reexecutar manualmente execuções recusadas; esta fila não garante entrega ilimitada nem ordem de merge. A retomada nunca sobrescreve assets: arquivos existentes devem ter hash idêntico, caso contrário a execução falha.
 

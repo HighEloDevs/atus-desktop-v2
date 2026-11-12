@@ -1,10 +1,10 @@
-/** Validate trusted CI job results before a release may be published. */
+/** Validate the results of the jobs a release depends on before it may be published. */
 export const REQUIRED_RELEASE_GATES = Object.freeze([
   'release-version', 'release-artifacts', 'coverage-rust', 'coverage-frontend',
   'coverage-cpp', 'integration-linux', 'integration-windows', 'integration-macos-arm64',
   'integration-macos-intel', 'install-linux-deb', 'install-linux-rpm',
   'install-linux-appimage', 'install-windows', 'install-macos-arm64',
-  'install-macos-intel', 'native-version-order',
+  'install-macos-intel',
 ]);
 
 const JOB_EVIDENCE = Object.freeze({
@@ -13,6 +13,7 @@ const JOB_EVIDENCE = Object.freeze({
   'coverage-rust': 'test-macos-arm64',
   'install-windows': 'build-windows',
   'install-macos-arm64': 'build-macos-arm64',
+  'install-macos-intel': 'build-macos-intel',
   'install-linux-deb': 'build-linux',
   'install-linux-rpm': 'build-linux',
   'install-linux-appimage': 'build-linux',
@@ -32,5 +33,18 @@ export function requireReleaseGates(jobs, sha) {
     if (matching.length !== 1 || matching[0].conclusion !== 'success' || matching[0].sha !== sha) {
       throw new Error(`Release gate not satisfied: ${name}`);
     }
+  }
+}
+
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+  try {
+    // NEEDS_JSON is `toJSON(needs)` from the publishing job: { "<job>": { "result": "success" }, ... }.
+    const needs = JSON.parse(process.env.NEEDS_JSON ?? '');
+    const sha = process.env.RELEASE_SHA ?? '';
+    requireReleaseGates(Object.entries(needs).map(([name, job]) => ({ name, conclusion: job.result, sha })), sha);
+    console.log('Release gates verified');
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
   }
 }
