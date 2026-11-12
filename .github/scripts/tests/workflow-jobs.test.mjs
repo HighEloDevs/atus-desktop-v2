@@ -44,8 +44,9 @@ test('release artifact gate waits for every platform package', () => {
 
 test('desktop smoke jobs cover both macOS architectures', () => {
   const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
-  assert.match(workflow, /^  coverage-rust:\n    runs-on: macos-latest$/m);
-  assert.match(workflow, /^  desktop-macos-intel:\n    runs-on: macos-15-intel$/m);
+  assert.doesNotMatch(workflow, /^  coverage-rust:$/m);
+  assert.match(workflow, /^  test-macos-arm64:\n(?:    .*\n)*?    runs-on: macos-latest$/m);
+  assert.match(workflow, /^  integration-macos-intel:\n(?:    .*\n)*?    runs-on: macos-15-intel$/m);
   assert.equal((workflow.match(/\.github\/scripts\/coverage\/rust-desktop-macos\.sh/g) ?? []).length, 2);
 });
 
@@ -62,13 +63,24 @@ test('Linux desktop smoke locates the repository after relocation to .github', (
   const runner = readFileSync('.github/scripts/desktop-e2e/run-linux.sh', 'utf8');
   assert.match(runner, /\$\(dirname "\$\{BASH_SOURCE\[0\]\}"\)\/\.\.\/\.\.\/\.\./);
   const workflow = readFileSync('.github/workflows/build.yml', 'utf8');
-  assert.match(workflow, /^  desktop-linux:$/m);
+  assert.match(workflow, /^  integration-linux:$/m);
   assert.ok(workflow.includes('xvfb-run -a .github/scripts/desktop-e2e/run-linux.sh'));
 });
 
 test('Windows desktop smoke runs only after building the test application', () => {
   const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
-  const job = workflow.split('  desktop-windows:\n')[1]?.split(/^  [\w-]+:/m)[0];
+  const job = workflow.split('  integration-windows:\n')[1]?.split(/^  [\w-]+:/m)[0];
   assert.ok(job);
   assert.ok(job.indexOf('cargo build --manifest-path') < job.indexOf('desktop-e2e/run-windows.ps1'));
+});
+
+test('test and integration jobs wait for the version checks and skip only when they are skipped', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const names = [...workflow.matchAll(/^  ((?:test|integration)-[\w-]+):$/gm)].map((m) => m[1]);
+  assert.deepEqual(names.sort(), ['integration-linux', 'integration-macos-intel', 'integration-windows', 'test-linux', 'test-macos-arm64', 'test-macos-intel', 'test-windows']);
+  for (const name of names) {
+    const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
+    assert.ok(job.includes('needs: [check-version, release-version]'), name);
+    assert.ok(job.includes('if: ${{ !failure() && !cancelled() }}'), name);
+  }
 });

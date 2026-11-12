@@ -43,30 +43,9 @@ jobs:
       - name: Validate version against previous main commit
         run: node .github/scripts/version.mjs check --base HEAD^
 
-  coverage-rust:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: src/frontend/package-lock.json
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
-      - name: Install frontend dependencies
-        working-directory: src/frontend
-        run: npm ci
-      - name: Verify Rust coverage collector
-        run: node --test .github/scripts/coverage/rust-inventory.test.mjs .github/scripts/coverage/rust-desktop-macos.test.mjs
-      - name: Collect Rust coverage from unit tests and desktop smoke
-        run: |
-          llvm_bin="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin"
-          LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" .github/scripts/coverage/rust-desktop-macos.sh "$RUNNER_TEMP/rust.lcov"
-          node .github/scripts/coverage/check.mjs "$RUNNER_TEMP/rust.lcov"
-
-  desktop-macos-intel:
+  integration-macos-intel:
+    needs: [check-version, release-version]
+    if: ${{ !failure() && !cancelled() }}
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
@@ -87,6 +66,8 @@ jobs:
           LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" .github/scripts/coverage/rust-desktop-macos.sh "$RUNNER_TEMP/rust-intel.lcov"
 
   test-macos-arm64:
+    needs: [check-version, release-version]
+    if: ${{ !failure() && !cancelled() }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -96,22 +77,23 @@ jobs:
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
       - name: Test CI helper scripts
         run: node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/tests/windows-node-path.test.mjs .github/scripts/coverage/check.test.mjs
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
-      - name: Lint frontend
-        working-directory: src/frontend
-        run: npm run lint
       - name: Test frontend
         working-directory: src/frontend
         run: npm test
-      - name: Check frontend formatting
-        working-directory: src/frontend
-        run: npm run format:check
-      - name: Test Rust and C++ bridge
-        run: cargo test --manifest-path src/desktop/Cargo.toml
+      - name: Verify Rust coverage collector
+        run: node --test .github/scripts/coverage/rust-inventory.test.mjs .github/scripts/coverage/rust-desktop-macos.test.mjs
+      - name: Test Rust and C++ bridge with coverage, including desktop smoke
+        run: |
+          llvm_bin="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin"
+          LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" .github/scripts/coverage/rust-desktop-macos.sh "$RUNNER_TEMP/rust.lcov"
+          node .github/scripts/coverage/check.mjs "$RUNNER_TEMP/rust.lcov"
 
   build-macos-arm64:
     needs: test-macos-arm64
@@ -150,6 +132,8 @@ jobs:
 
 
   test-macos-intel:
+    needs: [check-version, release-version]
+    if: ${{ !failure() && !cancelled() }}
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
@@ -164,15 +148,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
-      - name: Lint frontend
-        working-directory: src/frontend
-        run: npm run lint
       - name: Test frontend
         working-directory: src/frontend
         run: npm test
-      - name: Check frontend formatting
-        working-directory: src/frontend
-        run: npm run format:check
       - name: Test Rust and C++ bridge
         run: cargo test --manifest-path src/desktop/Cargo.toml
 
@@ -212,7 +190,9 @@ jobs:
           retention-days: 3
 
 
-  desktop-windows:
+  integration-windows:
+    needs: [check-version, release-version]
+    if: ${{ !failure() && !cancelled() }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -234,6 +214,8 @@ jobs:
         run: .github/scripts/desktop-e2e/run-windows.ps1
 
   test-windows:
+    needs: [check-version, release-version]
+    if: ${{ !failure() && !cancelled() }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -248,15 +230,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
-      - name: Lint frontend
-        working-directory: src/frontend
-        run: npm run lint
       - name: Test frontend
         working-directory: src/frontend
         run: npm test
-      - name: Check frontend formatting
-        working-directory: src/frontend
-        run: npm run format:check
       - name: Test Rust and C++ bridge
         run: cargo test --manifest-path src/desktop/Cargo.toml
 
@@ -300,7 +276,9 @@ jobs:
           retention-days: 3
 
 
-  desktop-linux:
+  integration-linux:
+    needs: [check-version, release-version]
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -323,6 +301,8 @@ jobs:
         run: xvfb-run -a .github/scripts/desktop-e2e/run-linux.sh
 
   test-linux:
+    needs: [check-version, release-version]
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4

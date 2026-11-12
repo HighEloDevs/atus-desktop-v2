@@ -1,8 +1,8 @@
 /** Validate trusted CI job results before a release may be published. */
 export const REQUIRED_RELEASE_GATES = Object.freeze([
   'release-version', 'release-artifacts', 'coverage-rust', 'coverage-frontend',
-  'coverage-cpp', 'desktop-linux', 'desktop-windows', 'desktop-macos-arm64',
-  'desktop-macos-intel', 'install-linux-deb', 'install-linux-rpm',
+  'coverage-cpp', 'integration-linux', 'integration-windows', 'integration-macos-arm64',
+  'integration-macos-intel', 'install-linux-deb', 'install-linux-rpm',
   'install-linux-appimage', 'install-windows', 'install-macos-arm64',
   'install-macos-intel', 'native-version-order',
 ]);
@@ -10,7 +10,8 @@ export const REQUIRED_RELEASE_GATES = Object.freeze([
 const JOB_EVIDENCE = Object.freeze({
   'coverage-frontend': 'test-linux',
   'coverage-cpp': 'test-linux',
-  'desktop-macos-arm64': 'coverage-rust',
+  'coverage-rust': 'test-macos-arm64',
+  'integration-macos-arm64': 'test-macos-arm64',
   'install-windows': 'build-windows',
   'install-macos-arm64': 'build-macos-arm64',
   'install-linux-deb': 'build-linux',

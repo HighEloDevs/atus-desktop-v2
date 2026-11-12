@@ -49,10 +49,7 @@
             "context": "test-macos-intel"
           },
           {
-            "context": "coverage-rust"
-          },
-          {
-            "context": "desktop-macos-intel"
+            "context": "integration-macos-intel"
           }
         ]
       }
