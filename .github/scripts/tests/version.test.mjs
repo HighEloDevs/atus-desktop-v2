@@ -59,3 +59,15 @@ test('uses semver ordering for release candidates', (t) => {
   assert.equal(run('bump', '0.2.0').status, 0);
   assert.equal(run('check', '--base', 'base').status, 0);
 });
+
+test('accepts any valid version when the base has no application manifest', (t) => {
+  const { dir, git, run } = fixture(t);
+  const out = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
+  const tree = execFileSync('git', ['mktree'], { cwd: dir, input: '', encoding: 'utf8' }).trim();
+  const empty = out('commit-tree', tree, '-m', 'initial');
+  git('branch', 'initial', empty);
+  assert.equal(run('check', '--base', 'initial').status, 0);
+  writeFileSync(join(dir, 'src/frontend/package.json'), '{"version":"0.2.0"}\n');
+  assert.notEqual(run('check', '--base', 'initial').status, 0);
+  assert.notEqual(run('check', '--base', 'missing-ref').status, 0);
+});

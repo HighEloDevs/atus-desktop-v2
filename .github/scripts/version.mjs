@@ -68,8 +68,13 @@ function check(base) {
   const { versions } = load(); const version = versions[0];
   if (!versions.every((current) => current === version)) throw new Error('Application versions are inconsistent');
   execFileSync('git', ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`], { stdio: 'pipe' });
-  const baseConfig = JSON.parse(execFileSync('git', ['show', `${base}:${paths.config}`], { encoding: 'utf8' }));
-  if (compare(version, baseConfig.version) <= 0) throw new Error(`Version ${version} must be greater than base ${baseConfig.version}`);
+  // A base that predates the application manifest has no version to exceed (first release).
+  const baseHasConfig = spawnSync('git', ['cat-file', '-e', `${base}:${paths.config}`]);
+  if (baseHasConfig.error) throw new Error('Could not inspect base');
+  if (baseHasConfig.status === 0) {
+    const baseConfig = JSON.parse(execFileSync('git', ['show', `${base}:${paths.config}`], { encoding: 'utf8' }));
+    if (compare(version, baseConfig.version) <= 0) throw new Error(`Version ${version} must be greater than base ${baseConfig.version}`);
+  }
   const tag = spawnSync('git', ['show-ref', '--verify', '--quiet', `refs/tags/v${version}`]);
   if (tag.error || (tag.status !== 0 && tag.status !== 1)) throw new Error('Could not inspect tags');
   if (tag.status === 0) throw new Error(`Tag v${version} already exists`);
