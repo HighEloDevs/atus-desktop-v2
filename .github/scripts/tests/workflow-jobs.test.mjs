@@ -169,9 +169,20 @@ test('package jobs and the release gate survive the skipped pull-request version
   const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
   // A skipped ancestor (check-version on pushes, release-version on dispatch) skips dependents
   // unless their condition calls a status function.
-  for (const name of ['build-linux', 'build-windows', 'build-macos-intel', 'build-macos-arm64', 'release-artifacts']) {
+  for (const name of ['build-linux', 'build-windows', 'build-macos-intel', 'build-macos-arm64']) {
     const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
     assert.match(job, /^ {4}if: \$\{\{ !failure\(\) && !cancelled\(\) && /m, name);
+  }
+});
+
+test('release artifact gate requires every package job to have succeeded', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const job = workflow.split('  release-artifacts:\n')[1].split(/^  [\w-]+:/m)[0];
+  // failure() and cancelled() ignore a cancelled or skipped dependency, so check each result.
+  assert.match(job, /^ {4}if: \$\{\{ !cancelled\(\) && /m);
+  assert.doesNotMatch(job, /!failure\(\)/);
+  for (const name of ['release-version', 'build-linux', 'build-windows', 'build-macos-intel', 'build-macos-arm64']) {
+    assert.ok(job.includes(`needs.${name}.result == 'success'`), name);
   }
 });
 
