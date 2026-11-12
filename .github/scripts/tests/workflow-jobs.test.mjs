@@ -156,3 +156,11 @@ test('macOS test and integration jobs run for pull requests only when they targe
     assert.ok(!workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0].includes('base_ref'), name);
   }
 });
+
+test('release workflow does not combine gh api --slurp with --jq', () => {
+  const workflow = readFileSync('.github/workflows/release.yml', 'utf8').replaceAll('\r\n', '\n');
+  const calls = workflow.split('\n').filter((line) => line.includes('--slurp'));
+  assert.ok(calls.length > 0);
+  for (const call of calls) assert.doesNotMatch(call, /--(jq|template)\b|\s-q\s/, 'gh api rejects --slurp with --jq');
+  assert.ok(calls.every((call) => call.includes('| jq ')), 'filter slurped pages with jq');
+});

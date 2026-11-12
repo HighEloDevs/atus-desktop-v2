@@ -46,7 +46,7 @@ jobs:
         run: |
           [[ "$RUN_ID" =~ ^[0-9]+$ ]]
           gh api "repos/$REPOSITORY/actions/runs/$RUN_ID" > "$RUNNER_TEMP/run.json"
-          gh api --paginate --slurp "repos/$REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" --jq '[.[].jobs[]]' > "$RUNNER_TEMP/jobs.json"
+          gh api --paginate --slurp "repos/$REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" | jq '[.[].jobs[]]' > "$RUNNER_TEMP/jobs.json"
           node .github/scripts/check-release-run.mjs "$RUNNER_TEMP/run.json" "$RUNNER_TEMP/jobs.json"
           echo "sha=$(jq -r .head_sha "$RUNNER_TEMP/run.json")" >> "$GITHUB_OUTPUT"
       - name: Check out verified commit
