@@ -48,7 +48,8 @@ test('desktop smoke jobs cover both macOS architectures', () => {
   assert.doesNotMatch(workflow, /^  coverage-rust:$/m);
   assert.match(workflow, /^  test-macos-arm64:\n(?:    .*\n)*?    runs-on: macos-latest$/m);
   assert.match(workflow, /^  integration-macos-intel:\n(?:    .*\n)*?    runs-on: macos-15-intel$/m);
-  assert.equal((workflow.match(/\.github\/scripts\/coverage\/rust-desktop-macos\.sh/g) ?? []).length, 2);
+  // arm64 gate, arm64 unit-only measurement and the Intel smoke.
+  assert.equal((workflow.match(/\.github\/scripts\/coverage\/rust-desktop-macos\.sh/g) ?? []).length, 3);
 });
 
 test('package builds check platform applications before uploading', () => {

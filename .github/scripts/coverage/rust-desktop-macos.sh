@@ -4,11 +4,14 @@ set -euo pipefail
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 # With --no-coverage the script only builds and runs the desktop smoke, without instrumentation.
+# With --unit-only <output.lcov> it measures only the unit-test binary, without the app or smoke.
 coverage=1
+unit_only=0
 if [[ "${1:-}" == --no-coverage ]]; then
   coverage=0; output=''
 else
-  output="${1:?Usage: rust-desktop-macos.sh <output.lcov> | --no-coverage}"
+  if [[ "${1:-}" == --unit-only ]]; then unit_only=1; shift; fi
+  output="${1:?Usage: rust-desktop-macos.sh [--unit-only] <output.lcov> | --no-coverage}"
   case "$output" in /*) ;; *) output="$root/$output" ;; esac
 fi
 [[ "$(uname -s)" == Darwin ]] || { echo 'This exploratory runner requires macOS.' >&2; exit 1; }
@@ -45,7 +48,9 @@ mkdir -p "$(dirname "$output")"
 export RUSTFLAGS="${RUSTFLAGS:-} -C instrument-coverage"
 export LLVM_PROFILE_FILE="$tmp/profiles/%p-%m.profraw"
 # Apply link-dead-code only to the application/test targets, not dependencies.
+if (( ! unit_only )); then
 cargo rustc --manifest-path src/desktop/Cargo.toml --features desktop-e2e --bin atus-desktop -- -C link-dead-code
+fi
 cargo rustc --manifest-path src/desktop/Cargo.toml --tests --message-format=json -- -C link-dead-code > "$tmp/cargo.jsonl"
 node - "$tmp/cargo.jsonl" > "$tmp/binary" <<'NODE'
 const fs = require('node:fs');
@@ -58,6 +63,14 @@ if (bins.size !== 1) throw new Error(`Expected one test binary; got ${bins.size}
 process.stdout.write([...bins][0]);
 NODE
 "$(cat "$tmp/binary")"
+if (( unit_only )); then
+  "$profdata" merge -sparse "$tmp"/profiles/*.profraw -o "$tmp/merged.profdata"
+  "$cov" export -format=lcov -ignore-filename-regex='/(project/tests|project/additional_tests|project/menu_tests|project/e2e|project/store_test_support|main_tests)\.rs$' -instr-profile="$tmp/merged.profdata" "$(cat "$tmp/binary")" "$root/src/desktop/src" > "$output"
+  grep -q '^SF:' "$output" || { echo 'Rust coverage report is empty.' >&2; exit 1; }
+  "$cov" report -ignore-filename-regex='/(project/tests|project/additional_tests|project/menu_tests|project/e2e|project/store_test_support|main_tests)\.rs$' -instr-profile="$tmp/merged.profdata" "$(cat "$tmp/binary")" "$root/src/desktop/src"
+  echo 'Unit-test-only report: the desktop smoke is not included.' >&2
+  exit 0
+fi
 else
 cargo build --manifest-path src/desktop/Cargo.toml --features desktop-e2e --bin atus-desktop
 fi

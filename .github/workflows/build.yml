@@ -96,6 +96,12 @@ jobs:
           llvm_bin="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin"
           LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" .github/scripts/coverage/rust-desktop-macos.sh "$RUNNER_TEMP/rust.lcov"
           node .github/scripts/coverage/check.mjs "$RUNNER_TEMP/rust.lcov"
+      - name: Measure Rust coverage from unit tests only (informational)
+        continue-on-error: true
+        run: |
+          llvm_bin="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin"
+          LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" .github/scripts/coverage/rust-desktop-macos.sh --unit-only "$RUNNER_TEMP/rust-unit.lcov"
+          node .github/scripts/coverage/check.mjs "$RUNNER_TEMP/rust-unit.lcov"
 
   build-macos-arm64:
     needs: test-macos-arm64
