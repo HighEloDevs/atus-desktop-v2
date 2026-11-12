@@ -3,16 +3,24 @@
 set -euo pipefail
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
-output="${1:?Usage: rust-desktop-macos.sh <output.lcov>}"
-case "$output" in /*) ;; *) output="$root/$output" ;; esac
+# With --no-coverage the script only builds and runs the desktop smoke, without instrumentation.
+coverage=1
+if [[ "${1:-}" == --no-coverage ]]; then
+  coverage=0; output=''
+else
+  output="${1:?Usage: rust-desktop-macos.sh <output.lcov> | --no-coverage}"
+  case "$output" in /*) ;; *) output="$root/$output" ;; esac
+fi
 [[ "$(uname -s)" == Darwin ]] || { echo 'This exploratory runner requires macOS.' >&2; exit 1; }
 cov="${LLVM_COV:-llvm-cov}"
 profdata="${LLVM_PROFDATA:-llvm-profdata}"
+if (( coverage )); then
 compiler_llvm="$(rustc -vV | sed -n 's/^LLVM version: \([0-9]*\).*/\1/p')"
 for tool in "$cov" "$profdata"; do
   major="$("$tool" --version | sed -n 's/.*LLVM version \([0-9]*\).*/\1/p' | head -n 1)"
   [[ -n "$compiler_llvm" && "$major" == "$compiler_llvm" ]] || { echo "LLVM tool $tool does not match rustc LLVM major version $compiler_llvm" >&2; exit 1; }
 done
+fi
 node --input-type=module -e '
 import net from "node:net";
 for (const port of [1420, 4455]) {
@@ -31,7 +39,9 @@ cleanup() {
   rm -rf "$tmp"
 }
 trap cleanup EXIT
-mkdir -p "$(dirname "$output")" "$tmp/projects" "$tmp/profiles"
+mkdir -p "$tmp/projects" "$tmp/profiles"
+if (( coverage )); then
+mkdir -p "$(dirname "$output")"
 export RUSTFLAGS="${RUSTFLAGS:-} -C instrument-coverage"
 export LLVM_PROFILE_FILE="$tmp/profiles/%p-%m.profraw"
 # Apply link-dead-code only to the application/test targets, not dependencies.
@@ -48,6 +58,9 @@ if (bins.size !== 1) throw new Error(`Expected one test binary; got ${bins.size}
 process.stdout.write([...bins][0]);
 NODE
 "$(cat "$tmp/binary")"
+else
+cargo build --manifest-path src/desktop/Cargo.toml --features desktop-e2e --bin atus-desktop
+fi
 (cd src/frontend && exec node ./node_modules/vite/bin/vite.js --configLoader runner --host 127.0.0.1 --port 1420 --strictPort) > "$tmp/vite.log" 2>&1 & vite_pid=$!
 wait_http() {
   local url="$1" pid="$2" attempt
@@ -112,8 +125,10 @@ for attempt in {1..30}; do
 done
 if kill -0 "$app_pid" 2>/dev/null; then echo 'Test application did not exit; no coverage report generated.' >&2; exit 1; fi
 wait "$app_pid"; app_pid=''
+if (( coverage )); then
 "$profdata" merge -sparse "$tmp"/profiles/*.profraw -o "$tmp/merged.profdata"
 "$cov" export -format=lcov -ignore-filename-regex='/(project/tests|project/additional_tests|project/menu_tests|project/e2e|project/store_test_support|main_tests)\.rs$' -instr-profile="$tmp/merged.profdata" src/desktop/target/debug/atus-desktop -object "$(cat "$tmp/binary")" "$root/src/desktop/src" > "$output"
 grep -q '^SF:' "$output" || { echo 'Rust coverage report is empty.' >&2; exit 1; }
 node .github/scripts/coverage/rust-inventory.mjs "$root/src/desktop/src" "$output" .github/scripts/coverage/rust-source-inventory.json
 echo 'Exploratory macOS report: other platform cfg paths may be absent; not a multiplatform coverage gate.' >&2
+fi

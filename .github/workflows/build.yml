@@ -45,7 +45,7 @@ jobs:
 
   integration-macos-intel:
     needs: [check-version, release-version]
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && (github.event_name != 'pull_request' || github.base_ref == 'main') }}
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
@@ -55,15 +55,15 @@ jobs:
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.7.8
         with:
-          components: llvm-tools-preview
+          workspaces: src/desktop
+          cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
       - name: Run desktop smoke on macOS Intel
-        run: |
-          llvm_bin="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin"
-          LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" .github/scripts/coverage/rust-desktop-macos.sh "$RUNNER_TEMP/rust-intel.lcov"
+        run: .github/scripts/coverage/rust-desktop-macos.sh --no-coverage
 
   test-macos-arm64:
     needs: [check-version, release-version]
@@ -79,8 +79,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
-      - name: Test CI helper scripts
-        run: node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/tests/windows-node-path.test.mjs .github/scripts/coverage/check.test.mjs
+      - uses: Swatinem/rust-cache@v2.7.8
+        with:
+          workspaces: src/desktop
+          cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -107,6 +109,10 @@ jobs:
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.7.8
+        with:
+          workspaces: src/desktop
+          cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -143,8 +149,10 @@ jobs:
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
-      - name: Test CI helper scripts
-        run: node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/tests/windows-node-path.test.mjs .github/scripts/coverage/check.test.mjs
+      - uses: Swatinem/rust-cache@v2.7.8
+        with:
+          workspaces: src/desktop
+          cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -155,7 +163,7 @@ jobs:
         run: cargo test --manifest-path src/desktop/Cargo.toml
 
   build-macos-intel:
-    needs: test-macos-intel
+    needs: [test-macos-intel, integration-macos-intel]
     if: github.event_name != 'pull_request'
     runs-on: macos-15-intel
     steps:
@@ -166,6 +174,10 @@ jobs:
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.7.8
+        with:
+          workspaces: src/desktop
+          cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -204,6 +216,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Test desktop runner safeguards
         run: .github/scripts/tests/windows-desktop-runner.test.ps1
+      - uses: Swatinem/rust-cache@v2.7.8
+        with:
+          workspaces: src/desktop
+          cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -225,19 +241,26 @@ jobs:
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
-      - name: Test CI helper scripts
-        run: node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/tests/windows-node-path.test.mjs .github/scripts/coverage/check.test.mjs
+      - name: Test checkout line endings
+        run: node --test .github/scripts/tests/git-attributes.test.mjs
+      - uses: Swatinem/rust-cache@v2.7.8
+        with:
+          workspaces: src/desktop
+          cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
       - name: Test frontend
         working-directory: src/frontend
         run: npm test
+      - name: Check frontend formatting
+        working-directory: src/frontend
+        run: npm run format:check
       - name: Test Rust and C++ bridge
         run: cargo test --manifest-path src/desktop/Cargo.toml
 
   build-windows:
-    needs: test-windows
+    needs: [test-windows, integration-windows]
     if: github.event_name != 'pull_request'
     runs-on: windows-latest
     steps:
@@ -248,6 +271,10 @@ jobs:
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.7.8
+        with:
+          workspaces: src/desktop
+          cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -291,6 +318,10 @@ jobs:
       - name: Install desktop test dependencies
         timeout-minutes: 15
         run: sudo .github/scripts/ci/install-ubuntu-deps.sh
+      - uses: Swatinem/rust-cache@v2.7.8
+        with:
+          workspaces: src/desktop
+          cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -318,6 +349,10 @@ jobs:
         timeout-minutes: 15
         run: |
           sudo .github/scripts/ci/install-ubuntu-deps.sh
+      - uses: Swatinem/rust-cache@v2.7.8
+        with:
+          workspaces: src/desktop
+          cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
@@ -345,7 +380,7 @@ jobs:
           node .github/scripts/coverage/check.mjs /tmp/atus-cpp.lcov
 
   build-linux:
-    needs: test-linux
+    needs: [test-linux, integration-linux]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04
     steps:
@@ -362,6 +397,10 @@ jobs:
         timeout-minutes: 15
         run: |
           sudo .github/scripts/ci/install-ubuntu-deps.sh
+      - uses: Swatinem/rust-cache@v2.7.8
+        with:
+          workspaces: src/desktop
+          cache-on-failure: true
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci

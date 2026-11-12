@@ -19,7 +19,8 @@ test('platform tests run independently and packages run only after tests outside
   for (const platform of ['linux', 'windows', 'macos-intel', 'macos-arm64']) {
     assert.match(workflow, new RegExp(`^  test-${platform}:$`, 'm'));
     const job = workflow.split(`  build-${platform}:\n`)[1].split(/^  [\w-]+:/m)[0];
-    assert.ok(job.includes(`needs: test-${platform}`));
+    const integration = platform === 'macos-arm64' ? '' : `, integration-${platform}`;
+    assert.ok(job.includes(integration ? `needs: [test-${platform}${integration}]` : `needs: test-${platform}`), platform);
     assert.ok(job.includes("github.event_name != 'pull_request'"));
   }
 });
@@ -81,6 +82,33 @@ test('test and integration jobs wait for the version checks and skip only when t
   for (const name of names) {
     const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
     assert.ok(job.includes('needs: [check-version, release-version]'), name);
-    assert.ok(job.includes('if: ${{ !failure() && !cancelled() }}'), name);
+    assert.ok(job.includes('if: ${{ !failure() && !cancelled()'), name);
   }
+});
+
+test('Intel desktop smoke runs without coverage instrumentation and only for PRs to main', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const job = workflow.split('  integration-macos-intel:\n')[1].split(/^  [\w-]+:/m)[0];
+  assert.ok(job.includes('rust-desktop-macos.sh --no-coverage'));
+  assert.ok(!job.includes('llvm-tools-preview'));
+  assert.ok(job.includes("github.base_ref == 'main'"));
+});
+
+test('every Rust-compiling job restores the Cargo cache from the desktop workspace', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const names = [...workflow.matchAll(/^  ((?:test|integration|build)-[\w-]+):$/gm)].map((m) => m[1]);
+  assert.equal(names.length, 11);
+  for (const name of names) {
+    const job = workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
+    assert.match(job, /uses: Swatinem\/rust-cache@v2\.\d+\.\d+\n\s+with:\n\s+workspaces: src\/desktop/, name);
+  }
+});
+
+test('helper script tests run on Linux; Windows keeps the checkout and formatting checks', () => {
+  const workflow = readFileSync('.github/workflows/build.yml', 'utf8').replaceAll('\r\n', '\n');
+  const job = (name) => workflow.split(`  ${name}:\n`)[1].split(/^  [\w-]+:/m)[0];
+  assert.ok(job('test-linux').includes('Test CI helper scripts'));
+  for (const name of ['test-macos-arm64', 'test-macos-intel']) assert.ok(!job(name).includes('Test CI helper scripts'), name);
+  assert.ok(job('test-windows').includes('git-attributes.test.mjs'));
+  assert.ok(job('test-windows').includes('npm run format:check'));
 });
