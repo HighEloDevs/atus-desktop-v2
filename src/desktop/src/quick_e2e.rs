@@ -95,6 +95,18 @@ pub fn quick_test_close_quick(app: AppHandle) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+/// Destroys the quick window, as if the system had reclaimed it, to check that it comes back.
+///
+/// # Errors
+/// Returns a message when the quick window does not exist or cannot be destroyed.
+#[tauri::command]
+pub fn quick_test_destroy_quick(app: AppHandle) -> Result<(), String> {
+    app.get_webview_window(quick::QUICK_LABEL)
+        .ok_or("A janela rápida não existe")?
+        .destroy()
+        .map_err(|error| error.to_string())
+}
+
 /// Replaces the system clipboard text, so the quick window has something to read.
 ///
 /// # Errors

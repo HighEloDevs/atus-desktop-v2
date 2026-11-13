@@ -180,8 +180,43 @@ test("the tray menu shows the quick window", async () => {
   await until(quickIsHidden, "The quick window did not hide");
 });
 
+test("pressing the shortcut again hides the window while it has the focus", async () => {
+  await showQuick();
+  if (!(await nativeState()).quick_focused) {
+    // Some systems (a bare X11 session) never give the focus to a window under automation.
+    await native("quick_dismiss");
+    await until(quickIsHidden, "The quick window did not hide");
+    return;
+  }
+  await native("quick_test_press_shortcut");
+  await until(quickIsHidden, "The shortcut should toggle the focused window off");
+});
+
+test("the quick window comes back when it was destroyed", async () => {
+  await native("quick_test_destroy_quick");
+  await until(
+    async () => !(await nativeState()).quick_exists,
+    "The quick window was not destroyed",
+  );
+  assert.equal(await appIsAlive(), true);
+  await native("quick_test_press_shortcut");
+  await until(async () => {
+    const state = await nativeState();
+    return state.quick_exists && state.quick_visible;
+  }, "The shortcut did not recreate the quick window");
+  await withWindow("quick", (quick) => quick.waitForText("Análise rápida"));
+  await native("quick_dismiss");
+  await until(quickIsHidden, "The quick window did not hide");
+});
+
 test("data alone opens the main window in a new project without running a fit", async () => {
   const before = await projectFiles();
+  await showQuick(OHM);
+  await withWindow("quick", async (quick) => {
+    await until(async () => (await quick.rows()) === 6, "The pasted rows did not appear");
+    await quick.type("Função de ajuste", ""); // the window keeps the last equation
+  });
+
   await withWindow("quick", (quick) => quick.clickButton("Abrir no ATUS"));
   await until(quickIsHidden, "Submitting should hide the quick window");
   const file = await newProject(before);
@@ -332,6 +367,24 @@ test("the tray reopens the main window after it was closed", async () => {
   } finally {
     await main.close();
   }
+});
+
+test("project management commands work in the running application", async () => {
+  const [file] = (await projectFiles()).map((name) => path.join(projectDir, name));
+  assert.ok(file, "A project is needed");
+  await withWindow("quick", async (quick) => {
+    const [details] = await quick.invoke("project_details", { paths: [file] });
+    assert.equal(details.available, true);
+    assert.equal(details.archived, false);
+    const renamed = await quick.invoke("project_rename", { path: file, newName: "Renomeado e2e" });
+    assert.match(renamed, /Renomeado e2e\.atus$/);
+    const archived = await quick.invoke("project_archive", { path: renamed });
+    assert.match(archived, /archived/);
+    assert.ok((await quick.invoke("project_list_archived")).includes(archived));
+    const restored = await quick.invoke("project_unarchive", { path: archived });
+    assert.match(restored, /Renomeado e2e\.atus$/);
+    assert.equal((await quick.invoke("project_list_archived")).includes(archived), false);
+  });
 });
 
 test("quitting saves the open project and ends the application", async () => {

@@ -62,9 +62,10 @@ export async function until(check, message, timeout = 30000) {
  * one a test wants.
  * Windows that are still loading are retried for up to a minute.
  * @param {string} [label] Window label: `main` or `quick`.
+ * @param {number} [timeout] Milliseconds to keep retrying.
  * @returns {Promise<Window>} The session handle.
  */
-export async function openSession(label = "main") {
+export async function openSession(label = "main", timeout = 60000) {
   return until(
     async () => {
       const { sessionId } = await request("POST", "/session", {
@@ -93,7 +94,7 @@ export async function openSession(label = "main") {
       return null;
     },
     `Window ${label} was not found`,
-    60000,
+    timeout,
   );
 }
 
@@ -203,17 +204,38 @@ export async function withWindow(label, work) {
 }
 
 /**
+ * Runs `work` on whichever of the quick and main windows exists, for native calls that do not
+ * depend on the page. The quick window is preferred; it is missing only while it is destroyed.
+ * @template T
+ * @param {(window: Window) => Promise<T>} work Test body.
+ * @returns {Promise<T>} What `work` returns.
+ */
+async function withHostWindow(work) {
+  let host;
+  try {
+    host = await openSession("quick", 3000);
+  } catch {
+    host = await openSession("main");
+  }
+  try {
+    return await work(host);
+  } finally {
+    await host.close();
+  }
+}
+
+/**
  * Reads the native state of the quick analysis feature (windows, shortcut and tray).
  * @returns {Promise<{quick_exists: boolean, quick_visible: boolean, quick_focused: boolean,
  * main_exists: boolean, main_visible: boolean, shortcut_registered: boolean, tray: boolean}>}
  */
 export function nativeState() {
-  return withWindow("quick", (quick) => quick.invoke("quick_test_state"));
+  return withHostWindow((host) => host.invoke("quick_test_state"));
 }
 
-/** Runs a native test command from the always-present quick window. */
+/** Runs a native test command from a window that exists. */
 export function native(command, args = {}) {
-  return withWindow("quick", (quick) => quick.invoke(command, args));
+  return withHostWindow((host) => host.invoke(command, args));
 }
 
 /** Whether the test driver still answers, that is, the application process is alive. */
