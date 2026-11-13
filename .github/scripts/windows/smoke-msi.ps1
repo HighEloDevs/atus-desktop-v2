@@ -37,8 +37,15 @@ try {
     if ($install.ExitCode -ne 0 -and $install.ExitCode -ne 3010) { throw "msiexec /i exited with $($install.ExitCode)." }
     $installed = $true
     if ((Get-Installed).Count -eq 0) { throw 'MSI did not register an ATUS Desktop installation.' }
-    $candidates = @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:LOCALAPPDATA) | Where-Object { $_ } | ForEach-Object { Join-Path $_ 'ATUS Desktop\atus-desktop.exe' }
+    # The WiX template may nest the product folder under the manufacturer (for example Program Files\atus\ATUS Desktop),
+    # so search the install roots instead of assuming one layout.
+    $roots = @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:LOCALAPPDATA) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Container) }
+    $candidates = $roots | ForEach-Object { Join-Path $_ 'ATUS Desktop\atus-desktop.exe' }
     $binary = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+    if (-not $binary) {
+        $binary = $roots | ForEach-Object { Get-ChildItem -LiteralPath $_ -Filter 'atus-desktop.exe' -Recurse -Depth 3 -File -ErrorAction SilentlyContinue } | Select-Object -First 1 -ExpandProperty FullName
+    }
+    if ($binary) { Write-Output "Installed executable: $binary" }
     if (-not $binary) { throw "Installed executable not found in: $($candidates -join ', ')" }
     $savedAppData = $env:APPDATA; $savedLocalAppData = $env:LOCALAPPDATA; $savedUserProfile = $env:USERPROFILE
     try {
