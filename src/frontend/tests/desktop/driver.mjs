@@ -60,24 +60,41 @@ export async function until(check, message, timeout = 30000) {
  * Opens a WebDriver session attached to the window with the given label. The application also
  * keeps a hidden quick analysis window, so the initial window of a session is not necessarily the
  * one a test wants.
+ * Windows that are still loading are retried for up to a minute.
  * @param {string} [label] Window label: `main` or `quick`.
  * @returns {Promise<Window>} The session handle.
  */
 export async function openSession(label = "main") {
-  const { sessionId } = await request("POST", "/session", { capabilities: { alwaysMatch: {} } });
-  assert.ok(sessionId);
-  const base = `/session/${sessionId}`;
-  const handles = await request("GET", `${base}/window/handles`);
-  for (const handle of handles) {
-    await request("POST", `${base}/window`, { handle });
-    const current = await request("POST", `${base}/execute/sync`, {
-      script: "return window.__TAURI_INTERNALS__.metadata.currentWindow.label",
-      args: [],
-    });
-    if (current === label) return new Window(sessionId, base);
-  }
-  await request("DELETE", base);
-  throw new Error(`Window ${label} was not found`);
+  return until(
+    async () => {
+      const { sessionId } = await request("POST", "/session", {
+        capabilities: { alwaysMatch: {} },
+      });
+      const base = `/session/${sessionId}`;
+      try {
+        const handles = await request("GET", `${base}/window/handles`);
+        for (const handle of handles) {
+          try {
+            await request("POST", `${base}/window`, { handle });
+            // A window that is still loading has no Tauri bridge yet.
+            const current = await request("POST", `${base}/execute/sync`, {
+              script: "return window.__TAURI_INTERNALS__.metadata.currentWindow.label",
+              args: [],
+            });
+            if (current === label) return new Window(sessionId, base);
+          } catch {
+            // Try the next window; the loop retries while windows finish loading.
+          }
+        }
+      } catch {
+        // Retry with a new session.
+      }
+      await request("DELETE", base).catch(() => {});
+      return null;
+    },
+    `Window ${label} was not found`,
+    60000,
+  );
 }
 
 /** A WebDriver session attached to one application window. */

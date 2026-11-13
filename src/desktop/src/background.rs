@@ -37,6 +37,14 @@ fn tray_action(id: &str) -> Option<TrayAction> {
     }
 }
 
+/// Key hint shown next to **Análise rápida** in the tray menu.
+///
+/// Only macOS menus accept Cmd in an accelerator. On Windows the parser rejects it and the whole
+/// tray fails to build, so other systems show the item without a hint.
+fn quick_accelerator() -> Option<&'static str> {
+    cfg!(target_os = "macos").then_some("Ctrl+Cmd+B")
+}
+
 /// Identifier of the tray icon.
 const TRAY_ID: &str = "atus";
 
@@ -60,15 +68,11 @@ pub fn install_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
 }
 
 fn build_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    let accelerator = if cfg!(target_os = "macos") {
-        "Ctrl+Cmd+B"
-    } else {
-        "Ctrl+Super+B"
-    };
+    let accelerator = quick_accelerator();
     let menu = Menu::with_items(
         app,
         &[
-            &MenuItem::with_id(app, MENU_QUICK, "Análise rápida", true, Some(accelerator))?,
+            &MenuItem::with_id(app, MENU_QUICK, "Análise rápida", true, accelerator)?,
             &MenuItem::with_id(app, MENU_OPEN, "Abrir ATUS", true, None::<&str>)?,
             &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, MENU_QUIT, "Sair do ATUS", true, None::<&str>)?,
@@ -133,6 +137,11 @@ mod tests {
         assert_eq!(tray_action(MENU_OPEN), Some(TrayAction::Open));
         assert_eq!(tray_action(MENU_QUIT), Some(TrayAction::Quit));
         assert_eq!(tray_action("other"), None);
+    }
+
+    #[test]
+    fn only_macos_shows_a_key_hint_because_other_menus_reject_super() {
+        assert_eq!(quick_accelerator().is_some(), cfg!(target_os = "macos"));
     }
 
     #[test]

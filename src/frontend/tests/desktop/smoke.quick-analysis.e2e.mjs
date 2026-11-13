@@ -13,7 +13,7 @@ import { execFile } from "node:child_process";
 import { readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { test } from "node:test";
+import { before, test } from "node:test";
 import { appIsAlive, native, nativeState, openSession, until, withWindow } from "./driver.mjs";
 
 const run = promisify(execFile);
@@ -81,6 +81,16 @@ async function mainWindow() {
   }, "The main window did not load");
 }
 
+before(async () => {
+  // The smoke test leaves a project open; start from the home page, as after a fresh launch.
+  await withWindow("main", async (main) => {
+    if (await main.exists('//button[@aria-label="Voltar ao início"]')) {
+      await main.click('//button[@aria-label="Voltar ao início"]');
+    }
+    await main.waitForText("Acesso rápido");
+  });
+});
+
 test("starts with the quick window preloaded, the shortcut registered and the tray created", async () => {
   const state = await until(async () => {
     const current = await nativeState();
@@ -91,13 +101,6 @@ test("starts with the quick window preloaded, the shortcut registered and the tr
   assert.equal(state.main_exists, true);
   assert.equal(state.shortcut_registered, true, "The system refused the global shortcut");
   assert.equal(state.tray, true, "The tray icon was not created");
-  // The smoke test leaves a project open; start from the home page, as after a fresh launch.
-  await withWindow("main", async (main) => {
-    if (await main.exists('//button[@aria-label="Voltar ao início"]')) {
-      await main.click('//button[@aria-label="Voltar ao início"]');
-    }
-    await main.waitForText("Acesso rápido");
-  });
 });
 
 test(
