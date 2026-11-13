@@ -37,11 +37,29 @@ fn tray_action(id: &str) -> Option<TrayAction> {
     }
 }
 
-/// Installs the tray icon and its menu.
+/// Identifier of the tray icon.
+const TRAY_ID: &str = "atus";
+
+/// Whether the tray icon exists.
+pub fn has_tray<R: Runtime>(app: &AppHandle<R>) -> bool {
+    app.tray_by_id(TRAY_ID).is_some()
+}
+
+/// Installs the tray icon and its menu, treating every failure as "no tray".
+///
+/// On Linux the tray library loads `libayatana-appindicator3` at run time and panics, instead of
+/// returning an error, when it is missing. The panic is caught here so that an app on such a
+/// system still starts, only without the tray.
 ///
 /// # Errors
-/// Fails when the menu or the tray icon cannot be created.
-pub fn install_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+/// Returns a message when the menu or the tray icon cannot be created.
+pub fn install_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| build_tray(app)))
+        .map_err(|_| "a biblioteca da bandeja não está disponível".to_owned())?
+        .map_err(|error| error.to_string())
+}
+
+fn build_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let accelerator = if cfg!(target_os = "macos") {
         "Ctrl+Cmd+B"
     } else {
@@ -56,7 +74,7 @@ pub fn install_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             &MenuItem::with_id(app, MENU_QUIT, "Sair do ATUS", true, None::<&str>)?,
         ],
     )?;
-    let mut tray = TrayIconBuilder::with_id("atus")
+    let mut tray = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip("ATUS")
         .menu(&menu)
         .show_menu_on_left_click(true)

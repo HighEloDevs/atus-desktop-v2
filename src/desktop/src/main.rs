@@ -6,6 +6,8 @@ mod background;
 mod export;
 mod project;
 mod quick;
+#[cfg(feature = "desktop-e2e")]
+mod quick_e2e;
 
 #[cfg(all(feature = "desktop-e2e", not(debug_assertions)))]
 compile_error!("The desktop-e2e feature is only permitted in debug builds");
@@ -122,6 +124,18 @@ fn main() {
             project_delete,
             #[cfg(feature = "desktop-e2e")]
             project_test_directory,
+            #[cfg(feature = "desktop-e2e")]
+            quick_e2e::quick_test_state,
+            #[cfg(feature = "desktop-e2e")]
+            quick_e2e::quick_test_press_shortcut,
+            #[cfg(feature = "desktop-e2e")]
+            quick_e2e::quick_test_tray_open,
+            #[cfg(feature = "desktop-e2e")]
+            quick_e2e::quick_test_tray_quit,
+            #[cfg(feature = "desktop-e2e")]
+            quick_e2e::quick_test_set_clipboard,
+            #[cfg(feature = "desktop-e2e")]
+            quick_e2e::quick_test_close_main,
             #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
             project_test_finder,
             #[cfg(target_os = "macos")]

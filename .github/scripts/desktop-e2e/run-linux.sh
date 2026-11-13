@@ -69,10 +69,25 @@ if ! wait_http http://127.0.0.1:4455/status "$app_pid"; then
   cat "$test_dir/app.log" >&2
   exit 1
 fi
-if ! ATUS_DESKTOP_E2E_PROJECT_DIR="$test_dir/projects" \
-  ATUS_DESKTOP_E2E_URL=http://127.0.0.1:4455 \
-  node --test tests/desktop/smoke.e2e.mjs; then
+# Press the real shortcut with xdotool when it is installed (X11 grabs the key combination).
+key_command=''
+if command -v xdotool >/dev/null 2>&1; then
+  key_command='xdotool key --clearmodifiers ctrl+super+b'
+fi
+export ATUS_DESKTOP_E2E_PROJECT_DIR="$test_dir/projects" ATUS_DESKTOP_E2E_URL=http://127.0.0.1:4455
+# The quick analysis test runs second and ends by quitting the application.
+if ! node --test tests/desktop/smoke.e2e.mjs \
+  || ! ATUS_E2E_KEY_COMMAND="$key_command" node --test tests/desktop/smoke.quick-analysis.e2e.mjs; then
   cat "$test_dir/app.log" >&2
   cat "$test_dir/vite.log" >&2
+  exit 1
+fi
+# The application must have exited by itself, and cleanly.
+app_status=0
+wait "$app_pid" || app_status=$?
+app_pid=''
+if [[ "$app_status" != 0 ]]; then
+  echo "The application exited with status $app_status." >&2
+  cat "$test_dir/app.log" >&2
   exit 1
 fi
