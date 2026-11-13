@@ -156,19 +156,26 @@ jobs:
         run: npm ci
       - name: Build desktop bundle
         working-directory: src/frontend
-        run: npm run tauri -- build --bundles app
+        run: npm run tauri -- build --bundles app,dmg
       - name: Open packaged macOS application
         run: .github/scripts/macos/smoke-app.sh "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
       - name: Check macOS project document icon
         if: runner.os == 'macOS'
         run: python3 .github/scripts/macos/check-document-icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
+      - name: Install and open the disk image
+        run: |
+          dmg=(src/desktop/target/release/bundle/dmg/*.dmg)
+          [ "${#dmg[@]}" -eq 1 ] || { echo 'Expected exactly one disk image' >&2; exit 1; }
+          .github/scripts/macos/smoke-dmg.sh "${dmg[0]}"
       - name: Archive macOS app
         if: runner.os == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent "src/desktop/target/release/bundle/macos/ATUS Desktop.app" "src/desktop/target/release/bundle/macos/atus-desktop-macos.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: macos-arm64-app
-          path: src/desktop/target/release/bundle/macos/atus-desktop-macos.zip
+          path: |
+            src/desktop/target/release/bundle/macos/atus-desktop-macos.zip
+            src/desktop/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
           retention-days: 3
 
@@ -224,19 +231,26 @@ jobs:
         run: npm ci
       - name: Build desktop bundle
         working-directory: src/frontend
-        run: npm run tauri -- build --bundles app
+        run: npm run tauri -- build --bundles app,dmg
       - name: Open packaged macOS application
         run: .github/scripts/macos/smoke-app.sh "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
       - name: Check macOS project document icon
         if: runner.os == 'macOS'
         run: python3 .github/scripts/macos/check-document-icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
+      - name: Install and open the disk image
+        run: |
+          dmg=(src/desktop/target/release/bundle/dmg/*.dmg)
+          [ "${#dmg[@]}" -eq 1 ] || { echo 'Expected exactly one disk image' >&2; exit 1; }
+          .github/scripts/macos/smoke-dmg.sh "${dmg[0]}"
       - name: Archive macOS app
         if: runner.os == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent "src/desktop/target/release/bundle/macos/ATUS Desktop.app" "src/desktop/target/release/bundle/macos/atus-desktop-macos.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: macos-intel-app
-          path: src/desktop/target/release/bundle/macos/atus-desktop-macos.zip
+          path: |
+            src/desktop/target/release/bundle/macos/atus-desktop-macos.zip
+            src/desktop/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
           retention-days: 3
 
@@ -318,25 +332,43 @@ jobs:
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
-      - name: Build desktop bundle
+      - name: Build desktop bundles
+        id: bundles
+        shell: bash
         working-directory: src/frontend
-        run: npm run tauri -- build --bundles nsis
-      - name: Check macOS project document icon
-        if: runner.os == 'macOS'
-        run: python3 .github/scripts/macos/check-document-icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
-      - name: Archive macOS app
-        if: runner.os == 'macOS'
-        run: ditto -c -k --sequesterRsrc --keepParent "src/desktop/target/release/bundle/macos/ATUS Desktop.app" "src/desktop/target/release/bundle/macos/atus-desktop-macos.zip"
+        run: |
+          version="$(node -p "require('../desktop/tauri.conf.json').version")"
+          if [[ "$version" == *-* ]]; then
+            # WiX only accepts numeric versions. A pre-release gets an MSI built for testing only; it is not shipped.
+            npm run tauri -- build --bundles nsis
+            npm run tauri -- build --bundles msi --config "{\"bundle\":{\"windows\":{\"wix\":{\"version\":\"${version%%-*}\"}}}}"
+            echo 'stable=false' >> "$GITHUB_OUTPUT"
+          else
+            npm run tauri -- build --bundles nsis,msi
+            echo 'stable=true' >> "$GITHUB_OUTPUT"
+          fi
       - name: Install and open Windows package
         shell: pwsh
         run: |
           $installers = @(Get-ChildItem src/desktop/target/release/bundle/nsis/*.exe)
           if ($installers.Count -ne 1) { throw 'Expected exactly one Windows installer.' }
           .github/scripts/windows/smoke-nsis.ps1 -Installer $installers[0].FullName
+      - name: Install and open Windows MSI
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem src/desktop/target/release/bundle/msi/*.msi)
+          if ($installers.Count -ne 1) { throw 'Expected exactly one MSI package.' }
+          .github/scripts/windows/smoke-msi.ps1 -Installer $installers[0].FullName
+      - name: Keep the MSI out of pre-releases
+        if: steps.bundles.outputs.stable != 'true'
+        shell: pwsh
+        run: Remove-Item src/desktop/target/release/bundle/msi/*.msi
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
-          path: src/desktop/target/release/bundle/nsis/*.exe
+          path: |
+            src/desktop/target/release/bundle/nsis/*.exe
+            src/desktop/target/release/bundle/msi/*.msi
           if-no-files-found: error
           retention-days: 3
 

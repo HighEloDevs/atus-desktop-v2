@@ -43,6 +43,6 @@ Scripts reais usados pelo workflow `Build desktop` (`.github/workflows/build.yml
 | `linux/collect-cpp-coverage.sh` | `test-linux` |
 | `linux/smoke-packages.sh` | `build-linux` |
 | `macos/collect-rust-coverage.sh` | `test-macos-arm64`, `integration-macos-*` |
-| `macos/smoke-app.sh`, `check-document-icon.py` | `build-macos-*` |
+| `macos/smoke-app.sh`, `smoke-dmg.sh`, `check-document-icon.py` | `build-macos-*` |
 | `windows/run-e2e.ps1`, `press-shortcut.ps1` | `integration-windows` |
-| `windows/smoke-nsis.ps1` | `build-windows` |
+| `windows/smoke-nsis.ps1`, `smoke-msi.ps1` | `build-windows` |

@@ -11,13 +11,40 @@ test('recognizes stable and RC versions and rejects ambiguous versions', () => {
   assert.throws(() => prerelease('0.2.0-rc.01'));
   assert.throws(() => prerelease('v0.2.0'));
 });
-test('requires exact artifact types in each platform directory', () => {
+/** Build an artifact tree with the given files per job folder. */
+function tree(files) {
   const root = mkdtempSync(join(tmpdir(), 'atus-artifacts-'));
-  for (const name of ['linux-bundles', 'windows-installer', 'macos-arm64-app', 'macos-intel-app']) mkdirSync(join(root, name));
-  for (const [dir, name] of [['linux-bundles','a.deb'], ['linux-bundles','a.rpm'], ['linux-bundles','a.AppImage'], ['windows-installer','a.exe'], ['macos-arm64-app','a.zip'], ['macos-intel-app','a.zip']]) writeFileSync(join(root, dir, name), 'x');
-  assert.equal(selectArtifacts(root).length, 6);
+  for (const [dir, names] of Object.entries(files)) {
+    mkdirSync(join(root, dir));
+    for (const name of names) writeFileSync(join(root, dir, name), 'x');
+  }
+  return root;
+}
+const COMMON = {
+  'linux-bundles': ['a.deb', 'a.rpm', 'a.AppImage'],
+  'macos-arm64-app': ['a.zip', 'a.dmg'],
+  'macos-intel-app': ['a.zip', 'a.dmg'],
+};
+
+test('a stable release needs the exe, the msi and both macOS formats', () => {
+  const root = tree({ ...COMMON, 'windows-installer': ['a.exe', 'a.msi'] });
+  const names = selectArtifacts(root, '0.2.1').map(({ name }) => name).sort();
+  assert.deepEqual(names, ['atus-linux.AppImage', 'atus-linux.deb', 'atus-linux.rpm', 'atus-macos-arm64.dmg', 'atus-macos-arm64.zip', 'atus-macos-intel.dmg', 'atus-macos-intel.zip', 'atus-windows.exe', 'atus-windows.msi']);
+  assert.throws(() => selectArtifacts(tree({ ...COMMON, 'windows-installer': ['a.exe'] }), '0.2.1'), /windows-installer \.msi/);
+  assert.throws(() => selectArtifacts(tree({ ...COMMON, 'macos-intel-app': ['a.zip'], 'windows-installer': ['a.exe', 'a.msi'] }), '0.2.1'), /macos-intel-app \.dmg/);
+});
+
+test('a pre-release ships no msi and rejects one left in the artifacts', () => {
+  const names = selectArtifacts(tree({ ...COMMON, 'windows-installer': ['a.exe'] }), '0.2.1-rc.1').map(({ name }) => name);
+  assert.equal(names.length, 8);
+  assert.ok(!names.includes('atus-windows.msi'));
+  assert.throws(() => selectArtifacts(tree({ ...COMMON, 'windows-installer': ['a.exe', 'a.msi'] }), '0.2.1-rc.1'), /MSI/);
+});
+
+test('rejects an ambiguous artifact', () => {
+  const root = tree({ ...COMMON, 'windows-installer': ['a.exe', 'a.msi'] });
   writeFileSync(join(root, 'linux-bundles', 'b.deb'), 'x');
-  assert.throws(() => selectArtifacts(root));
+  assert.throws(() => selectArtifacts(root, '0.2.1'), /linux-bundles \.deb/);
 });
 
 test('resumes matching draft assets without overwriting conflicting uploads', () => {

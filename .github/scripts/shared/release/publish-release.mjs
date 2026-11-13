@@ -7,13 +7,24 @@ import { join, basename } from 'node:path';
 import { createManifest, formatChecksums, verifyManifest } from './check-release-artifacts.mjs';
 import { pathToFileURL } from 'node:url';
 
-/** Select exactly one regular file per expected build artifact. */
-export function selectArtifacts(root) {
+/**
+ * Select exactly one regular file per expected build artifact.
+ * The Windows MSI is part of the inventory only for stable versions: WiX cannot represent a pre-release,
+ * so a pre-release must not ship one.
+ * @param {string} root Directory holding the downloaded artifacts, one folder per build job.
+ * @param {string} version Release version, such as `0.2.1` or `0.2.1-rc.1`.
+ * @returns {Array<{path: string, name: string}>} The selected files and their release asset names.
+ * @throws {Error} When a file is missing or ambiguous, or an MSI is present in a pre-release.
+ */
+export function selectArtifacts(root, version) {
+  const stable = !prerelease(version);
   const specs = [
     ['linux-bundles', '.deb', 'atus-linux.deb'], ['linux-bundles', '.rpm', 'atus-linux.rpm'],
     ['linux-bundles', '.AppImage', 'atus-linux.AppImage'], ['windows-installer', '.exe', 'atus-windows.exe'],
     ['macos-arm64-app', '.zip', 'atus-macos-arm64.zip'], ['macos-intel-app', '.zip', 'atus-macos-intel.zip'],
+    ['macos-arm64-app', '.dmg', 'atus-macos-arm64.dmg'], ['macos-intel-app', '.dmg', 'atus-macos-intel.dmg'],
   ];
+  if (stable) specs.push(['windows-installer', '.msi', 'atus-windows.msi']);
   function walk(dir) {
     return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
       const path = join(dir, entry.name);
@@ -21,6 +32,7 @@ export function selectArtifacts(root) {
       return entry.isDirectory() ? walk(path) : entry.isFile() ? [path] : [];
     });
   }
+  if (!stable && walk(join(root, 'windows-installer')).some((path) => path.endsWith('.msi'))) throw new Error('Pre-releases must not ship an MSI');
   return specs.map(([folder, suffix, name]) => {
     const candidates = walk(join(root, folder)).filter((path) => basename(path).endsWith(suffix));
     if (candidates.length !== 1 || !lstatSync(candidates[0]).isFile()) throw new Error(`Expected exactly one ${folder} ${suffix}`);
@@ -79,7 +91,7 @@ export function publish({ run, artifacts, repository }) {
   const version = config.version;
   const isPrerelease = prerelease(version);
   const tag = `v${version}`;
-  const selected = selectArtifacts(artifacts);
+  const selected = selectArtifacts(artifacts, version);
   const directory = mkdtempSync(join(tmpdir(), 'atus-release-'));
   for (const entry of selected) copyFileSync(entry.path, join(directory, entry.name));
   const names = selected.map(({ name }) => name);
