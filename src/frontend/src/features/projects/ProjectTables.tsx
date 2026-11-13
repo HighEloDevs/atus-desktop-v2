@@ -528,26 +528,29 @@ export function ProjectTables({
                 {visible.length}
               </span>
               <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2">
+                <label className="flex items-center gap-2 whitespace-nowrap">
                   Por página
-                  <NativeSelect
-                    size="sm"
-                    aria-label="Projetos por página"
-                    className="w-[4.5rem] bg-white"
-                    value={pageSize}
-                    onChange={(event) => {
-                      setPageSize(Number(event.target.value));
-                      setPage(0);
-                    }}
-                  >
-                    {PAGE_SIZES.map((size) => (
-                      <NativeSelectOption key={size} value={size}>
-                        {size}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
+                  {/* NativeSelect fills its wrapper, so the width is set on a parent. */}
+                  <span className="block w-[4.75rem]">
+                    <NativeSelect
+                      size="sm"
+                      aria-label="Projetos por página"
+                      className="bg-white text-xs"
+                      value={pageSize}
+                      onChange={(event) => {
+                        setPageSize(Number(event.target.value));
+                        setPage(0);
+                      }}
+                    >
+                      {PAGE_SIZES.map((size) => (
+                        <NativeSelectOption key={size} value={size}>
+                          {size}
+                        </NativeSelectOption>
+                      ))}
+                    </NativeSelect>
+                  </span>
                 </label>
-                <span>
+                <span className="whitespace-nowrap">
                   Página {currentPage + 1} de {pageCount}
                 </span>
                 <div className="flex gap-1">
