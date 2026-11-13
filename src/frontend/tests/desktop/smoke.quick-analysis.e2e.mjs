@@ -68,6 +68,23 @@ async function showQuick(clipboard) {
   await until(async () => (await nativeState()).quick_visible, "The quick window did not show");
 }
 
+/**
+ * Shows the quick window in a known state, so a test does not depend on the one before it: any
+ * data and equation left in the page are cleared first, then the clipboard is set and the window
+ * is shown as the shortcut shows it.
+ */
+async function freshQuick(clipboard) {
+  if ((await nativeState()).quick_visible) {
+    await native("quick_dismiss");
+    await until(quickIsHidden, "The quick window did not hide");
+  }
+  await withWindow("quick", async (quick) => {
+    await quick.type("Função de ajuste", "");
+    await quick.run("document.querySelector('[aria-label=\"Limpar dados\"]')?.click()");
+  });
+  await showQuick(clipboard);
+}
+
 async function quickIsHidden() {
   return !(await nativeState()).quick_visible;
 }
@@ -125,7 +142,7 @@ test(
 );
 
 test("the shortcut shows the quick window and fills the data from the clipboard", async () => {
-  await showQuick(OHM);
+  await freshQuick(OHM);
   await withWindow("quick", async (quick) => {
     await until(async () => (await quick.rows()) === 6, "The pasted rows did not appear");
     const text = await quick.text();
@@ -145,11 +162,13 @@ test("the shortcut shows the quick window and fills the data from the clipboard"
 });
 
 test("Esc hides the window, which keeps its data for the next time", async () => {
-  await withWindow("quick", (quick) =>
-    quick.run(
+  await freshQuick(OHM);
+  await withWindow("quick", async (quick) => {
+    await until(async () => (await quick.rows()) === 6, "The pasted rows did not appear");
+    await quick.run(
       "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }))",
-    ),
-  );
+    );
+  });
   await until(quickIsHidden, "Esc did not hide the quick window");
   await showQuick();
   await withWindow("quick", async (quick) => {
@@ -158,7 +177,10 @@ test("Esc hides the window, which keeps its data for the next time", async () =>
 });
 
 test("losing focus or closing the quick window only hides it", async () => {
-  await showQuick();
+  await freshQuick(OHM);
+  await withWindow("quick", async (quick) => {
+    await until(async () => (await quick.rows()) === 6, "The pasted rows did not appear");
+  });
   await native("quick_test_blur_quick");
   await until(quickIsHidden, "Losing focus should hide the quick window");
   await showQuick();
@@ -212,10 +234,9 @@ test("the quick window comes back when it was destroyed", async () => {
 
 test("data alone opens the main window in a new project without running a fit", async () => {
   const before = await projectFiles();
-  await showQuick(OHM);
+  await freshQuick(OHM);
   await withWindow("quick", async (quick) => {
     await until(async () => (await quick.rows()) === 6, "The pasted rows did not appear");
-    await quick.type("Função de ajuste", ""); // the window keeps the last equation
   });
 
   await withWindow("quick", (quick) => quick.clickButton("Abrir no ATUS"));
@@ -252,7 +273,7 @@ test("data alone opens the main window in a new project without running a fit", 
 
 test("invalid data is explained and nothing is submitted", async () => {
   const before = await projectFiles();
-  await showQuick("1;2;-1");
+  await freshQuick("1;2;-1");
   await withWindow("quick", async (quick) => {
     await quick.clickButton("Colar do clipboard");
     await quick.waitForText("incertezas não podem ser negativas");
@@ -273,7 +294,7 @@ test("invalid data is explained and nothing is submitted", async () => {
 
 test("an open analysis asks before it is replaced and keeps working when declined", async () => {
   const before = await projectFiles();
-  await showQuick(RC);
+  await freshQuick(RC);
   await withWindow("quick", async (quick) => {
     await until(async () => (await quick.rows()) === 4, "The new data did not appear");
     await quick.type("Função de ajuste", "V0 * exp(-x / tau)");
@@ -289,7 +310,7 @@ test("an open analysis asks before it is replaced and keeps working when decline
     );
     assert.deepEqual(await projectFiles(), before, "Declining must not create a project");
 
-    await showQuick(RC);
+    await freshQuick(RC);
     await withWindow("quick", async (quick) => {
       await until(async () => (await quick.rows()) === 4, "The data did not appear");
       await quick.type("Função de ajuste", "V0 * exp(-x / tau)");
@@ -327,7 +348,7 @@ test("closing the main window keeps ATUS running and the shortcut opens a new wi
   assert.equal(state.tray, true);
 
   const before = await projectFiles();
-  await showQuick(OHM);
+  await freshQuick(OHM);
   await withWindow("quick", async (quick) => {
     await until(async () => (await quick.rows()) === 6, "The pasted rows did not appear");
     await quick.type("Função de ajuste", "a * x + b");
@@ -390,10 +411,9 @@ test("project management commands work in the running application", async () => 
 
 test("quitting saves the open project and ends the application", async () => {
   const before = await projectFiles();
-  await showQuick(RC);
+  await freshQuick(RC);
   await withWindow("quick", async (quick) => {
     await until(async () => (await quick.rows()) === 4, "The data did not appear");
-    await quick.type("Função de ajuste", ""); // the window keeps the last equation
     await quick.clickButton("Abrir no ATUS");
   });
   const file = await newProject(before);
