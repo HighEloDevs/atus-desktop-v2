@@ -130,8 +130,8 @@ it("configures Sonner for list, stack and banner modes", async () => {
 
 it("keeps the timer bar animating under reduced motion", async () => {
   const { readFileSync } = await import("node:fs");
-  const css = readFileSync(new URL("../../src/styles/globals.css", import.meta.url), "utf8");
-  const reduced = css.slice(css.indexOf("prefers-reduced-motion"));
+  const css = readFileSync(`${process.cwd()}/src/styles/globals.css`, "utf8");
+  const reduced = css.slice(css.lastIndexOf("prefers-reduced-motion"));
   expect(reduced).toContain(".toast-timer");
   expect(reduced).not.toMatch(/animation:\s*none/);
   expect(reduced).toContain("steps(");
