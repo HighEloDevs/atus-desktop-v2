@@ -302,3 +302,65 @@ it("opens through the row button and keeps Abrir out of the actions menu", async
   await click(firstRow("all-heading").querySelector('button[aria-label="Abrir a"]'));
   expect(onOpen).toHaveBeenCalledWith("/d/a.atus");
 });
+
+const many = (n) => Array.from({ length: n }, (_, i) => `/d/p${String(i).padStart(2, "0")}.atus`);
+const byAge = (paths) => paths.map((p, i) => detail(p, { modified: 1_700_000_000_000 - i * 1000 }));
+const setSelect = (select, value) =>
+  act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+
+it("shows only the five most recent projects", async () => {
+  api.recentPaths.mockReturnValue(many(8));
+  api.projectClient.details.mockImplementation(async (paths) => byAge(paths));
+  await render();
+  expect(rows("recent-heading")).toHaveLength(5);
+  expect(rows("recent-heading")[0]).toContain("p00");
+  expect(rows("recent-heading")[4]).toContain("p04");
+});
+
+it("paginates all projects ten at a time, newest modification first", async () => {
+  api.projectClient.list.mockResolvedValue(many(23));
+  api.projectClient.details.mockImplementation(async (paths) => byAge([...paths].reverse()));
+  await render();
+  expect(rows("all-heading")).toHaveLength(10);
+  expect(rows("all-heading")[0]).toContain("p22");
+  expect(node.querySelector('nav[aria-label="Paginação"]').textContent).toContain("1–10 de 23");
+  expect(node.querySelector('button[aria-label="Página anterior"]').disabled).toBe(true);
+  await click(node.querySelector('button[aria-label="Próxima página"]'));
+  expect(rows("all-heading")[0]).toContain("p12");
+  await click(node.querySelector('button[aria-label="Próxima página"]'));
+  expect(rows("all-heading")).toHaveLength(3);
+  expect(node.querySelector('nav[aria-label="Paginação"]').textContent).toContain("21–23 de 23");
+  expect(node.querySelector('button[aria-label="Próxima página"]').disabled).toBe(true);
+});
+
+it("offers 5, 10 and 20 per page and returns to the first page when the size changes", async () => {
+  api.projectClient.list.mockResolvedValue(many(30));
+  await render();
+  const select = node.querySelector('select[aria-label="Projetos por página"]');
+  expect([...select.options].map((o) => o.value)).toEqual(["5", "10", "20"]);
+  expect(select.value).toBe("10");
+  await click(node.querySelector('button[aria-label="Próxima página"]'));
+  await setSelect(select, "20");
+  expect(rows("all-heading")).toHaveLength(20);
+  expect(node.querySelector('nav[aria-label="Paginação"]').textContent).toContain("1–20 de 30");
+  await setSelect(select, "5");
+  expect(rows("all-heading")).toHaveLength(5);
+  expect(node.querySelector('nav[aria-label="Paginação"]').textContent).toContain("Página 1 de 6");
+});
+
+it("returns to the first page when the search or the filter changes", async () => {
+  api.projectClient.list.mockResolvedValue(many(15));
+  await render();
+  await click(node.querySelector('button[aria-label="Próxima página"]'));
+  expect(rows("all-heading")).toHaveLength(5);
+  const search = node.querySelector('input[aria-label="Buscar projetos"]');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(search, "p0");
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(rows("all-heading")).toHaveLength(10);
+  expect(node.querySelector('nav[aria-label="Paginação"]').textContent).toContain("1–10 de 10");
+});

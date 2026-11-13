@@ -6,6 +6,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
   FileChartColumn,
   FileSearch,
   FileWarning,
@@ -20,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import {
   Table,
   TableBody,
@@ -51,6 +54,11 @@ const filters: { value: Filter; label: string }[] = [
   { value: "archived", label: "Arquivados" },
   { value: "all", label: "Todos" },
 ];
+
+/** Number of projects shown in the recent table. */
+const RECENT_LIMIT = 5;
+const PAGE_SIZES = [5, 10, 20] as const;
+const DEFAULT_PAGE_SIZE = 10;
 
 const sorts: { value: Sort; label: string }[] = [
   { value: "modified", label: "Recentes" },
@@ -287,6 +295,8 @@ export function ProjectTables({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("active");
   const [sort, setSort] = useState<Sort>("modified");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [pending, setPending] = useState<Pending>(null);
   const reload = useCallback(() => setRevision((n) => n + 1), []);
 
@@ -306,7 +316,7 @@ export function ProjectTables({
       ]);
       if (!active) return;
       const byPath = new Map(details.map((item) => [item.path, item]));
-      setRecent(recents.flatMap((path) => byPath.get(path) ?? []));
+      setRecent(recents.flatMap((path) => byPath.get(path) ?? []).slice(0, RECENT_LIMIT));
       setAll([...folder, ...archived].flatMap((path) => byPath.get(path) ?? []));
       setLoading(false);
     }
@@ -329,9 +339,13 @@ export function ProjectTables({
       .sort((a, b) =>
         sort === "name"
           ? a.name.localeCompare(b.name, "pt-BR")
-          : (b.modified ?? 0) - (a.modified ?? 0),
+          : (b.modified ?? 0) - (a.modified ?? 0) || a.name.localeCompare(b.name, "pt-BR"),
       );
   }, [all, query, filter, sort]);
+  const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
+  // Clamp instead of resetting so deleting the last item of a page lands on the previous page.
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageItems = visible.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
 
   async function locate(path: string) {
     try {
@@ -468,19 +482,28 @@ export function ProjectTables({
             placeholder="Buscar por nome…"
             className="h-8 max-w-[260px] bg-white"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(0);
+            }}
           />
           <Segmented
             label="Filtro"
             value={filter}
             options={filters}
-            onChange={(value) => setFilter(value)}
+            onChange={(value) => {
+              setFilter(value);
+              setPage(0);
+            }}
           />
           <Segmented
             label="Ordenação"
             value={sort}
             options={sorts}
-            onChange={(value) => setSort(value)}
+            onChange={(value) => {
+              setSort(value);
+              setPage(0);
+            }}
           />
         </div>
         {loading ? null : visible.length === 0 ? (
@@ -488,13 +511,70 @@ export function ProjectTables({
             Nenhum projeto encontrado.
           </p>
         ) : (
-          <ProjectsTable
-            labelledBy="all-heading"
-            columns="all"
-            projects={visible}
-            onOpen={open}
-            renderMenu={(project) => menu(project, false)}
-          />
+          <>
+            <ProjectsTable
+              labelledBy="all-heading"
+              columns="all"
+              projects={pageItems}
+              onOpen={open}
+              renderMenu={(project) => menu(project, false)}
+            />
+            <nav
+              aria-label="Paginação"
+              className="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground"
+            >
+              <span role="status">
+                {currentPage * pageSize + 1}–{currentPage * pageSize + pageItems.length} de{" "}
+                {visible.length}
+              </span>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2">
+                  Por página
+                  <NativeSelect
+                    size="sm"
+                    aria-label="Projetos por página"
+                    className="w-[4.5rem] bg-white"
+                    value={pageSize}
+                    onChange={(event) => {
+                      setPageSize(Number(event.target.value));
+                      setPage(0);
+                    }}
+                  >
+                    {PAGE_SIZES.map((size) => (
+                      <NativeSelectOption key={size} value={size}>
+                        {size}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </label>
+                <span>
+                  Página {currentPage + 1} de {pageCount}
+                </span>
+                <div className="flex gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label="Página anterior"
+                    disabled={currentPage === 0}
+                    onClick={() => setPage(currentPage - 1)}
+                  >
+                    <ChevronLeft aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label="Próxima página"
+                    disabled={currentPage >= pageCount - 1}
+                    onClick={() => setPage(currentPage + 1)}
+                  >
+                    <ChevronRight aria-hidden="true" />
+                  </Button>
+                </div>
+              </div>
+            </nav>
+          </>
         )}
       </section>
 
