@@ -2,8 +2,10 @@
 
 //! Desktop entry point and native demonstration bridge.
 
+mod background;
 mod export;
 mod project;
+mod quick;
 
 #[cfg(all(feature = "desktop-e2e", not(debug_assertions)))]
 compile_error!("The desktop-e2e feature is only permitted in debug builds");
@@ -55,23 +57,57 @@ fn get_mock_analysis() -> MockAnalysis {
 }
 
 fn main() {
-    let builder = tauri::Builder::default();
+    // Must be the first plugin: a second launch only shows the running instance.
+    let builder =
+        tauri::Builder::default().plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Err(error) = quick::show_main(app) {
+                eprintln!("Não foi possível abrir a janela principal: {error}");
+            }
+        }));
     #[cfg(feature = "desktop-e2e")]
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
     #[cfg(target_os = "macos")]
-    let builder = builder
-        .manage(project::finder::FinderRequest::default())
-        .setup(|app| {
-            project::menu::install(app)?;
-            Ok(())
-        });
+    let builder = builder.manage(project::finder::FinderRequest::default());
     builder
+        .manage(quick::PendingQuickAnalysis::default())
+        .setup(|app| {
+            #[cfg(target_os = "macos")]
+            project::menu::install(app)?;
+            quick::install(app.handle())?;
+            // Without a tray (for example Linux without an appindicator library) the app still
+            // works; only the background entry points are missing.
+            if let Err(error) = background::install_tray(app.handle()) {
+                eprintln!("Não foi possível criar o ícone na bandeja: {error}");
+            }
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if window.label() != quick::QUICK_LABEL {
+                return;
+            }
+            match event {
+                // The quick window is a transient panel: losing focus or closing only hides it.
+                tauri::WindowEvent::Focused(false) => {
+                    let _ = window.hide();
+                }
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                _ => {}
+            }
+        })
+        .plugin(quick::shortcut_plugin())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
             get_mock_analysis,
             export::export_image_write,
+            background::app_quit,
+            quick::quick_submit,
+            quick::quick_dismiss,
+            quick::take_quick_analysis,
             project_create,
             project_open,
             project_save,
@@ -95,19 +131,32 @@ fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("failed to build ATUS Desktop")
-        .run(|app, event| {
+        .run(|app, event| match event {
             #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Opened { urls } = &event {
-                project::finder::receive(app, urls.clone());
+            tauri::RunEvent::Opened { urls } => {
+                // Opening a file while only the tray is left recreates the main window first.
+                if app.get_webview_window(quick::MAIN_LABEL).is_none() {
+                    let _ = quick::show_main(app);
+                }
+                project::finder::receive(app, urls);
             }
-            if let tauri::RunEvent::ExitRequested { api, .. } = event {
-                if let Some(window) = app.get_webview_window("main") {
-                    api.prevent_exit();
-                    if let Err(error) = window.close() {
-                        eprintln!("Não foi possível solicitar o fechamento da janela: {error}");
-                    }
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen {
+                has_visible_windows: false,
+                ..
+            } => {
+                if let Err(error) = quick::show_main(app) {
+                    eprintln!("Não foi possível abrir a janela principal: {error}");
                 }
             }
+            tauri::RunEvent::ExitRequested { code, api, .. } => {
+                let has_main = app.get_webview_window(quick::MAIN_LABEL).is_some();
+                if background::exit_needs_save(code, has_main) {
+                    api.prevent_exit();
+                    background::request_quit(app);
+                }
+            }
+            _ => {}
         });
 }
 

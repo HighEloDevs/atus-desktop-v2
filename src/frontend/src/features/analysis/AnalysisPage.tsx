@@ -4,6 +4,8 @@
  */
 
 import { FinderProjectDialog } from "@/features/projects/FinderProjectDialog";
+import { QuickAnalysisDialog } from "@/features/quick-analysis/QuickAnalysisDialog";
+import type { QuickAnalysis } from "@/features/quick-analysis/quick-analysis-client";
 import { Button } from "@/components/ui/button";
 import { useProjectSave } from "@/features/projects/useProjectSave";
 import { ProjectTitle } from "@/features/projects/ProjectTitle";
@@ -13,7 +15,8 @@ import { notify } from "@/lib/notify";
 import { FitControls } from "./fit/FitControls";
 import { defaultFitConfig, validateFitConfig, type FitConfig } from "./fit/fit-config";
 import { mockFitService, type FitResponse } from "./fit/fit-service";
-import { textParser, type SeparatorType } from "./data-import/text-data-parser";
+import { type SeparatorType } from "./data-import/text-data-parser";
+import { DataValidationError, parseValidPoints } from "./data-import/parse-valid-points";
 import { SeparatorDialog } from "./data-import/SeparatorDialog";
 import { SeparatorSelect } from "./data-import/SeparatorSelect";
 import { readClipboardText, ClipboardReadError } from "./clipboard/read-clipboard-text";
@@ -73,9 +76,6 @@ type MockAnalysis = {
   y: number[];
 };
 
-/** Parsed data that is readable but invalid, so a different separator cannot fix it. */
-class DataValidationError extends Error {}
-
 /** Where imported text goes: a new dataset or the data of an existing one. */
 type ImportTarget = { kind: "create" } | { kind: "replace"; id: string };
 
@@ -83,34 +83,6 @@ type ImportTarget = { kind: "create" } | { kind: "replace"; id: string };
 type PendingImport = { name: string; text: string; target: ImportTarget; error: string };
 
 const CLIPBOARD_NAME = "Dados colados do clipboard";
-
-/**
- * Parses text into points and checks that values and uncertainties are usable.
- * @param text - Delimited text.
- * @param separator - Selected or automatic separator.
- * @returns The parsed points.
- * @throws {DataValidationError} When values are not finite or uncertainties are negative.
- * @throws {Error} When the text cannot be parsed with the separator.
- */
-function parseValidPoints(text: string, separator: SeparatorType) {
-  const points = textParser.parse(text, { separator });
-  if (
-    points.some(
-      (p) =>
-        !Number.isFinite(p.x) ||
-        !Number.isFinite(p.y) ||
-        !Number.isFinite(p.sx ?? 0) ||
-        !Number.isFinite(p.sy ?? 0) ||
-        (p.sx ?? 0) < 0 ||
-        (p.sy ?? 0) < 0,
-    )
-  ) {
-    throw new DataValidationError(
-      "Os dados devem ser finitos e as incertezas não podem ser negativas.",
-    );
-  }
-  return points;
-}
 
 type AnalysisState = {
   chart?: ChartValues;
@@ -121,7 +93,8 @@ type AnalysisState = {
 
 /**
  * Renders the analysis workspace and coordinates project editing.
- * @param props - Current project, navigation callback, and Finder opening state and callbacks.
+ * @param props - Current project, navigation callback, Finder and quick analysis requests with
+ * their callbacks, and whether to run the fits once the project opens.
  * @returns The rendered React element.
  */
 export function AnalysisPage({
@@ -130,12 +103,24 @@ export function AnalysisPage({
   finderPath,
   onOpenFinderProject,
   onCancelFinderProject,
+  quickRequest = null,
+  onStartQuick,
+  onCancelQuick,
+  runFitsOnOpen = false,
 }: {
   onBack: () => void;
   project?: OpenProject | null;
   finderPath: string | null;
   onOpenFinderProject: (path: string) => Promise<void>;
   onCancelFinderProject: () => void;
+  /** Quick analysis waiting to replace this one, or null. */
+  quickRequest?: QuickAnalysis | null;
+  /** Opens the quick analysis as a new project; called after this project is saved. */
+  onStartQuick?: (request: QuickAnalysis) => Promise<void>;
+  /** Keeps this analysis and drops the quick analysis request. */
+  onCancelQuick?: () => void;
+  /** Runs the configured fits once after mounting, as for a project made by a quick analysis. */
+  runFitsOnOpen?: boolean;
 }) {
   const [initialAnalysis] = useState(() =>
     project
@@ -154,6 +139,9 @@ export function AnalysisPage({
   const sidebarContent = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef({ analysis: 0, visual: 0 });
   const [openingFinderProject, setOpeningFinderProject] = useState(false);
+  const [startingQuick, setStartingQuick] = useState(false);
+  const startingQuickRef = useRef(false);
+  const fitsRunOnOpen = useRef(false);
   const openingFinderRef = useRef(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -671,8 +659,16 @@ export function AnalysisPage({
   useClipboardShortcuts(
     (shortcut) => void importFromClipboard(shortcut),
     isMac,
-    pendingImports.length === 0 && !table && finderPath === null,
+    pendingImports.length === 0 && !table && finderPath === null && quickRequest === null,
   );
+
+  useEffect(() => {
+    if (!runFitsOnOpen || fitsRunOnOpen.current) return;
+    fitsRunOnOpen.current = true;
+    void runFits();
+    // Runs once for the datasets the project opened with; later edits use the normal controls.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runFitsOnOpen]);
 
   return (
     <div className="analysis-workspace flex h-screen min-h-0 bg-[#f7f7f3] text-[#20272c]">
@@ -700,6 +696,24 @@ export function AnalysisPage({
             } finally {
               openingFinderRef.current = false;
               setOpeningFinderProject(false);
+            }
+          })();
+        }}
+      />
+      <QuickAnalysisDialog
+        open={quickRequest !== null && finderPath === null}
+        opening={startingQuick}
+        onCancel={() => onCancelQuick?.()}
+        onConfirm={() => {
+          if (!quickRequest || startingQuickRef.current) return;
+          startingQuickRef.current = true;
+          setStartingQuick(true);
+          void (async () => {
+            try {
+              if (await saving.canLeave()) await onStartQuick?.(quickRequest);
+            } finally {
+              startingQuickRef.current = false;
+              setStartingQuick(false);
             }
           })();
         }}

@@ -25,9 +25,29 @@ async function request(method, path, body) {
   return data.value;
 }
 
-test("the native application shows the new analysis action", { timeout: 60000 }, async () => {
+/**
+ * Opens a WebDriver session attached to the window with the given label. The app also keeps a
+ * hidden quick analysis window, so the session's initial window is not necessarily the main one.
+ */
+async function openSession(label = "main") {
   const { sessionId } = await request("POST", "/session", { capabilities: { alwaysMatch: {} } });
   assert.ok(sessionId);
+  const base = `/session/${sessionId}`;
+  const handles = await request("GET", `${base}/window/handles`);
+  for (const handle of handles) {
+    await request("POST", `${base}/window`, { handle });
+    const current = await request("POST", `${base}/execute/sync`, {
+      script: "return window.__TAURI_INTERNALS__.metadata.currentWindow.label",
+      args: [],
+    });
+    if (current === label) return { sessionId, base };
+  }
+  await request("DELETE", base);
+  throw new Error(`Window ${label} was not found`);
+}
+
+test("the native application shows the new analysis action", { timeout: 60000 }, async () => {
+  const { sessionId } = await openSession();
   try {
     const deadline = Date.now() + 20000;
     let element;
@@ -62,8 +82,7 @@ test(
     );
     assert.deepEqual(await readdir(dir), [], "Project directory must start empty");
 
-    const { sessionId } = await request("POST", "/session", { capabilities: { alwaysMatch: {} } });
-    const base = `/session/${sessionId}`;
+    const { base } = await openSession();
     const execute = (script, args = []) =>
       request("POST", `${base}/execute/sync`, { script, args });
     try {
@@ -120,8 +139,7 @@ test(
     const files = (await readdir(dir)).filter((name) => name.endsWith(".atus"));
     assert.equal(files.length, 1);
     const filename = path.join(dir, files[0]);
-    const { sessionId } = await request("POST", "/session", { capabilities: { alwaysMatch: {} } });
-    const base = `/session/${sessionId}`;
+    const { base } = await openSession();
     try {
       await request("POST", `${base}/execute/sync`, {
         script:
@@ -150,6 +168,64 @@ test(
       );
     } finally {
       await request("DELETE", base);
+    }
+  },
+);
+
+test(
+  "the quick analysis window hands its data to the main window, which opens it as a project",
+  { timeout: 40000 },
+  async () => {
+    const dir = await realpath(process.env.ATUS_DESKTOP_E2E_PROJECT_DIR);
+    const before = (await readdir(dir)).filter((name) => name.endsWith(".atus")).length;
+    const quick = await openSession("quick");
+    try {
+      const title = await request("POST", `${quick.base}/element`, {
+        using: "xpath",
+        value: '//h1[contains(., "Análise rápida")]',
+      });
+      assert.ok(title, "The quick analysis window should be loaded while hidden");
+      await request("POST", `${quick.base}/execute/sync`, {
+        script:
+          'return window.__TAURI_INTERNALS__.invoke("quick_submit", { analysis: { equation: "a*x + b", points: [{ x: 0, y: 1 }, { x: 1, y: 3 }, { x: 2, y: 5 }] } })',
+        args: [],
+      });
+    } finally {
+      await request("DELETE", quick.base);
+    }
+    const main = await openSession();
+    try {
+      const deadline = Date.now() + 15000;
+      let dataset;
+      while (Date.now() < deadline && !dataset) {
+        const matches = await request("POST", `${main.base}/elements`, {
+          using: "xpath",
+          value:
+            '//*[contains(text(), "Abrir análise rápida") or contains(text(), "Dados da análise rápida")]',
+        });
+        dataset = matches[0]?.["element-6066-11e4-a52e-4f735466cecf"];
+        if (!dataset) await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      assert.ok(dataset, "The main window should receive the quick analysis");
+      const confirm = await request("POST", `${main.base}/elements`, {
+        using: "xpath",
+        value: '//button[contains(., "Abrir análise rápida")]',
+      });
+      if (confirm[0])
+        await request(
+          "POST",
+          `${main.base}/element/${confirm[0]["element-6066-11e4-a52e-4f735466cecf"]}/click`,
+          {},
+        );
+      let files = before;
+      const created = Date.now() + 15000;
+      while (Date.now() < created && files === before) {
+        files = (await readdir(dir)).filter((name) => name.endsWith(".atus")).length;
+        if (files === before) await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      assert.equal(files, before + 1, "The quick analysis should create one project");
+    } finally {
+      await request("DELETE", main.base);
     }
   },
 );
