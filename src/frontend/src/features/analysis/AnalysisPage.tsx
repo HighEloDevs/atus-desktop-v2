@@ -12,7 +12,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type SetStateAction } fro
 import { notify } from "@/lib/notify";
 import { FitControls } from "./fit/FitControls";
 import { defaultFitConfig, validateFitConfig, type FitConfig } from "./fit/fit-config";
-import { ResultsPanel } from "./fit/ResultsPanel";
+import { ResultsPanel, type ResultItem } from "./fit/ResultsPanel";
 import { mockFitService, type FitResponse } from "./fit/fit-service";
 import { textParser, type SeparatorType } from "./data-import/text-data-parser";
 import { SeparatorDialog } from "./data-import/SeparatorDialog";
@@ -1028,10 +1028,12 @@ export function AnalysisPage({
                 </p>
               )}
               <ResultsPanel
-                results={datasets.flatMap((item) =>
+                results={datasets.flatMap((item): ResultItem[] =>
                   item.result
                     ? [{ id: item.id, name: item.name, color: item.color, result: item.result }]
-                    : [],
+                    : item.fitState === "error" && item.fitError
+                      ? [{ id: item.id, name: item.name, color: item.color, error: item.fitError }]
+                      : [],
                 )}
                 onHighlight={setHighlightedSeriesId}
               />

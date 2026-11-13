@@ -165,6 +165,10 @@ it("clears previous simulated output after changing the equation and reports inv
       item.textContent.includes("Função inválida"),
     ),
   ).toBe(true);
+  const failed = node.querySelector('section[aria-label="Resultados da análise"] article');
+  expect(failed.textContent).toContain("Falha no ajuste");
+  expect(failed.textContent).toContain("Função inválida");
+  expect(failed.textContent).not.toContain("Ver detalhes");
   expect(notify.error).toHaveBeenCalledWith("Falha no ajuste de ensaio.csv", {
     description: expect.stringContaining("Função inválida"),
     id: expect.stringMatching(/^fit-error-/),
