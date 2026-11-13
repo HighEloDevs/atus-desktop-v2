@@ -12,16 +12,12 @@ import { useEffect, useLayoutEffect, useRef, useState, type SetStateAction } fro
 import { notify } from "@/lib/notify";
 import { FitControls } from "./fit/FitControls";
 import { defaultFitConfig, validateFitConfig, type FitConfig } from "./fit/fit-config";
-import { ResultsPanel } from "./fit/ResultsPanel";
 import { mockFitService, type FitResponse } from "./fit/fit-service";
 import { textParser, type SeparatorType } from "./data-import/text-data-parser";
 import { SeparatorDialog } from "./data-import/SeparatorDialog";
 import { SeparatorSelect } from "./data-import/SeparatorSelect";
-import {
-  MAX_IMPORT_BYTES,
-  readClipboardText,
-  ClipboardReadError,
-} from "./clipboard/read-clipboard-text";
+import { readClipboardText, ClipboardReadError } from "./clipboard/read-clipboard-text";
+import { EmptyState } from "./EmptyState";
 import { useClipboardShortcuts, type ClipboardShortcut } from "./clipboard/clipboard-shortcuts";
 import { Chart, type ChartSeries } from "@/components/chart/Chart";
 import { DataTableDialog } from "./DataTableDialog";
@@ -35,7 +31,6 @@ import {
 import { ChartExportMenu } from "@/components/chart/ChartExportMenu";
 import { ChartSettingsPanel } from "@/components/chart/ChartSettingsPanel";
 import { useChartSettings, type ChartValues } from "@/components/chart/useChartSettings";
-import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   Activity,
   ArrowLeft,
@@ -44,7 +39,6 @@ import {
   Save,
   Database,
   FileInput,
-  FlaskConical,
   Palette,
   PanelLeft,
   Plus,
@@ -155,7 +149,6 @@ export function AnalysisPage({
   const initial = initialAnalysis?.state as AnalysisState | undefined;
   const chartSettings = useChartSettings(initial?.chart);
   const graphicRef = useRef<HTMLDivElement>(null);
-  const exampleNumber = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const sidebarContent = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef({ analysis: 0, visual: 0 });
@@ -258,10 +251,8 @@ export function AnalysisPage({
         visible: typeof value === "function" ? value(selected.visible) : value,
       }),
   });
-  const [status, setStatus] = useState<"idle" | "loading">("idle");
   const [panelOpen, setPanelOpen] = useState(true);
   const [mode, setMode] = useState<"analysis" | "visual">("analysis");
-  const [highlightedSeriesId, setHighlightedSeriesId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useLayoutEffect(() => {
@@ -328,9 +319,8 @@ export function AnalysisPage({
     }
   }
 
-  /** Reads files, enforcing the size limit, and imports each one with the selected separator. */
+  /** Reads the text of an imported file. There is no size limit in the desktop app. */
   async function readImportFile(file: File) {
-    if (file.size > MAX_IMPORT_BYTES) throw new Error("O arquivo excede 1 MB.");
     return file.text();
   }
 
@@ -377,6 +367,10 @@ export function AnalysisPage({
 
   /** Imports clipboard text as a new dataset or into dataset N (1-based) of the list. */
   async function importFromClipboard(shortcut: ClipboardShortcut) {
+    if (shortcut.kind === "fit") {
+      await runFits();
+      return;
+    }
     let target: ImportTarget = { kind: "create" };
     let replaced: ChartSeries | undefined;
     if (shortcut.kind === "replace") {
@@ -433,6 +427,7 @@ export function AnalysisPage({
 
   async function runFits() {
     const configured = datasets.filter((item) => item.equation.trim());
+    if (configured.length === 0) return;
     const results = await Promise.all(
       configured.map(async (item) => {
         try {
@@ -455,7 +450,7 @@ export function AnalysisPage({
           return {
             item,
             response: undefined,
-            error: error instanceof Error ? error.message : "Falha na simulação.",
+            error: error instanceof Error ? error.message : "Falha ao executar o ajuste.",
           };
         }
       }),
@@ -466,6 +461,8 @@ export function AnalysisPage({
           description: error,
           id: `fit-error-${item.id}`,
         });
+    if (results.every(({ error }) => !error))
+      notify.success("Ajuste executado com sucesso", { id: "fit-success" });
     setDatasets((items) =>
       items.map((current) => {
         const result = results.find(
@@ -506,54 +503,6 @@ export function AnalysisPage({
           : item,
       ),
     );
-  }
-
-  function reportExampleError() {
-    setStatus("idle");
-    notify.error("Não foi possível carregar o exemplo", {
-      description: "Abra o aplicativo desktop e tente novamente.",
-      id: "example-error",
-    });
-  }
-
-  async function loadExample() {
-    if (!isTauri()) {
-      reportExampleError();
-      return;
-    }
-    setStatus("loading");
-    try {
-      const example = await invoke<MockAnalysis>("get_mock_analysis");
-      const id = crypto.randomUUID();
-      const name = `Exemplo ${++exampleNumber.current}`;
-      setDatasets((items) => [
-        ...items,
-        {
-          id,
-          name,
-          data: example,
-          ...defaultFitConfig,
-          fitState: "idle",
-          points: example.x.map((x, index) => ({ x, y: example.y[index] })),
-          linePoints: example.x.length
-            ? [Math.min(...example.x), Math.max(...example.x)].map((x) => ({
-                x,
-                y: example.slope * x + example.intercept,
-              }))
-            : [],
-          color: ["#f25a3c", "#364cff", "#16835d", "#a04cb0"][items.length % 4],
-          radius: 5,
-          symbol: "circle",
-          lineStyle: "solid",
-          lineWidth: 2,
-          visible: true,
-        },
-      ]);
-      setSelectedId(id);
-      setStatus("idle");
-    } catch {
-      reportExampleError();
-    }
   }
 
   const cards = (cardMode: "analysis" | "visual") => (
@@ -893,7 +842,7 @@ export function AnalysisPage({
                     <FileInput size={22} className="mx-auto text-[#829087]" />
                     <p className="mt-3 text-[12px] font-semibold">Importar dados</p>
                     <p className="mt-1 text-[11px] leading-5 text-[#87938a]">
-                      Arquivos CSV, TXT ou DAT, com até 1 MB cada.
+                      Arquivos CSV, TXT ou DAT.
                     </p>
                     <p className="mt-2 text-[11px] leading-5 text-[#87938a]">
                       <kbd className="font-sans font-semibold">{modifier} B</kbd> adiciona do
@@ -931,11 +880,9 @@ export function AnalysisPage({
               onClick={() => void runFits()}
               className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-45"
             >
-              <Activity size={16} /> Executar ajustes
+              <Activity size={16} /> Executar ajustes{" "}
+              <kbd className="font-sans text-[10px] font-medium opacity-80">{modifier} ↵</kbd>
             </button>
-            <p className="mt-2 text-center text-[10px] text-[#87938a]">
-              Simulação: nenhum ajuste científico é calculado
-            </p>
           </div>
         </aside>
       )}
@@ -950,69 +897,13 @@ export function AnalysisPage({
           >
             <PanelLeft size={17} />
           </button>
-          <span className="text-[12px] font-semibold">Gráfico</span>
           <ChartExportMenu graphic={graphicRef} disabled={!data} />
         </div>
         <div
           className={`analysis-canvas relative flex min-h-0 flex-1 ${data ? "overflow-hidden p-0" : "items-center justify-center overflow-auto px-6 py-8"}`}
         >
           {!data ? (
-            <div className="relative w-full max-w-[620px] text-center">
-              <h2 className="text-[18px] font-semibold">Comece sua análise</h2>
-              <p className="mt-1.5 text-[13px] text-[#758078]">
-                Importe seus dados para visualizar o gráfico e calcular ajustes.
-              </p>
-              <div className="mt-6 grid gap-3 rounded-xl border border-dashed border-[#c8d0c8] bg-white p-4 sm:grid-cols-2">
-                <div className="rounded-lg border border-[#e1e6df] bg-[#f8faf7] p-5">
-                  <Database size={22} className="mx-auto text-[#607568]" />
-                  <h3 className="mt-3 text-[13px] font-semibold">Importar no painel Dados</h3>
-                  <p className="mt-1 text-[11px] text-[#87938a]">CSV, TXT ou DAT</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPanelOpen(true);
-                      setMode("analysis");
-                    }}
-                    className="mt-4 rounded border border-[#d8ded7] bg-white px-3 py-2 text-[11px] font-medium"
-                  >
-                    Abrir painel de dados
-                  </button>
-                </div>
-                <div className="rounded-lg border border-[#e1e6df] bg-[#f8faf7] p-5">
-                  <FlaskConical size={22} className="mx-auto text-[#607568]" />
-                  <h3 className="mt-3 text-[13px] font-semibold">Explorar demonstração</h3>
-                  <p className="mt-1 text-[11px] text-[#87938a]">Dados fixos retornados pelo C++</p>
-                  <button
-                    type="button"
-                    onClick={loadExample}
-                    disabled={status === "loading"}
-                    className="mt-4 rounded border border-[#d8ded7] bg-white px-3 py-2 text-[11px] font-medium hover:bg-[#eff2ed]"
-                  >
-                    {status === "loading" ? "Carregando…" : "Carregar exemplo"}
-                  </button>
-                </div>
-              </div>
-              <div className="mx-auto mt-6 max-w-[360px] text-left">
-                <p className="mb-3 text-center text-[10px] font-semibold uppercase tracking-wider text-[#9aa59c]">
-                  Próximos passos
-                </p>
-                {[
-                  "Importe dados no painel à esquerda",
-                  "Escreva a equação de ajuste",
-                  "Execute os ajustes e veja os resultados",
-                ].map((step, i) => (
-                  <div
-                    key={step}
-                    className="flex items-center gap-3 py-1.5 text-[11px] text-[#929e95]"
-                  >
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#e9ece7] text-[10px] font-semibold">
-                      {i + 1}
-                    </span>
-                    {step}
-                  </div>
-                ))}
-              </div>
-            </div>
+            <EmptyState modifier={modifier} />
           ) : (
             <div className="relative flex h-full min-h-0 w-full flex-col bg-white p-5">
               <Chart
@@ -1020,20 +911,6 @@ export function AnalysisPage({
                 settings={chartSettings}
                 label="Gráfico dos conjuntos de dados"
                 series={datasets}
-                highlightedSeriesId={highlightedSeriesId}
-              />
-              {datasets.some((item) => item.data) && (
-                <p className="mt-2 text-[11px] text-[#8a6a38]">
-                  Exemplo demonstrativo: nenhum ajuste foi executado.
-                </p>
-              )}
-              <ResultsPanel
-                results={datasets.flatMap((item) =>
-                  item.result
-                    ? [{ id: item.id, name: item.name, color: item.color, result: item.result }]
-                    : [],
-                )}
-                onHighlight={setHighlightedSeriesId}
               />
             </div>
           )}

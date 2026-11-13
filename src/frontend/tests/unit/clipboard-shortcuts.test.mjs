@@ -56,4 +56,25 @@ describe("clipboard shortcuts", () => {
       kind: "create",
     });
   });
+
+  test("Cmd/Ctrl+Enter runs the fits, also from text controls", () => {
+    const enter = { ...base, code: "Enter" };
+    expect(getClipboardShortcut({ ...enter, metaKey: true }, true)).toEqual({ kind: "fit" });
+    expect(getClipboardShortcut({ ...enter, ctrlKey: true }, false)).toEqual({ kind: "fit" });
+    expect(getClipboardShortcut({ ...enter, code: "NumpadEnter", ctrlKey: true }, false)).toEqual({
+      kind: "fit",
+    });
+    const input = document.createElement("input");
+    expect(getClipboardShortcut({ ...enter, ctrlKey: true, target: input }, false)).toEqual({
+      kind: "fit",
+    });
+  });
+
+  test("plain Enter, wrong modifier, extra modifiers and key repeat do not run the fits", () => {
+    const enter = { ...base, code: "Enter" };
+    expect(getClipboardShortcut(enter, false)).toBeNull();
+    expect(getClipboardShortcut({ ...enter, ctrlKey: true }, true)).toBeNull();
+    expect(getClipboardShortcut({ ...enter, ctrlKey: true, shiftKey: true }, false)).toBeNull();
+    expect(getClipboardShortcut({ ...enter, ctrlKey: true, repeat: true }, false)).toBeNull();
+  });
 });
