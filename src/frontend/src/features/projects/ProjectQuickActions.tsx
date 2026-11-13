@@ -51,9 +51,9 @@ export function ProjectQuickActions({ isMac, onCreate, onOpen }: ProjectQuickAct
             type="button"
             onClick={onClick}
             aria-keyshortcuts={keyShortcuts}
-            className="flex h-full min-w-0 items-center gap-3 rounded-md border border-border bg-white p-4 text-left hover:border-ring hover:bg-[#f1f3ff]"
+            className="flex h-full min-w-0 items-center gap-3 rounded-md border border-border bg-white p-4 text-left hover:border-foreground/40 hover:bg-muted/50"
           >
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[#eef0ff] text-ring">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
               <Icon aria-hidden="true" size={18} />
             </span>
             <span className="min-w-0 flex-1">

@@ -29,7 +29,7 @@ export function FinderProjectDialog({ path, opening, onCancel, onOpen }: FinderP
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-[#20272c]/35 backdrop-blur-sm" />
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-foreground/35 backdrop-blur-sm" />
         <Dialog.Content
           aria-modal="true"
           className="fixed left-1/2 top-1/2 z-50 w-[min(90vw,440px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-white p-5 shadow-xl"

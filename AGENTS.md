@@ -46,7 +46,7 @@ A sequência proposta é fundação (AT-01, AT-19, AT-20), primeiro fluxo (AT-02
 
 ## Identidade e comunicação
 
-Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A base é grafite `#20272C` sobre papel `#F7F7F3`, com coral `#F25A3C` para foco e atenção e cobalto `#364CFF` para análise, seleção e séries. Preserve proporções da marca e confira o contraste real: branco sobre coral não é adequado para texto pequeno. Inter Display, Inter e fonte monoespaçada são as referências tipográficas. Use linguagem clara, objetiva e acessível em português na interface.
+Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A base é grafite `#20272C` sobre papel `#F7F7F3`, com coral `#F25A3C` para foco e atenção e cobalto `#364CFF` para análise, seleção e séries. Preserve proporções da marca e confira o contraste real: branco sobre coral não é adequado para texto pequeno. Inter Display, Inter e fonte monoespaçada são as referências tipográficas. Use linguagem clara, objetiva e acessível em português na interface. O cobalto é semântico: só para análise, seleção e séries de dados (não para ícones, links ou hover decorativos); na tela inicial e nos controles gerais use grafite, papel e neblina (`muted`), e coral só para atenção. Prefira os tokens do tema (`foreground`, `muted`, `destructive`, `brand-coral`) a hex avulsos.
 
 ## Desenvolvimento
 
