@@ -20,6 +20,10 @@ Construir o ATUS Desktop v2, software científico gratuito e open source para es
 - Escreva código, identificadores e nomes de arquivos e pastas em inglês. A interface permanece em português, conforme a orientação de produto.
 - Documente todos os módulos e classes e todas as funções e métodos públicos em inglês, no padrão da linguagem (JSDoc, rustdoc ou Doxygen). Descreva propósito, parâmetros, retorno, erros, efeitos colaterais e pré-condições relevantes ao contrato. Inclua exemplos de uso quando ajudarem a compreender a API e mantenha a documentação atualizada junto com a implementação.
 
+## Componentes de interface
+
+Antes de criar qualquer componente, confira se ele já existe em `src/frontend/src/components/ui/` (ou em outro lugar do frontend) e reutilize-o. O projeto usa **shadcn/ui**: para um componente novo, parta do equivalente do shadcn (`components.json` configura o CLI) em vez de escrever do zero. Ajuste o visual do componente com `className` e os tokens da identidade; não duplique a marcação (por exemplo, tabelas usam `ui/table.tsx`). Cuidado com bordas: o `border-b` do shadcn herda a cor do texto, então informe `border-border`.
+
 ## Princípios de implementação
 
 - Toda melhoria deve vir com um teste de regressão que cubra o comportamento alterado. Adicione ou atualize o teste na mesma mudança e execute as verificações relevantes.

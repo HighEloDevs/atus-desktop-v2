@@ -145,9 +145,9 @@ it("opens an available project and relocates a missing one", async () => {
   api.chooseProject.mockResolvedValue("/replacement.atus");
   await render();
   expect(node.textContent).toContain("Arquivo indisponível");
-  await click(node.querySelector('button[title="/a.atus"]'));
+  await click(node.querySelector('button[aria-label="Abrir a"]'));
   expect(onOpen).toHaveBeenCalledWith("/a.atus");
-  await click(node.querySelector('button[title="/missing.atus"]'));
+  await click(node.querySelector('button[aria-label="Localizar missing"]'));
   expect(onOpen).toHaveBeenCalledWith("/replacement.atus", "/missing.atus");
 });
 
@@ -156,7 +156,7 @@ it("reports a failed relocation dialog", async () => {
   api.projectClient.details.mockResolvedValue([detail("/missing.atus", { available: false })]);
   api.chooseProject.mockRejectedValue(new Error("dialog failed"));
   await render();
-  await click(node.querySelector('button[title="/missing.atus"]'));
+  await click(node.querySelector('button[aria-label="Localizar missing"]'));
   expect(notify.error).toHaveBeenCalledWith(
     "Não foi possível localizar o projeto",
     expect.objectContaining({ description: expect.stringContaining("dialog failed") }),
@@ -290,4 +290,15 @@ it("removes an entry from recents without touching the file", async () => {
   await click(item(firstRow("recent-heading"), "Remover dos recentes"));
   expect(api.forgetProject).toHaveBeenCalledWith("/d/a.atus");
   expect(api.projectClient.remove).not.toHaveBeenCalled();
+});
+
+it("opens through the row button and keeps Abrir out of the actions menu", async () => {
+  api.projectClient.list.mockResolvedValue(["/d/a.atus"]);
+  await render();
+  const labels = [...firstRow("all-heading").querySelectorAll('[role="menuitem"]')].map(
+    (b) => b.textContent,
+  );
+  expect(labels).toEqual(["Renomear…", "Mostrar na pasta", "Arquivar", "Excluir…"]);
+  await click(firstRow("all-heading").querySelector('button[aria-label="Abrir a"]'));
+  expect(onOpen).toHaveBeenCalledWith("/d/a.atus");
 });

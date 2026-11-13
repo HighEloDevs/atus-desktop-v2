@@ -3,8 +3,14 @@
  * Home tables for recent projects and all projects, with management actions.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { FileWarning, MoreHorizontal } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  ArrowUpRight,
+  FileChartColumn,
+  FileSearch,
+  FileWarning,
+  MoreHorizontal,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -46,6 +52,54 @@ const filters: { value: Filter; label: string }[] = [
   { value: "all", label: "Todos" },
 ];
 
+const sorts: { value: Sort; label: string }[] = [
+  { value: "modified", label: "Recentes" },
+  { value: "name", label: "A–Z" },
+];
+
+/** Item count shown next to a section title. */
+function Count({ n }: { n: number }) {
+  return (
+    <span className="rounded-full bg-muted px-2 text-[11px] font-medium text-muted-foreground">
+      {n}
+    </span>
+  );
+}
+
+/** Compact segmented control built from shadcn buttons. */
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className="flex gap-0.5 rounded-md border border-input bg-white p-0.5"
+    >
+      {options.map((option) => (
+        <Button
+          key={option.value}
+          type="button"
+          size="xs"
+          variant={value === option.value ? "default" : "ghost"}
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 /** Reports a project-list failure as a global snackbar. */
 function reportError(title: string, reason: unknown) {
   notify.error(title, { description: String(reason), id: "project-list-error" });
@@ -58,7 +112,6 @@ function directoryOf(path: string) {
 
 function ActionsMenu({
   project,
-  onOpen,
   onRename,
   onArchive,
   onDelete,
@@ -66,7 +119,6 @@ function ActionsMenu({
   onForget,
 }: {
   project: ProjectDetails;
-  onOpen: () => void;
   onRename: () => void;
   onArchive: () => void;
   onDelete: () => void;
@@ -81,9 +133,8 @@ function ActionsMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {project.available ? (
+        {project.available && (
           <>
-            <DropdownMenuItem onSelect={onOpen}>Abrir</DropdownMenuItem>
             <DropdownMenuItem onSelect={onRename}>Renomear…</DropdownMenuItem>
             <DropdownMenuItem onSelect={onReveal}>Mostrar na pasta</DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -92,8 +143,6 @@ function ActionsMenu({
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={onDelete}>Excluir…</DropdownMenuItem>
           </>
-        ) : (
-          <DropdownMenuItem onSelect={onOpen}>Localizar…</DropdownMenuItem>
         )}
         {onForget && (
           <>
@@ -106,34 +155,118 @@ function ActionsMenu({
   );
 }
 
-function NameCell({ project, onOpen }: { project: ProjectDetails; onOpen: () => void }) {
+const headClass =
+  "h-9 bg-[#fafbf8] px-4 text-[11px] font-medium uppercase tracking-[.04em] text-muted-foreground";
+const cellClass = "px-4 py-2.5";
+
+function NameCell({ project }: { project: ProjectDetails }) {
   return (
-    <TableCell className="max-w-[260px]">
-      <button
-        type="button"
-        title={project.path}
-        className="flex w-full min-w-0 flex-col rounded-sm text-left"
-        onClick={onOpen}
-      >
-        <span className="flex items-center gap-2 truncate font-medium">
-          {!project.available && <FileWarning aria-hidden="true" size={14} className="shrink-0" />}
-          <span className="truncate">{project.name}</span>
-          {project.archived && (
-            <span className="rounded bg-muted px-1.5 text-[11px] font-normal text-muted-foreground">
-              Arquivado
+    <TableCell className={`${cellClass} max-w-[280px]`}>
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          className={`flex size-8 shrink-0 items-center justify-center rounded ${project.available ? "bg-[#eef0ff] text-ring" : "bg-[#fff1e8] text-[#8d432a]"}`}
+        >
+          {project.available ? (
+            <FileChartColumn aria-hidden="true" size={16} />
+          ) : (
+            <FileWarning aria-hidden="true" size={16} />
+          )}
+        </span>
+        <span className="min-w-0">
+          <span className="flex items-center gap-2">
+            <span className="truncate font-medium">{project.name}</span>
+            {project.archived && (
+              <span className="shrink-0 rounded bg-muted px-1.5 text-[11px] text-muted-foreground">
+                Arquivado
+              </span>
+            )}
+          </span>
+          {!project.available && (
+            <span className="block truncate text-xs text-[#8d432a]">Arquivo indisponível</span>
+          )}
+          {project.error && (
+            <span className="block truncate text-xs text-[#8d432a]">
+              Não foi possível ler o arquivo
             </span>
           )}
         </span>
-        {!project.available && (
-          <span className="text-xs font-normal text-[#8d432a]">
-            Arquivo indisponível · Localizar
-          </span>
-        )}
-        {project.error && (
-          <span className="text-xs font-normal text-[#8d432a]">Não foi possível ler o arquivo</span>
-        )}
-      </button>
+      </div>
     </TableCell>
+  );
+}
+
+/** One project table; `columns` picks the recent or the complete layout. */
+function ProjectsTable({
+  labelledBy,
+  columns,
+  projects,
+  onOpen,
+  renderMenu,
+}: {
+  labelledBy: string;
+  columns: "recent" | "all";
+  projects: ProjectDetails[];
+  onOpen: (project: ProjectDetails) => void;
+  renderMenu: (project: ProjectDetails) => ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-md border border-border bg-white">
+      <Table aria-labelledby={labelledBy} className="text-[13px]">
+        <TableHeader className="[&_tr]:border-border">
+          <TableRow className="border-border hover:bg-transparent">
+            <TableHead className={headClass}>Nome</TableHead>
+            <TableHead className={headClass}>Modificado</TableHead>
+            {columns === "all" && <TableHead className={headClass}>Tamanho</TableHead>}
+            <TableHead className={headClass}>Local</TableHead>
+            <TableHead className={`${headClass} w-[88px]`}>
+              <span className="sr-only">Ações</span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {projects.map((project) => (
+            <TableRow key={project.path} className="border-border hover:bg-[#f1f3ff]">
+              <NameCell project={project} />
+              <TableCell className={`${cellClass} text-muted-foreground`}>
+                {formatModified(project.modified)}
+              </TableCell>
+              {columns === "all" && (
+                <TableCell className={`${cellClass} text-muted-foreground`}>
+                  {formatSize(project.size)}
+                </TableCell>
+              )}
+              <TableCell
+                dir="auto"
+                title={project.path}
+                className={`${cellClass} max-w-[260px] truncate font-mono text-xs text-muted-foreground`}
+              >
+                {directoryOf(project.path)}
+              </TableCell>
+              <TableCell className="px-2 py-1.5">
+                <div className="flex items-center justify-end gap-0.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    title={project.available ? "Abrir projeto" : "Localizar arquivo"}
+                    aria-label={`${project.available ? "Abrir" : "Localizar"} ${project.name}`}
+                    className="text-ring hover:text-ring"
+                    onClick={() => onOpen(project)}
+                  >
+                    {project.available ? (
+                      <ArrowUpRight aria-hidden="true" />
+                    ) : (
+                      <FileSearch aria-hidden="true" />
+                    )}
+                  </Button>
+                  {renderMenu(project)}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 
@@ -280,7 +413,6 @@ export function ProjectTables({
     return (
       <ActionsMenu
         project={project}
-        onOpen={() => void (project.available ? onOpen(project.path) : locate(project.path))}
         onRename={() => setPending({ kind: "rename", project })}
         onArchive={() => void toggleArchive(project)}
         onDelete={() => setPending({ kind: "delete", project })}
@@ -297,14 +429,15 @@ export function ProjectTables({
     );
   }
 
-  const open = (project: ProjectDetails) => () =>
+  const open = (project: ProjectDetails) =>
     void (project.available ? onOpen(project.path) : locate(project.path));
 
   return (
     <>
       <section aria-labelledby="recent-heading" className="mt-6">
-        <h2 id="recent-heading" className="mb-3 text-sm font-semibold">
+        <h2 id="recent-heading" className="mb-3 flex items-center gap-2 text-sm font-semibold">
           Projetos recentes
+          {!loading && recent.length > 0 && <Count n={recent.length} />}
         </h2>
         {loading ? (
           <p role="status" className="text-sm text-muted-foreground">
@@ -313,123 +446,55 @@ export function ProjectTables({
         ) : recent.length === 0 ? (
           <EmptyRecentProjects />
         ) : (
-          <div className="rounded-md border border-border bg-white">
-            <Table aria-labelledby="recent-heading">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Modificado</TableHead>
-                  <TableHead>Local</TableHead>
-                  <TableHead className="w-10">
-                    <span className="sr-only">Ações</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recent.map((project) => (
-                  <TableRow key={project.path}>
-                    <NameCell project={project} onOpen={open(project)} />
-                    <TableCell>{formatModified(project.modified)}</TableCell>
-                    <TableCell
-                      dir="auto"
-                      title={project.path}
-                      className="max-w-[320px] truncate text-xs text-muted-foreground"
-                    >
-                      {directoryOf(project.path)}
-                    </TableCell>
-                    <TableCell className="text-right">{menu(project, true)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <ProjectsTable
+            labelledBy="recent-heading"
+            columns="recent"
+            projects={recent}
+            onOpen={open}
+            renderMenu={(project) => menu(project, true)}
+          />
         )}
       </section>
 
       <section aria-labelledby="all-heading" className="mt-8">
-        <h2 id="all-heading" className="mb-3 text-sm font-semibold">
+        <h2 id="all-heading" className="mb-3 flex items-center gap-2 text-sm font-semibold">
           Todos os projetos
+          {!loading && <Count n={visible.length} />}
         </h2>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Input
             type="search"
             aria-label="Buscar projetos"
             placeholder="Buscar por nome…"
-            className="h-8 max-w-[280px] bg-white"
+            className="h-8 max-w-[260px] bg-white"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          <div role="group" aria-label="Filtro" className="flex gap-1">
-            {filters.map(({ value, label }) => (
-              <Button
-                key={value}
-                type="button"
-                size="sm"
-                variant={filter === value ? "default" : "outline"}
-                aria-pressed={filter === value}
-                onClick={() => setFilter(value)}
-              >
-                {label}
-              </Button>
-            ))}
-          </div>
-          <div role="group" aria-label="Ordenação" className="flex gap-1">
-            {(
-              [
-                ["modified", "Recentes"],
-                ["name", "A–Z"],
-              ] as const
-            ).map(([value, label]) => (
-              <Button
-                key={value}
-                type="button"
-                size="sm"
-                variant={sort === value ? "default" : "outline"}
-                aria-pressed={sort === value}
-                onClick={() => setSort(value)}
-              >
-                {label}
-              </Button>
-            ))}
-          </div>
+          <Segmented
+            label="Filtro"
+            value={filter}
+            options={filters}
+            onChange={(value) => setFilter(value)}
+          />
+          <Segmented
+            label="Ordenação"
+            value={sort}
+            options={sorts}
+            onChange={(value) => setSort(value)}
+          />
         </div>
         {loading ? null : visible.length === 0 ? (
           <p className="rounded-md border border-dashed border-border bg-white p-6 text-center text-sm text-muted-foreground">
             Nenhum projeto encontrado.
           </p>
         ) : (
-          <div className="rounded-md border border-border bg-white">
-            <Table aria-labelledby="all-heading">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Modificado</TableHead>
-                  <TableHead>Tamanho</TableHead>
-                  <TableHead>Local</TableHead>
-                  <TableHead className="w-10">
-                    <span className="sr-only">Ações</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visible.map((project) => (
-                  <TableRow key={project.path}>
-                    <NameCell project={project} onOpen={open(project)} />
-                    <TableCell>{formatModified(project.modified)}</TableCell>
-                    <TableCell>{formatSize(project.size)}</TableCell>
-                    <TableCell
-                      dir="auto"
-                      title={project.path}
-                      className="max-w-[320px] truncate text-xs text-muted-foreground"
-                    >
-                      {directoryOf(project.path)}
-                    </TableCell>
-                    <TableCell className="text-right">{menu(project, false)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <ProjectsTable
+            labelledBy="all-heading"
+            columns="all"
+            projects={visible}
+            onOpen={open}
+            renderMenu={(project) => menu(project, false)}
+          />
         )}
       </section>
 
