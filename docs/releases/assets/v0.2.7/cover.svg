@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Janela do ATUS com uma barra de progresso de download e um escudo de assinatura verificada">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#2B3439" stroke-width="1"/></pattern>
+  </defs>
+  <rect width="1280" height="720" fill="#20272C"/>
+  <rect width="1280" height="720" fill="url(#grid)"/>
+
+  <g fill="#F7F7F3">
+    <path d="M110 80H196V104H134V166H110Z"/>
+    <path d="M1170 80H1084V104H1146V166H1170Z"/>
+    <path d="M110 640H196V616H134V554H110Z"/>
+    <path d="M1170 640H1084V616H1146V554H1170Z"/>
+  </g>
+
+  <!-- App window -->
+  <rect x="300" y="190" width="680" height="360" rx="16" fill="#000000" opacity=".25" transform="translate(10 14)"/>
+  <rect x="300" y="190" width="680" height="360" rx="16" fill="#F7F7F3"/>
+  <path d="M316 190H964A16 16 0 0 1 980 206V234H300V206A16 16 0 0 1 316 190Z" fill="#E6E9E4"/>
+  <g fill="#C9CFC8"><circle cx="324" cy="212" r="6.5"/><circle cx="345" cy="212" r="6.5"/><circle cx="366" cy="212" r="6.5"/></g>
+  <path d="M300 234H450V550H316A16 16 0 0 1 300 534Z" fill="#EFF1ED"/>
+  <rect x="320" y="258" width="60" height="10" rx="3" fill="#20272C"/>
+  <rect x="320" y="290" width="100" height="22" rx="5" fill="#FFFFFF" stroke="#D8DED7" stroke-width="2"/>
+  <rect x="320" y="322" width="80" height="12" rx="3" fill="#C9CFC8"/>
+
+  <!-- Header button: update downloading -->
+  <rect x="800" y="248" width="150" height="40" rx="9" fill="#FFFFFF" stroke="#D8DED7" stroke-width="2"/>
+  <circle cx="824" cy="268" r="9" fill="none" stroke="#E9ECE7" stroke-width="4"/>
+  <path d="M824 259A9 9 0 1 1 815 268" fill="none" stroke="#20272C" stroke-width="4" stroke-linecap="round"/>
+  <rect x="842" y="262" width="92" height="12" rx="3" fill="#66716E"/>
+
+  <!-- Banner with progress -->
+  <rect x="480" y="320" width="470" height="112" rx="12" fill="#FFFFFF" stroke="#D8DED7" stroke-width="2"/>
+  <rect x="498" y="338" width="104" height="76" rx="8" fill="#20272C"/>
+  <path d="M510 398C540 392 556 374 580 360" fill="none" stroke="#F7F7F3" stroke-width="3"/>
+  <g fill="#364CFF" stroke="#C9CFFF" stroke-width="2"><circle cx="520" cy="396" r="5"/><circle cx="548" cy="384" r="5"/><circle cx="576" cy="364" r="5"/></g>
+  <rect x="620" y="342" width="86" height="9" rx="3" fill="#B3321A"/>
+  <rect x="620" y="360" width="200" height="14" rx="4" fill="#20272C"/>
+  <rect x="620" y="384" width="290" height="10" rx="4" fill="#D8DED7"/>
+  <rect x="620" y="402" width="230" height="10" rx="4" fill="#D8DED7"/>
+
+  <!-- Progress bar -->
+  <rect x="480" y="462" width="470" height="14" rx="7" fill="#E9ECE7"/>
+  <rect x="480" y="462" width="292" height="14" rx="7" fill="#20272C"/>
+  <rect x="480" y="490" width="120" height="10" rx="3" fill="#C9CFC8"/>
+
+  <!-- Verified signature seal -->
+  <g transform="translate(980 520)">
+    <circle r="54" fill="#1E7B4F" stroke="#20272C" stroke-width="10"/>
+    <path d="M-24 2L-8 18L26 -17" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

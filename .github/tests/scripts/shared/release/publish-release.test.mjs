@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
@@ -75,14 +75,15 @@ test('publish never looks releases up through the tag endpoint, which hides draf
 });
 
 /** Sign a file the way the Tauri bundler does and write `<file>.sig`; returns the public key value. */
-function signer() {
+function signer(version = '0.2.1') {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
   const id = Buffer.from('0011223344556677', 'hex');
   const pub = Buffer.from(`untrusted comment: k\n${Buffer.concat([Buffer.from('Ed'), id, publicKey.export({ format: 'der', type: 'spki' }).subarray(-32)]).toString('base64')}\n`).toString('base64');
   const signFile = (path, data) => {
     const sig = sign(null, createHash('blake2b512').update(data).digest(), privateKey);
-    const global = sign(null, Buffer.concat([sig, Buffer.from('c')]), privateKey);
-    writeFileSync(`${path}.sig`, Buffer.from(`untrusted comment: s\n${Buffer.concat([Buffer.from('ED'), id, sig]).toString('base64')}\ntrusted comment: c\n${global.toString('base64')}\n`).toString('base64'));
+    const comment = `timestamp:1\tfile:f\tversion:${version}`;
+    const global = sign(null, Buffer.concat([sig, Buffer.from(comment)]), privateKey);
+    writeFileSync(`${path}.sig`, Buffer.from(`untrusted comment: s\n${Buffer.concat([Buffer.from('ED'), id, sig]).toString('base64')}\ntrusted comment: ${comment}\n${global.toString('base64')}\n`).toString('base64'));
   };
   return { pub, signFile };
 }
@@ -92,14 +93,18 @@ test('verifies every updater signature and reports each bad one', () => {
   const { pub, signFile } = signer();
   const selected = selectArtifacts(root, '0.2.1');
   for (const entry of selected.filter((item) => item.signature)) signFile(entry.path, 'x');
-  const signatures = verifySignatures(selected, pub);
+  const signatures = verifySignatures(selected, pub, '0.2.1');
   assert.deepEqual(Object.keys(signatures).sort(), ARTIFACTS.filter((item) => item.signed).map((item) => item.name).sort());
   writeFileSync(join(root, 'windows-installer', 'a.msi'), 'changed');
   writeFileSync(join(root, 'linux-bundles', 'a.deb'), 'changed');
-  assert.throws(() => verifySignatures(selected, pub), /Invalid updater signatures.*\natus-linux\.deb: the signature does not match the file\natus-windows\.msi:/s);
+  assert.throws(() => verifySignatures(selected, pub, '0.2.1'), /Invalid updater signatures.*\natus-linux\.deb: the signature does not match the file\natus-windows\.msi:/s);
   // A different key with the same id is still caught by the signature itself.
-  assert.throws(() => verifySignatures(selected, signer().pub), /atus-linux\.rpm: the signature does not match the file/);
-  assert.throws(() => verifySignatures(selected, undefined), /not a base64 minisign box/);
+  assert.throws(() => verifySignatures(selected, signer().pub, '0.2.1'), /atus-linux\.rpm: the signature does not match the file/);
+  assert.throws(() => verifySignatures(selected, undefined, '0.2.1'), /not a base64 minisign box/);
+  // A package signed for another version could never be installed by the app.
+  const other = signer('0.2.0');
+  for (const entry of selected.filter((item) => item.signature)) other.signFile(entry.path, readFileSync(entry.path));
+  assert.throws(() => verifySignatures(selected, other.pub, '0.2.1'), /the signature is for version 0\.2\.0, not 0\.2\.1/);
 });
 
 test('latest.json points each installed format to its own signed package', () => {

@@ -1,6 +1,6 @@
 [package]
 name = "atus-desktop"
-version = "0.2.6"
+version = "0.2.7"
 description = "ATUS Desktop"
 edition = "2021"
 
@@ -25,3 +25,4 @@ trash = "5"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2.14"

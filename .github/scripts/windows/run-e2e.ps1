@@ -78,7 +78,10 @@ try {
     try {
         & $node --test 'tests/desktop/smoke.e2e.mjs'
         if ($LASTEXITCODE -ne 0) { throw "Desktop smoke test failed with exit code $LASTEXITCODE." }
-        # The quick analysis test runs second, presses the real shortcut with synthetic input and
+        # The updater test needs only the running application and its own local server.
+        & $node --test 'tests/desktop/smoke.updater.e2e.mjs'
+        if ($LASTEXITCODE -ne 0) { throw "Updater test failed with exit code $LASTEXITCODE." }
+        # The quick analysis test runs last, presses the real shortcut with synthetic input and
         # ends by quitting the application.
         $pressScript = Join-Path $PSScriptRoot 'press-shortcut.ps1'
         $env:ATUS_E2E_KEY_COMMAND = "pwsh -NoProfile -File `"$pressScript`""

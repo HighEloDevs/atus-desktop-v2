@@ -33,9 +33,12 @@ export function decodePublicKey(encoded) {
  * @param {Buffer} data Bytes of the signed artifact.
  * @param {string} signature Contents of its `.sig` file.
  * @param {string} publicKey Value of `plugins.updater.pubkey`.
+ * @param {string} [expectedVersion] When given, the signature must also name this version in its
+ *   trusted comment (`version:M.m.p`, written by the Tauri bundler). The app enforces the same
+ *   with `requireSignedVersion`, so a signature that does not name it can never be installed.
  * @returns {string|null} Null when valid, otherwise the reason it is not.
  */
-export function checkSignature(data, signature, publicKey) {
+export function checkSignature(data, signature, publicKey, expectedVersion) {
   let pub;
   try { pub = decodePublicKey(publicKey); } catch (error) { return error.message; }
   let lines;
@@ -50,7 +53,10 @@ export function checkSignature(data, signature, publicKey) {
   const trusted = /^trusted comment: (.*)$/.exec(lines[2] ?? '');
   const global = Buffer.from(lines[3] ?? '', 'base64');
   if (!trusted || global.length !== 64 || !verify(null, Buffer.concat([raw.subarray(10), Buffer.from(trusted[1], 'utf8')]), pub.key, global)) return 'the trusted comment signature is invalid';
-  return null;
+  if (expectedVersion === undefined) return null;
+  const named = trusted[1].split('\t').find((field) => field.startsWith('version:'))?.slice('version:'.length);
+  if (named === undefined) return 'the signature does not name the version it was signed for';
+  return named === expectedVersion ? null : `the signature is for version ${named}, not ${expectedVersion}`;
 }
 
 /** minisign stores the key id little-endian and prints it as a big-endian number. */

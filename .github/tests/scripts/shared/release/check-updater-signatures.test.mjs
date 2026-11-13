@@ -46,6 +46,16 @@ test('rejects a changed file, another key, a forged comment and malformed input'
   assert.throws(() => decodePublicKey(Buffer.from('untrusted comment: x\nAAAA\n').toString('base64')), /not a minisign Ed25519 key/);
 });
 
+test('requires the signature to name the release version when asked', () => {
+  const keys = keyPair();
+  const named = (version) => signature(DATA, keys, { comment: `timestamp:1\tfile:app\tversion:${version}` });
+  assert.equal(checkSignature(DATA, named('0.3.0'), keys.publicKey, '0.3.0'), null);
+  assert.match(checkSignature(DATA, named('0.2.0'), keys.publicKey, '0.3.0'), /for version 0\.2\.0, not 0\.3\.0/);
+  assert.match(checkSignature(DATA, signature(DATA, keys), keys.publicKey, '0.3.0'), /does not name the version/);
+  // Without an expected version the comment is not inspected.
+  assert.equal(checkSignature(DATA, signature(DATA, keys), keys.publicKey), null);
+});
+
 test('decodes the public key committed in tauri.conf.json', () => {
   const { plugins } = JSON.parse(readFileSync('src/desktop/tauri.conf.json', 'utf8'));
   assert.equal(decodePublicKey(plugins.updater.pubkey).keyId, '895E126F456242E6');

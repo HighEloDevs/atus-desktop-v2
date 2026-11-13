@@ -75,8 +75,10 @@ fi
 # shortcut handler itself is exercised through the quick_test_press_shortcut command.
 key_command=''
 export ATUS_DESKTOP_E2E_PROJECT_DIR="$test_dir/projects" ATUS_DESKTOP_E2E_URL=http://127.0.0.1:4455
-# The quick analysis test runs second and ends by quitting the application.
+# The updater test only needs the running application; the quick analysis test runs last and
+# ends by quitting the application.
 if ! node --test tests/desktop/smoke.e2e.mjs \
+  || ! node --test tests/desktop/smoke.updater.e2e.mjs \
   || ! ATUS_E2E_KEY_COMMAND="$key_command" node --test tests/desktop/smoke.quick-analysis.e2e.mjs; then
   cat "$test_dir/app.log" >&2
   cat "$test_dir/vite.log" >&2
