@@ -69,3 +69,14 @@ test('pull requests and releases require valid release notes, and nothing is pub
   assert.doesNotMatch(workflow, /pre-release|prerelease|stable=/i);
   assert.ok(job('build-windows').includes('--bundles nsis,msi'));
 });
+
+test('the updater signing key reaches only the four build steps', () => {
+  const uses = [...workflow.matchAll(/secrets\.TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)? \}\}/g)].length;
+  assert.equal(uses, 8);
+  assert.doesNotMatch(workflow, /secrets\.(?!TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)? \}\})/);
+  for (const platform of PLATFORMS) {
+    const text = job(`build-${platform}`);
+    assert.match(text, /env:\n {10}TAURI_SIGNING_PRIVATE_KEY: \$\{\{ secrets\.TAURI_SIGNING_PRIVATE_KEY \}\}\n {10}TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \$\{\{ secrets\.TAURI_SIGNING_PRIVATE_KEY_PASSWORD \}\}\n {8}run: npm run tauri -- build /, platform);
+    assert.ok(text.includes('.sig'), `${platform} uploads its updater signatures`);
+  }
+});

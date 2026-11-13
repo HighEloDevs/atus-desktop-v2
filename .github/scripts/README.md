@@ -39,6 +39,7 @@ Scripts reais usados pelo workflow `Build desktop` (`.github/workflows/build.yml
 | `shared/release/publish-release.mjs` | `publish-release` |
 | `shared/release/check-release-artifacts.mjs` | chamado por `publish-release.mjs` |
 | `shared/release/check-release-notes.mjs` | `check-version`, `release-version`; também usado por `publish-release.mjs` |
+| `shared/release/check-updater-signatures.mjs` | chamado por `publish-release.mjs` |
 | `linux/install-deps.sh`, `configure-dns-fallback.sh` | `integration-linux`, `test-linux`, `build-linux` |
 | `linux/run-e2e.sh` | `integration-linux` |
 | `linux/collect-cpp-coverage.sh` | `test-linux` |
