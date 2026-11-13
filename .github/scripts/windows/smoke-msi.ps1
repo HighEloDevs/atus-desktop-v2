@@ -32,21 +32,19 @@ $app = $null
 $failure = $null
 $installed = $false
 try {
-    $install = Start-Process -FilePath msiexec.exe -ArgumentList @('/i', "`"$msi`"", '/qn', '/norestart', '/l*v', "`"$log`"") -Wait -PassThru
+    # The WiX template reads HKCU\Software\<manufacturer>\<product> into INSTALLDIR (RegistrySearch), and the NSIS
+    # installer writes its install folder there and leaves the key behind. Clear it, and pin INSTALLDIR too, so the MSI
+    # never lands in the folder of an earlier smoke test.
+    foreach ($hive in 'HKCU', 'HKLM') { Remove-Item -LiteralPath "${hive}:\Software\atus\ATUS Desktop" -Recurse -Force -ErrorAction SilentlyContinue }
+    $installDir = Join-Path $testRoot 'app'
+    $install = Start-Process -FilePath msiexec.exe -ArgumentList @('/i', "`"$msi`"", '/qn', '/norestart', "INSTALLDIR=`"$installDir`"", '/l*v', "`"$log`"") -Wait -PassThru
     # 3010 means the install worked but asks for a restart.
     if ($install.ExitCode -ne 0 -and $install.ExitCode -ne 3010) { throw "msiexec /i exited with $($install.ExitCode)." }
     $installed = $true
     if ((Get-Installed).Count -eq 0) { throw 'MSI did not register an ATUS Desktop installation.' }
-    # The WiX template may nest the product folder under the manufacturer (for example Program Files\atus\ATUS Desktop),
-    # so search the install roots instead of assuming one layout.
-    $roots = @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:LOCALAPPDATA) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Container) }
-    $candidates = $roots | ForEach-Object { Join-Path $_ 'ATUS Desktop\atus-desktop.exe' }
-    $binary = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-    if (-not $binary) {
-        $binary = $roots | ForEach-Object { Get-ChildItem -LiteralPath $_ -Filter 'atus-desktop.exe' -Recurse -Depth 3 -File -ErrorAction SilentlyContinue } | Select-Object -First 1 -ExpandProperty FullName
-    }
-    if ($binary) { Write-Output "Installed executable: $binary" }
-    if (-not $binary) { throw "Installed executable not found in: $($candidates -join ', ')" }
+    $binary = Join-Path $installDir 'atus-desktop.exe'
+    if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { throw "Installed executable not found at: $binary" }
+    Write-Output "Installed executable: $binary"
     $savedAppData = $env:APPDATA; $savedLocalAppData = $env:LOCALAPPDATA; $savedUserProfile = $env:USERPROFILE
     try {
         $env:APPDATA = Join-Path $testRoot 'appdata'; $env:LOCALAPPDATA = Join-Path $testRoot 'localappdata'; $env:USERPROFILE = Join-Path $testRoot 'profile'
