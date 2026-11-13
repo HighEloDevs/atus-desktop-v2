@@ -5,26 +5,25 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import { createManifest, formatChecksums, verifyManifest } from './check-release-artifacts.mjs';
+import { parseReleaseNotes, renderReleaseBody } from './check-release-notes.mjs';
 import { pathToFileURL } from 'node:url';
 
 /**
  * Select exactly one regular file per expected build artifact.
- * The Windows MSI is part of the inventory only for stable versions: WiX cannot represent a pre-release,
- * so a pre-release must not ship one.
  * @param {string} root Directory holding the downloaded artifacts, one folder per build job.
- * @param {string} version Release version, such as `0.2.1` or `0.2.1-rc.1`.
+ * @param {string} version Release version, such as `0.2.4`.
  * @returns {Array<{path: string, name: string}>} The selected files and their release asset names.
- * @throws {Error} When a file is missing or ambiguous, or an MSI is present in a pre-release.
+ * @throws {Error} When the version is not `M.m.p` or a file is missing or ambiguous.
  */
 export function selectArtifacts(root, version) {
-  const stable = !prerelease(version);
+  assertStableVersion(version);
   const specs = [
     ['linux-bundles', '.deb', 'atus-linux.deb'], ['linux-bundles', '.rpm', 'atus-linux.rpm'],
     ['linux-bundles', '.AppImage', 'atus-linux.AppImage'], ['windows-installer', '.exe', 'atus-windows.exe'],
+    ['windows-installer', '.msi', 'atus-windows.msi'],
     ['macos-arm64-app', '.zip', 'atus-macos-arm64.zip'], ['macos-intel-app', '.zip', 'atus-macos-intel.zip'],
     ['macos-arm64-app', '.dmg', 'atus-macos-arm64.dmg'], ['macos-intel-app', '.dmg', 'atus-macos-intel.dmg'],
   ];
-  if (stable) specs.push(['windows-installer', '.msi', 'atus-windows.msi']);
   function walk(dir) {
     return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
       const path = join(dir, entry.name);
@@ -32,7 +31,6 @@ export function selectArtifacts(root, version) {
       return entry.isDirectory() ? walk(path) : entry.isFile() ? [path] : [];
     });
   }
-  if (!stable && walk(join(root, 'windows-installer')).some((path) => path.endsWith('.msi'))) throw new Error('Pre-releases must not ship an MSI');
   return specs.map(([folder, suffix, name]) => {
     const candidates = walk(join(root, folder)).filter((path) => basename(path).endsWith(suffix));
     if (candidates.length !== 1 || !lstatSync(candidates[0]).isFile()) throw new Error(`Expected exactly one ${folder} ${suffix}`);
@@ -40,12 +38,26 @@ export function selectArtifacts(root, version) {
   });
 }
 
-/** Validate a version and return whether it is a prerelease. */
-export function prerelease(version) {
-  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.test(version)) throw new Error('Invalid release version');
-  const part = version.split('-').slice(1).join('-');
-  if (part.split('.').some((id) => /^\d+$/.test(id) && id.length > 1 && id.startsWith('0'))) throw new Error('Invalid prerelease identifier');
-  return Boolean(part);
+/**
+ * Require a stable `M.m.p` version. Pre-releases are no longer published.
+ * @param {string} version Version from `tauri.conf.json`.
+ * @throws {Error} When the version has a pre-release part or is not `M.m.p`.
+ */
+export function assertStableVersion(version) {
+  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error(`Invalid release version ${version}: only M.m.p is published`);
+}
+
+/**
+ * Read the release notes of a version at a commit and render the release title and body.
+ * @param {string} text Contents of `docs/releases/vM.m.p.md` at the released commit.
+ * @param {{version: string, repository: string, sha: string}} release Version, `owner/name` and commit.
+ * @returns {{title: string, body: string}} Release title and Markdown body.
+ * @throws {Error} When the notes are invalid.
+ */
+export function releaseText(text, { version, repository, sha }) {
+  const { notes, errors } = parseReleaseNotes(text, `v${version}.md`);
+  if (!notes) throw new Error(`Invalid release notes:\n${errors.join('\n')}`);
+  return { title: `ATUS ${version} · ${notes.title}`, body: renderReleaseBody(notes, { repository, sha }) };
 }
 /** Return files absent from a draft, rejecting collisions with different bytes. */
 export function missingAssets(files, assets, digests) {
@@ -89,9 +101,10 @@ export function publish({ run, artifacts, repository }) {
   execFileSync('git', ['fetch', '--no-tags', 'origin', sha], { stdio: 'inherit' });
   const config = JSON.parse(execFileSync('git', ['show', `${sha}:src/desktop/tauri.conf.json`], { encoding: 'utf8' }));
   const version = config.version;
-  const isPrerelease = prerelease(version);
   const tag = `v${version}`;
   const selected = selectArtifacts(artifacts, version);
+  // The release-version job already validated the notes and their images at this commit.
+  const { title, body } = releaseText(execFileSync('git', ['show', `${sha}:docs/releases/${tag}.md`], { encoding: 'utf8' }), { version, repository, sha });
   const directory = mkdtempSync(join(tmpdir(), 'atus-release-'));
   for (const entry of selected) copyFileSync(entry.path, join(directory, entry.name));
   const names = selected.map(({ name }) => name);
@@ -105,9 +118,9 @@ export function publish({ run, artifacts, repository }) {
   if (existing && (!existing.draft || (!ref && existing.target_commitish !== sha))) throw new Error('Release exists or draft target does not match');
   if (!existing) {
     if (ref) throw new Error('Tag already exists without matching draft');
-    const args = ['release', 'create', tag, '--repo', repository, '--target', sha, '--draft', '--generate-notes'];
-    if (isPrerelease) args.push('--prerelease');
-    gh(args);
+    const notesFile = join(mkdtempSync(join(tmpdir(), 'atus-notes-')), 'release-notes.md');
+    writeFileSync(notesFile, body);
+    gh(['release', 'create', tag, '--repo', repository, '--target', sha, '--draft', '--title', title, '--notes-file', notesFile]);
   }
   let verifiedRef = apiOptional(`repos/${repository}/git/ref/tags/${tag}`);
   if (!verifiedRef) {
@@ -123,7 +136,7 @@ export function publish({ run, artifacts, repository }) {
     gh(['release', 'upload', tag, '--repo', repository, join(directory, name)]);
   }
   const release = findRelease(repository, tag);
-  if (!release?.draft || release.prerelease !== isPrerelease || release.assets.length !== files.length || files.some((name) => !release.assets.some((asset) => asset.name === name && asset.state === 'uploaded'))) throw new Error('Draft assets do not match expected inventory');
+  if (!release?.draft || release.prerelease || release.assets.length !== files.length || files.some((name) => !release.assets.some((asset) => asset.name === name && asset.state === 'uploaded'))) throw new Error('Draft assets do not match expected inventory');
   for (const name of files) {
     const asset = release.assets.find((item) => item.name === name);
     const digest = createHash('sha256').update(readFileSync(join(directory, name))).digest('hex');

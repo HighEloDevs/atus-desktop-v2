@@ -63,3 +63,9 @@ test('releases are published only from main, after the four builds, by the only 
   const version = job('release-version');
   assert.ok(version.includes("github.event_name == 'push'") && version.includes("github.ref == 'refs/heads/main'") && version.includes('check --base HEAD^'));
 });
+
+test('pull requests and releases require valid release notes, and nothing is published as a pre-release', () => {
+  for (const name of ['check-version', 'release-version']) assert.ok(job(name).includes('check-release-notes.mjs'), name);
+  assert.doesNotMatch(workflow, /pre-release|prerelease|stable=/i);
+  assert.ok(job('build-windows').includes('--bundles nsis,msi'));
+});
