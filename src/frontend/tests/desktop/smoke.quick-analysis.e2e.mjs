@@ -214,24 +214,6 @@ test("pressing the shortcut again hides the window while it has the focus", asyn
   await until(quickIsHidden, "The shortcut should toggle the focused window off");
 });
 
-test("the quick window comes back when it was destroyed", async () => {
-  // Call from the main window: the quick window's own page dies in the middle of its call.
-  await withWindow("main", (main) => main.invoke("quick_test_destroy_quick").catch(() => {}));
-  await until(
-    async () => !(await nativeState()).quick_exists,
-    "The quick window was not destroyed",
-  );
-  assert.equal(await appIsAlive(), true);
-  await native("quick_test_press_shortcut");
-  await until(async () => {
-    const state = await nativeState();
-    return state.quick_exists && state.quick_visible;
-  }, "The shortcut did not recreate the quick window");
-  await withWindow("quick", (quick) => quick.waitForText("Análise rápida"));
-  await native("quick_dismiss");
-  await until(quickIsHidden, "The quick window did not hide");
-});
-
 test("data alone opens the main window in a new project without running a fit", async () => {
   const before = await projectFiles();
   await freshQuick(OHM);
@@ -407,6 +389,26 @@ test("project management commands work in the running application", async () => 
     assert.match(restored, /Renomeado e2e\.atus$/);
     assert.equal((await quick.invoke("project_list_archived")).includes(archived), false);
   });
+});
+
+test("a chart image is saved to a path with spaces and accents", async () => {
+  // A 1x1 PNG. The path is percent-encoded in a header, as the chart export sends it.
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  const target = path.join(projectDir, "gráfico e2e.png");
+  await withWindow("quick", async (quick) => {
+    await quick.invokeRaw("export_image_write", png, { path: encodeURIComponent(target) });
+    await assert.rejects(
+      quick.invokeRaw("export_image_write", png, {
+        path: encodeURIComponent(path.join(projectDir, "gráfico e2e.jpg")),
+      }),
+      /Não foi possível|não|extensão|conteúdo/i,
+    );
+  });
+  const written = await readFile(target);
+  assert.deepEqual(written, png);
 });
 
 test("quitting saves the open project and ends the application", async () => {

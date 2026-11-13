@@ -128,6 +128,25 @@ export class Window {
     return result.ok;
   }
 
+  /**
+   * Invokes a native command whose request body is raw bytes, with request headers.
+   * @param {string} command Command name.
+   * @param {Uint8Array | Buffer} bytes Request body.
+   * @param {Record<string, string>} headers Request headers.
+   * @returns {Promise<any>} The command result; rejects with its error text.
+   */
+  async invokeRaw(command, bytes, headers) {
+    const result = await request("POST", `${this.base}/execute/async`, {
+      script:
+        "const done = arguments[arguments.length - 1];" +
+        "window.__TAURI_INTERNALS__.invoke(arguments[0], new Uint8Array(arguments[1]), { headers: arguments[2] })" +
+        ".then((ok) => done({ ok: ok ?? null }), (error) => done({ error: String(error) }));",
+      args: [command, [...bytes], headers],
+    });
+    if (result.error !== undefined) throw new Error(`${command}: ${result.error}`);
+    return result.ok;
+  }
+
   /** Finds elements with an XPath expression. */
   async elements(xpath) {
     const found = await request("POST", `${this.base}/elements`, {

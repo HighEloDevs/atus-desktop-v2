@@ -128,17 +128,10 @@ fn build_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow<R
         .build()
 }
 
-/// Shows and focuses the quick window, recreating it if it was destroyed.
+/// Shows and focuses the quick window. It is created at startup and only ever hidden afterwards.
 pub fn show<R: Runtime>(app: &AppHandle<R>) {
     let Some(window) = app.get_webview_window(QUICK_LABEL) else {
-        // Recreating a window on the main thread deadlocks on Windows; do it on the runtime.
-        let app = app.clone();
-        tauri::async_runtime::spawn(async move {
-            match build_window(&app) {
-                Ok(_) => show(&app),
-                Err(error) => eprintln!("Não foi possível abrir a análise rápida: {error}"),
-            }
-        });
+        eprintln!("A janela da análise rápida não existe");
         return;
     };
     let _ = window.center();

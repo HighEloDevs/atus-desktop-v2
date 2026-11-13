@@ -120,8 +120,6 @@ fn main() {
             #[cfg(feature = "desktop-e2e")]
             quick_e2e::quick_test_close_quick,
             #[cfg(feature = "desktop-e2e")]
-            quick_e2e::quick_test_destroy_quick,
-            #[cfg(feature = "desktop-e2e")]
             quick_e2e::quick_test_set_clipboard,
             #[cfg(feature = "desktop-e2e")]
             quick_e2e::quick_test_close_main,
