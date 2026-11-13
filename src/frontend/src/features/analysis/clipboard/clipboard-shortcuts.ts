@@ -1,13 +1,14 @@
 /**
  * @module
- * Keyboard shortcuts that import clipboard data: Cmd/Ctrl+B creates a dataset and
- * Cmd/Ctrl+1 to 9 replaces the data of dataset N.
+ * Keyboard shortcuts of the analysis page: Cmd/Ctrl+B creates a dataset from the clipboard,
+ * Cmd/Ctrl+1 to 9 replaces the data of dataset N and Cmd/Ctrl+Enter runs the fits.
  */
 
 import { useEffect, useRef } from "react";
 
-/** Action requested by a clipboard shortcut. */
-export type ClipboardShortcut = { kind: "create" } | { kind: "replace"; index: number };
+/** Action requested by a keyboard shortcut. */
+export type ClipboardShortcut =
+  { kind: "create" } | { kind: "replace"; index: number } | { kind: "fit" };
 
 /** Minimal keyboard event fields used to detect a shortcut. */
 export type ShortcutEvent = Pick<
@@ -30,14 +31,16 @@ function isTextTarget(target: EventTarget | null) {
 /**
  * Maps a keyboard event to a clipboard shortcut.
  *
- * Uses Cmd on macOS and Ctrl elsewhere, without Alt or Shift, and ignores key repeat,
- * IME composition and events from text controls.
+ * Uses Cmd on macOS and Ctrl elsewhere, without Alt or Shift, and ignores key repeat and
+ * IME composition. Cmd/Ctrl+Enter also works inside text controls, since that is where the
+ * equation is typed; the clipboard shortcuts ignore events from text controls.
  *
  * @param event - Keyboard event, or an object with the same fields.
  * @param isMac - Whether the platform uses Cmd as the primary modifier.
  * @returns The shortcut, or null when the event is not one.
  * @example
  * getClipboardShortcut({ code: "Digit2", metaKey: true, ... }, true); // { kind: "replace", index: 2 }
+ * getClipboardShortcut({ code: "Enter", metaKey: true, ... }, true); // { kind: "fit" }
  */
 export function getClipboardShortcut(
   event: ShortcutEvent,
@@ -45,6 +48,7 @@ export function getClipboardShortcut(
 ): ClipboardShortcut | null {
   if (event.repeat || event.isComposing || event.altKey || event.shiftKey) return null;
   if (isMac ? !event.metaKey || event.ctrlKey : !event.ctrlKey || event.metaKey) return null;
+  if (event.code === "Enter" || event.code === "NumpadEnter") return { kind: "fit" };
   if (isTextTarget(event.target)) return null;
   if (event.code === "KeyB") return { kind: "create" };
   const digit = /^Digit([1-9])$/.exec(event.code);

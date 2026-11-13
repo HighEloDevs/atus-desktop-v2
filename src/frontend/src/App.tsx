@@ -4,8 +4,9 @@
  */
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { BrandMark } from "@/components/brand/BrandMark";
 import { ProjectQuickActions } from "@/features/projects/ProjectQuickActions";
-import { RecentProjects } from "@/features/projects/RecentProjects";
+import { ProjectTables } from "@/features/projects/ProjectTables";
 import {
   chooseProject,
   newSnapshot,
@@ -15,7 +16,15 @@ import {
 } from "@/features/projects/project-client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { notify } from "@/lib/notify";
 import { AnalysisPage } from "@/features/analysis/AnalysisPage";
+import {
+  QUICK_REQUESTED_EVENT,
+  quickAnalysisClient,
+  quickAnalysisSnapshot,
+  type QuickAnalysis,
+} from "@/features/quick-analysis/quick-analysis-client";
+import { useQuitRequest } from "@/hooks/use-quit-request";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ChevronRight, CircleHelp, FileClock, House, Info } from "lucide-react";
 
@@ -26,20 +35,6 @@ const navigation = [
   { label: "Changelog", icon: FileClock },
   { label: "Ajuda", icon: CircleHelp },
 ];
-
-function BrandMark() {
-  return (
-    <svg width="26" height="26" viewBox="0 0 100 100" aria-hidden="true" className="shrink-0">
-      <g fill="currentColor">
-        <path d="M9 9H42V23H23V42H9Z" />
-        <path d="M58 9H91V42H77V23H58Z" />
-        <path d="M9 58H23V77H42V91H9Z" />
-        <path d="M77 58H91V91H58V77H77Z" />
-      </g>
-      <circle cx="50" cy="50" r="11" fill="#F25A3C" />
-    </svg>
-  );
-}
 
 function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (page: Page) => void }) {
   return (
@@ -117,20 +112,28 @@ async function openProfile(url: string) {
   }
 }
 
+/** Reports a failure to open or create a project as a global snackbar. */
+function reportProjectError(error: unknown) {
+  notify.error("Não foi possível abrir o projeto", {
+    description: String(error),
+    id: "project-error",
+  });
+}
+
 function App() {
   const [page, setPage] = useState<Page>("home");
-  const [profileError, setProfileError] = useState(false);
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 
   const [project, setProject] = useState<OpenProject | null>(null);
-  const [projectError, setProjectError] = useState("");
   const opening = useRef(false);
   const [finderPath, setFinderPath] = useState<string | null>(null);
+  const [quickRequest, setQuickRequest] = useState<QuickAnalysis | null>(null);
+  const [autoFitPath, setAutoFitPath] = useState<string | null>(null);
   const runProjectAction = useCallback(
     async (action: () => Promise<OpenProject | null>, replaces?: string) => {
       if (opening.current) return;
       opening.current = true;
-      setProjectError("");
+      setAutoFitPath(null);
       try {
         const opened = await action();
         if (!opened) return;
@@ -138,7 +141,7 @@ function App() {
         setPage("analysis");
         rememberProject(opened.path, replaces);
       } catch (error) {
-        setProjectError(String(error));
+        reportProjectError(error);
       } finally {
         opening.current = false;
       }
@@ -188,12 +191,12 @@ function App() {
         const path = await invoke<string | null>("take_finder_project");
         if (active && path) setFinderPath(path);
       } catch (error) {
-        if (active) setProjectError(String(error));
+        if (active) reportProjectError(error);
       }
     }
     const listener = getCurrentWindow().listen("finder-project-requested", () => void receive());
     void listener.then(receive).catch((error) => {
-      if (active) setProjectError(String(error));
+      if (active) reportProjectError(error);
     });
     return () => {
       active = false;
@@ -209,6 +212,50 @@ function App() {
     [runProjectAction],
   );
 
+  // With no project open there is nothing to save, so a quit request quits at once.
+  useQuitRequest(page !== "analysis", async () => true);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let active = true;
+    async function receive() {
+      if (!active) return;
+      try {
+        const request = await quickAnalysisClient.take();
+        if (active && request) setQuickRequest(request);
+      } catch (error) {
+        if (active) reportProjectError(error);
+      }
+    }
+    const listener = getCurrentWindow().listen(QUICK_REQUESTED_EVENT, () => void receive());
+    void listener.then(receive).catch((error) => {
+      if (active) reportProjectError(error);
+    });
+    return () => {
+      active = false;
+      void listener.then((unlisten) => unlisten()).catch(console.error);
+    };
+  }, []);
+
+  /** Creates a project from a quick analysis and opens it with its fit already run. */
+  const startQuickAnalysis = useCallback(
+    async (request: QuickAnalysis) => {
+      await runProjectAction(async () => {
+        const opened = await projectClient.create(quickAnalysisSnapshot(request));
+        if (request.equation.trim()) setAutoFitPath(opened.path);
+        return opened;
+      });
+      setQuickRequest((pending) => (pending === request ? null : pending));
+    },
+    [runProjectAction],
+  );
+
+  useEffect(() => {
+    if (page === "analysis" || !quickRequest) return;
+    const timer = window.setTimeout(() => void startQuickAnalysis(quickRequest), 0);
+    return () => clearTimeout(timer);
+  }, [page, quickRequest, startQuickAnalysis]);
+
   useEffect(() => {
     if (page === "analysis" || !finderPath) return;
     const timer = window.setTimeout(() => void openFinderProject(finderPath), 0);
@@ -221,10 +268,14 @@ function App() {
         key={project?.path}
         project={project}
         finderPath={finderPath}
-        projectError={projectError}
         onOpenFinderProject={openFinderProject}
         onCancelFinderProject={() => setFinderPath(null)}
+        quickRequest={quickRequest}
+        onStartQuick={startQuickAnalysis}
+        onCancelQuick={() => setQuickRequest(null)}
+        runFitsOnOpen={Boolean(project && project.path === autoFitPath)}
         onBack={() => {
+          setAutoFitPath(null);
           setProject(null);
           setPage("home");
         }}
@@ -267,15 +318,7 @@ function App() {
                       : undefined
                   }
                 />
-                {projectError && (
-                  <p
-                    role="alert"
-                    className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
-                  >
-                    {projectError}
-                  </p>
-                )}
-                {isTauri() && <RecentProjects onOpen={openProject} />}
+                {isTauri() && <ProjectTables onOpen={openProject} />}
               </>
             ) : (
               <section className="max-w-[980px]" aria-labelledby="about-title">
@@ -363,8 +406,12 @@ function App() {
                               aria-label={`Abrir LinkedIn de ${person.name} no navegador`}
                               title={`LinkedIn de ${person.name}`}
                               onClick={() => {
-                                setProfileError(false);
-                                void openProfile(person.url).catch(() => setProfileError(true));
+                                void openProfile(person.url).catch(() =>
+                                  notify.error("Não foi possível abrir o navegador", {
+                                    description: "Tente novamente.",
+                                    id: "profile-error",
+                                  }),
+                                );
                               }}
                               className="ml-auto rounded p-2 text-[#66766c] hover:bg-[#eff2ed] hover:text-[#364cff]"
                             >
@@ -380,11 +427,6 @@ function App() {
                             </button>
                           </div>
                         ))}
-                        {profileError && (
-                          <p role="alert" className="px-5 py-3 text-[12px] text-[#a43d35]">
-                            Não foi possível abrir o navegador. Tente novamente.
-                          </p>
-                        )}
                       </div>
                     </section>
                   </div>

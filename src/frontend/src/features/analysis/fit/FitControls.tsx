@@ -3,14 +3,12 @@
  * Controls for entering a model and fit configuration.
  */
 
-import katex from "katex";
 import { useId } from "react";
 import { ChevronRight, Lock, MoveHorizontal, MoveVertical, SlidersHorizontal } from "lucide-react";
-import { equationToLatex } from "./equation-to-latex";
+import { EquationField } from "./EquationField";
 import { resolveFitParameters } from "./parse-fit-parameters";
 import { validateFitConfig, type FitConfig } from "./fit-config";
 
-const prefix = katex.renderToString("f(x) =", { throwOnError: false });
 const field =
   "mt-2 h-9 w-full rounded-lg border border-input bg-white px-3 font-mono text-[13px] text-foreground shadow-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20";
 const heading = "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
@@ -31,10 +29,6 @@ export function FitControls({
   onChange: (changes: Partial<FitConfig>) => void;
 }) {
   const equationId = useId();
-  const preview = equationToLatex(config.equation || "a * x + b");
-  const html = preview
-    ? katex.renderToString(`f(x) = ${preview}`, { throwOnError: false, displayMode: true })
-    : "";
   const parsedParameters = resolveFitParameters(config.parameters, config.equation);
   const parametersInvalid = !parsedParameters.ok;
   const parameters = parametersInvalid
@@ -52,29 +46,12 @@ export function FitControls({
         <p className={description}>
           Define a função ajustada aos pontos deste conjunto. Deixe vazio para não ajustar.
         </p>
-        <div className="mt-2 overflow-hidden rounded-lg border border-input bg-white focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20">
-          <div className="flex min-h-10 items-center gap-2 px-3">
-            <span
-              aria-hidden="true"
-              className="shrink-0 text-muted-foreground"
-              dangerouslySetInnerHTML={{ __html: prefix }}
-            />
-            <input
-              id={equationId}
-              aria-label={`Função de ajuste de ${name}`}
-              value={config.equation}
-              onChange={(event) => onChange({ equation: event.target.value })}
-              placeholder="a * x + b"
-              className="min-w-0 flex-1 bg-transparent font-mono text-[13px] outline-none placeholder:text-muted-foreground/60"
-              spellCheck={false}
-              autoComplete="off"
-            />
-          </div>
-          <div
-            aria-label="Pré-visualização da equação em LaTeX"
-            aria-live="polite"
-            className={`flex min-h-[76px] items-center justify-center overflow-x-auto border-t border-border bg-background px-3 text-center text-[15px] [&_.katex-display]:my-3 ${config.equation.trim() ? "" : "opacity-40"}`}
-            dangerouslySetInnerHTML={{ __html: html }}
+        <div className="mt-2">
+          <EquationField
+            id={equationId}
+            label={`Função de ajuste de ${name}`}
+            value={config.equation}
+            onChange={(equation) => onChange({ equation })}
           />
         </div>
       </section>

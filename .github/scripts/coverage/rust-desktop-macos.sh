@@ -102,10 +102,19 @@ try {
   if (!verified) throw new Error("Test application did not become ready");
 } finally { await fetch(base, {method:"DELETE"}); }
 '
+# The quick analysis test runs second. On CI it also presses the real shortcut through System
+# Events; locally that needs Accessibility permission, so it is skipped there.
+key_command=''
+if [[ -n "${CI:-}" ]]; then
+  key_command="osascript -e 'tell application \"System Events\" to key code 11 using {control down, command down}'"
+fi
 (cd src/frontend && ATUS_DESKTOP_E2E_PROJECT_DIR="$tmp/projects" ATUS_DESKTOP_E2E_URL=http://127.0.0.1:4455 node --test tests/desktop/smoke.e2e.mjs)
-# Closing the only window lets the application exit and LLVM flush its profile.
-kill -0 "$app_pid" 2>/dev/null || { echo 'Test application already exited.' >&2; exit 1; }
-verify_listener || { echo 'WebDriver listener changed; refusing to close.' >&2; exit 1; }
+(cd src/frontend && ATUS_E2E_KEY_COMMAND="$key_command" ATUS_DESKTOP_E2E_PROJECT_DIR="$tmp/projects" ATUS_DESKTOP_E2E_URL=http://127.0.0.1:4455 node --test tests/desktop/smoke.quick-analysis.e2e.mjs)
+# The desktop tests quit the application through its own quit path, which lets LLVM flush the
+# profile. A hidden quick analysis window keeps the process alive after the main window closes, so
+# if the tests left it running, ask it to quit the same way instead of closing a window.
+if kill -0 "$app_pid" 2>/dev/null; then
+verify_listener || { echo 'WebDriver listener changed; refusing to quit.' >&2; exit 1; }
 ATUS_DESKTOP_E2E_PROJECT_DIR="$tmp/projects" node --input-type=module -e '
 import { realpathSync } from "node:fs";
 const url = "http://127.0.0.1:4455";
@@ -113,21 +122,23 @@ const r = await fetch(url + "/session", {method:"POST",headers:{"content-type":"
 const value = (await r.json()).value;
 if (!r.ok || !value?.sessionId) throw new Error("Could not create WebDriver session");
 const base = `${url}/session/${value.sessionId}`;
-const response = await fetch(base + "/execute/sync", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({script:"return window.__TAURI_INTERNALS__.invoke(\"project_test_directory\")",args:[]})});
+const run = (script) => fetch(base + "/execute/sync", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({script,args:[]})});
+const response = await run("return window.__TAURI_INTERNALS__.invoke(\"project_test_directory\")");
 const actual = (await response.json()).value;
-if (!response.ok || typeof actual !== "string" || realpathSync(actual) !== realpathSync(process.env.ATUS_DESKTOP_E2E_PROJECT_DIR)) throw new Error("Unexpected application on WebDriver port; refusing to close");
-const close = await fetch(base + "/window", {method:"DELETE"});
-if (!close.ok) throw new Error("Could not close the test window");
+if (!response.ok || typeof actual !== "string" || realpathSync(actual) !== realpathSync(process.env.ATUS_DESKTOP_E2E_PROJECT_DIR)) throw new Error("Unexpected application on WebDriver port; refusing to quit");
+// The application may exit before it answers.
+await run("window.__TAURI_INTERNALS__.invoke(\"app_quit\"); return null").catch(() => {});
 '
+fi
 for attempt in {1..30}; do
   if ! kill -0 "$app_pid" 2>/dev/null; then break; fi
   sleep 1
 done
 if kill -0 "$app_pid" 2>/dev/null; then echo 'Test application did not exit; no coverage report generated.' >&2; exit 1; fi
-wait "$app_pid"; app_pid=''
+wait "$app_pid" || { echo 'Test application did not exit cleanly.' >&2; exit 1; }; app_pid=''
 if (( coverage )); then
 "$profdata" merge -sparse "$tmp"/profiles/*.profraw -o "$tmp/merged.profdata"
-"$cov" export -format=lcov -ignore-filename-regex='/(project/e2e|project/test_support)\.rs$' -instr-profile="$tmp/merged.profdata" src/desktop/target/debug/atus-desktop -object "$(cat "$tmp/binary")" "$root/src/desktop/src" > "$output"
+"$cov" export -format=lcov -ignore-filename-regex='/(project/e2e|project/test_support|quick_e2e)\.rs$' -instr-profile="$tmp/merged.profdata" src/desktop/target/debug/atus-desktop -object "$(cat "$tmp/binary")" "$root/src/desktop/src" > "$output"
 node .github/scripts/coverage/rust-strip-tests.mjs "$output"
 grep -q '^SF:' "$output" || { echo 'Rust coverage report is empty.' >&2; exit 1; }
 node .github/scripts/coverage/rust-inventory.mjs "$root/src/desktop/src" "$output" .github/scripts/coverage/rust-source-inventory.json

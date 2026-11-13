@@ -13,6 +13,8 @@ const api = vi.hoisted(() => ({
   destroy: vi.fn(),
   chooseDestination: vi.fn(),
   rememberProject: vi.fn(),
+  replaceRecentPath: vi.fn(),
+  rename: vi.fn(),
   save: vi.fn(),
   saveAs: vi.fn(),
 }));
@@ -28,7 +30,8 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ confirm: api.confirm }));
 vi.mock("../../src/features/projects/project-client", () => ({
   chooseDestination: api.chooseDestination,
   rememberProject: api.rememberProject,
-  projectClient: { save: api.save, saveAs: api.saveAs },
+  replaceRecentPath: api.replaceRecentPath,
+  projectClient: { save: api.save, saveAs: api.saveAs, rename: api.rename },
 }));
 import { useProjectSave } from "../../src/features/projects/useProjectSave";
 
@@ -236,4 +239,47 @@ it("retains the requested .atus extension without duplicating it", async () => {
   api.saveAs.mockImplementation(async (path, snapshot) => ({ path, snapshot }));
   await act(async () => controls.saveAs());
   expect(api.saveAs).toHaveBeenCalledWith("/backup.ATUS", expect.any(Object));
+});
+
+it("renames after saving pending edits and keeps saving at the new path", async () => {
+  api.rename.mockResolvedValue("/renamed.atus");
+  await render(empty);
+  await render(first);
+  await act(async () => controls.rename(" Novo "));
+  expect(api.save).toHaveBeenCalledWith("/original.atus", project.snapshot, expect.anything());
+  expect(api.rename).toHaveBeenCalledWith("/original.atus", " Novo ");
+  expect(api.save.mock.invocationCallOrder[0]).toBeLessThan(api.rename.mock.invocationCallOrder[0]);
+  expect(api.replaceRecentPath).toHaveBeenCalledWith("/original.atus", "/renamed.atus");
+  expect(controls.project.path).toBe("/renamed.atus");
+  expect(controls.project.snapshot.name).toBe("Novo");
+  await render(second);
+  await act(async () => expect(await controls.flush()).toBe(true));
+  const [path, previous] = api.save.mock.calls.at(-1);
+  expect(path).toBe("/renamed.atus");
+  expect(previous.name).toBe("Novo");
+});
+
+it("keeps the old path and rejects when the rename fails", async () => {
+  api.rename.mockRejectedValue("Já existe um projeto com esse nome nesta pasta.");
+  await render(empty);
+  await act(async () => {
+    await expect(controls.rename("x")).rejects.toBe(
+      "Já existe um projeto com esse nome nesta pasta.",
+    );
+  });
+  expect(controls.project.path).toBe("/original.atus");
+  expect(api.replaceRecentPath).not.toHaveBeenCalled();
+  api.rename.mockResolvedValue("/after.atus");
+  await act(async () => controls.rename("y"));
+  expect(controls.project.path).toBe("/after.atus");
+});
+
+it("refuses to rename when pending edits cannot be saved", async () => {
+  api.save.mockRejectedValue(new Error("disk"));
+  await render(empty);
+  await render(first);
+  await act(async () => {
+    await expect(controls.rename("x")).rejects.toThrow("Aguarde");
+  });
+  expect(api.rename).not.toHaveBeenCalled();
 });

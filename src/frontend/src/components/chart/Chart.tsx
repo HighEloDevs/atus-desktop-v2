@@ -21,13 +21,17 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  Info,
   RotateCcw,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
 import { chartLinePatterns, type ChartSettings } from "./useChartSettings";
+import { HISTOGRAM_GUTTER, ResidualPanel } from "./ResidualPanel";
+import { formatTick, hasResiduals, type ChartResidual } from "./residuals";
 import { EditableChartLabel } from "./EditableChartLabel";
 import { ChartTooltip } from "./ChartTooltip";
+import { axisPosition } from "./axisPosition";
 import {
   describeTooltip,
   groupNearbyPoints,
@@ -47,6 +51,8 @@ export type ChartSeries = {
   lineStyle: keyof typeof chartLinePatterns;
   lineWidth: number;
   visible: boolean;
+  /** Residuals of the latest fit, when there is one. */
+  residuals?: ChartResidual[];
 };
 type ChartProps = {
   series: ChartSeries[];
@@ -54,9 +60,10 @@ type ChartProps = {
   settings: ChartSettings;
   graphicRef: RefObject<HTMLDivElement | null>;
   highlightedSeriesId?: string | null;
+  /** Keys that run the fits, shown in the notice about missing residuals (e.g. "⌘ ↵"). */
+  fitShortcut?: string;
 };
-const fmt = (n: number) =>
-  new Intl.NumberFormat("pt-BR", { maximumSignificantDigits: 5 }).format(n);
+const fmt = formatTick;
 const finite = (p: ChartPoint) => Number.isFinite(p.x) && Number.isFinite(p.y);
 /** Smallest pointer target radius, in pixels, around a data point. */
 const HIT_RADIUS = 12;
@@ -75,10 +82,21 @@ function domain(values: number[], log: boolean): [number, number] {
  * Hovering a point, or focusing the plot and pressing the arrow keys, shows a
  * tooltip beside it with its values and uncertainties; coincident points share
  * one tooltip. Escape, blur, and the start of a zoom or pan dismiss it.
- * @param props - Series, labels, chart settings, export ref, and optional highlighted series.
+ *
+ * When the settings request residuals and a visible series has them, a residuals panel
+ * shares the X scale below the plot. Without residuals a quiet notice explains why the
+ * panel is unavailable.
+ * @param props - Series, labels, chart settings, export ref, highlighted series, and fit shortcut.
  * @returns The rendered React element.
  */
-export function Chart({ series, label, settings, graphicRef, highlightedSeriesId }: ChartProps) {
+export function Chart({
+  series,
+  label,
+  settings,
+  graphicRef,
+  highlightedSeriesId,
+  fitShortcut,
+}: ChartProps) {
   const container = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const clipId = useId().replace(/:/g, "");
@@ -113,6 +131,8 @@ export function Chart({ series, label, settings, graphicRef, highlightedSeriesId
     yMin,
     yMax,
     ticks,
+    residuals,
+    residualHistogram,
   } = settings;
   const legendDrag = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const [active, setActive] = useState<{ seriesId: string; row: number } | null>(null);
@@ -157,7 +177,14 @@ export function Chart({ series, label, settings, graphicRef, highlightedSeriesId
     return Number.isFinite(a) && Number.isFinite(b) && a < b && (!log || a > 0) ? [a, b] : d;
   };
   const { width, height } = size;
-  const margin = { top: 16, right: 25, bottom: 38, left: 65 };
+  const residualsAvailable = hasResiduals(series);
+  const panelOn = residuals && residualsAvailable;
+  const margin = {
+    top: 16,
+    right: 25 + (panelOn && residualHistogram ? HISTOGRAM_GUTTER : 0),
+    bottom: panelOn ? 8 : 38,
+    left: 65,
+  };
   const w = Math.max(1, width - margin.left - margin.right);
   const h = Math.max(1, height - margin.top - margin.bottom);
   const baseX = (xLog ? scaleLog() : scaleLinear())
@@ -168,6 +195,14 @@ export function Chart({ series, label, settings, graphicRef, highlightedSeriesId
     .range([h, 0]);
   const x = transform.rescaleX(baseX);
   const y = transform.rescaleY(baseY);
+  const axes = axisPosition(
+    (v) => x(v),
+    (v) => y(v),
+    w,
+    h,
+    xLog,
+    yLog,
+  );
   const xt = x.ticks(ticks);
   const yt = y.ticks(ticks);
   const zoomBy = (factor: number) => {
@@ -254,7 +289,7 @@ export function Chart({ series, label, settings, graphicRef, highlightedSeriesId
             />
           </div>
         </div>
-        <div className="flex min-h-0 flex-1">
+        <div className={`flex min-h-0 ${panelOn ? "flex-[68_1_0%]" : "flex-1"}`}>
           <div
             className="flex w-16 shrink-0 flex-col items-center text-[11px] text-[#66716e]"
             style={{
@@ -398,9 +433,11 @@ export function Chart({ series, label, settings, graphicRef, highlightedSeriesId
                   {xt.map((t) => (
                     <g key={t} transform={`translate(${x(t)},0)`}>
                       {grid && <line y2={h} stroke="#e8ece7" />}
-                      <text y={h + 16} textAnchor="middle" fontSize="10" fill="#78857d">
-                        {fmt(t)}
-                      </text>
+                      {!panelOn && (
+                        <text y={h + 16} textAnchor="middle" fontSize="10" fill="#78857d">
+                          {fmt(t)}
+                        </text>
+                      )}
                     </g>
                   ))}
                   {yt.map((t) => (
@@ -411,7 +448,8 @@ export function Chart({ series, label, settings, graphicRef, highlightedSeriesId
                       </text>
                     </g>
                   ))}
-                  <path d={`M0 0V${h}H${w}`} fill="none" stroke="#aebbb0" />
+                  <line x1={0} x2={w} y1={axes.y} y2={axes.y} stroke="#aebbb0" />
+                  <line x1={axes.x} x2={axes.x} y1={0} y2={h} stroke="#aebbb0" />
                   <g clipPath={`url(#${clipId})`}>
                     {visibleSeries.map(
                       ({ id, points, linePoints, color, radius, symbol, lineStyle, lineWidth }) => {
@@ -588,6 +626,17 @@ export function Chart({ series, label, settings, graphicRef, highlightedSeriesId
             </div>
           </div>
         </div>
+        {panelOn && (
+          <ResidualPanel
+            series={series}
+            x={(value) => x(value)}
+            xTicks={xt}
+            xLog={xLog}
+            margin={{ left: margin.left, right: margin.right }}
+            settings={settings}
+            highlightedSeriesId={highlightedSeriesId}
+          />
+        )}
         <div className="ml-16 px-2 text-[11px] text-[#66716e]" style={{ textAlign: xAlignment }}>
           <EditableChartLabel
             value={xLabel}
@@ -599,6 +648,18 @@ export function Chart({ series, label, settings, graphicRef, highlightedSeriesId
           />
         </div>
       </div>
+      {!residualsAvailable && (
+        <p
+          role="status"
+          className="flex items-center gap-2 border-t border-dashed border-border pt-2 text-xs text-muted-foreground"
+        >
+          <Info size={14} aria-hidden="true" className="shrink-0" />
+          <span>
+            Resíduos desabilitados porque ainda não há resíduos.
+            {fitShortcut ? ` Execute o ajuste com ${fitShortcut}.` : ""}
+          </span>
+        </p>
+      )}
     </div>
   );
 }

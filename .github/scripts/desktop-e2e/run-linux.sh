@@ -69,10 +69,25 @@ if ! wait_http http://127.0.0.1:4455/status "$app_pid"; then
   cat "$test_dir/app.log" >&2
   exit 1
 fi
-if ! ATUS_DESKTOP_E2E_PROJECT_DIR="$test_dir/projects" \
-  ATUS_DESKTOP_E2E_URL=http://127.0.0.1:4455 \
-  node --test tests/desktop/smoke.e2e.mjs; then
+# The real shortcut is not pressed here: with XTEST events from xdotool on a bare Xvfb server the
+# grab made by the global shortcut library never fired (Super was bound to Mod4 and the key
+# combination reached the server), so the test would only report a limit of this setup. The
+# shortcut handler itself is exercised through the quick_test_press_shortcut command.
+key_command=''
+export ATUS_DESKTOP_E2E_PROJECT_DIR="$test_dir/projects" ATUS_DESKTOP_E2E_URL=http://127.0.0.1:4455
+# The quick analysis test runs second and ends by quitting the application.
+if ! node --test tests/desktop/smoke.e2e.mjs \
+  || ! ATUS_E2E_KEY_COMMAND="$key_command" node --test tests/desktop/smoke.quick-analysis.e2e.mjs; then
   cat "$test_dir/app.log" >&2
   cat "$test_dir/vite.log" >&2
+  exit 1
+fi
+# The application must have exited by itself, and cleanly.
+app_status=0
+wait "$app_pid" || app_status=$?
+app_pid=''
+if [[ "$app_status" != 0 ]]; then
+  echo "The application exited with status $app_status." >&2
+  cat "$test_dir/app.log" >&2
   exit 1
 fi

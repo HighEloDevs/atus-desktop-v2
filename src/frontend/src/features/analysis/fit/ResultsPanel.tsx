@@ -1,20 +1,55 @@
 /**
  * @module
- * Presentation of simulated fit results.
+ * Compact fit result cards under the chart, with a link to the detailed report.
  */
 
 import { useState } from "react";
-import { Activity, ChevronDown, ChevronUp, ChevronRight, Copy } from "lucide-react";
-import { Dialog } from "radix-ui";
+import { Activity, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
+import { equationToLatex } from "./equation-to-latex";
+import { FitDetailsDialog } from "./FitDetailsDialog";
 import type { FitResponse } from "./fit-service";
+import {
+  CARD_PARAMETER_LIMIT,
+  parameterToLatex,
+  roundToUncertainty,
+  superscript,
+} from "./result-format";
+import { Tex } from "./Tex";
 
-type ResultItem = { id: string; name: string; color: string; result: FitResponse };
-const format = (value: number) =>
-  new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 4 }).format(value);
+/** One dataset shown in the panel: a fit result, or the reason its fit failed. */
+export type ResultItem = {
+  id: string;
+  name: string;
+  color: string;
+  /** Present when the fit succeeded. */
+  result?: FitResponse;
+  /** Reason shown in a red card when the fit failed. */
+  error?: string;
+};
+
+function ParameterValue({ value, uncertainty }: { value: number; uncertainty: number }) {
+  const rounded = roundToUncertainty(value, uncertainty);
+  const body = (
+    <>
+      <b className="font-semibold">{rounded.value}</b>{" "}
+      <span className="text-muted-foreground">±</span>{" "}
+      <span className="text-muted-foreground">{rounded.uncertainty}</span>
+    </>
+  );
+  return rounded.exponent ? (
+    <span>
+      ({body})<span className="text-muted-foreground">×10{superscript(rounded.exponent)}</span>
+    </span>
+  ) : (
+    <span>{body}</span>
+  );
+}
 
 /**
- * Renders simulated fit results and their details.
- * @param props - Results and a callback for highlighting a selected series.
+ * Renders one card per fit. A successful card shows the equation and the first
+ * parameters; the detailed report opens from "Ver detalhes". A failed fit shows a
+ * red card with the reason and no action.
+ * @param props - Items to show and a callback for highlighting a series in the chart.
  * @returns The rendered React element.
  */
 export function ResultsPanel({
@@ -26,21 +61,10 @@ export function ResultsPanel({
 }) {
   const [open, setOpen] = useState(true);
   const [detailsId, setDetailsId] = useState<string | null>(null);
-  const [copyStatus, setCopyStatus] = useState("");
-  const details = results.find((item) => item.id === detailsId);
-  async function copy(item: ResultItem) {
-    try {
-      await navigator.clipboard.writeText(
-        `SIMULAÇÃO — valores fictícios\n${item.result.parameters.map((p) => `${p.name} = ${p.value} ± ${p.uncertainty}`).join("\n")}`,
-      );
-      setCopyStatus(`Parâmetros de ${item.name} copiados.`);
-    } catch {
-      setCopyStatus("Não foi possível copiar os parâmetros.");
-    }
-  }
+  const details = results.find((item) => item.id === detailsId && item.result);
   return (
     <section
-      className={`-mx-5 -mb-5 mt-3 flex shrink-0 flex-col border-t border-border bg-background ${open ? "h-[min(35vh,300px)]" : "h-12"}`}
+      className={`-mx-5 -mb-5 mt-3 flex shrink-0 flex-col border-t border-border bg-background ${open ? "h-[min(40vh,340px)]" : "h-12"}`}
       aria-label="Resultados da análise"
     >
       <button
@@ -68,9 +92,12 @@ export function ResultsPanel({
               <p>Configure uma função e execute os ajustes.</p>
             </div>
           ) : (
-            <>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {results.map((item) => (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3.5">
+              {results.map((item) => {
+                const { result } = item;
+                const latex = result ? equationToLatex(result.equation) : null;
+                const hidden = result ? result.parameters.length - CARD_PARAMETER_LIMIT : 0;
+                return (
                   <article
                     key={item.id}
                     onMouseEnter={() => onHighlight(item.id)}
@@ -79,112 +106,81 @@ export function ResultsPanel({
                     onBlur={(event) => {
                       if (!event.currentTarget.contains(event.relatedTarget)) onHighlight(null);
                     }}
-                    className="relative rounded-lg border border-border bg-white p-3 pl-4 shadow-sm"
+                    className={`group relative flex min-w-0 flex-col gap-3 rounded-[10px] border p-3.5 transition-[border-color,box-shadow] ${item.error ? "border-destructive bg-destructive/10" : "border-border bg-white hover:border-ring focus-within:border-ring hover:shadow-[0_6px_20px_-10px_rgba(54,76,255,0.55)]"}`}
                   >
-                    <span
-                      className="absolute inset-y-0 left-0 w-1 rounded-l-lg"
-                      style={{ backgroundColor: item.color }}
-                    />
-                    <h4 className="truncate text-[12px] font-semibold">{item.name}</h4>
-                    <p className="mt-2 text-[10px] font-semibold uppercase text-muted-foreground">
-                      Equação
-                    </p>
-                    <p className="mt-1 overflow-x-auto rounded bg-muted/40 p-2 font-mono text-[12px]">
-                      {item.result.equation}
-                    </p>
-                    <div className="mt-2 flex items-center justify-between">
-                      <p className="text-[10px] font-semibold uppercase text-muted-foreground">
-                        Parâmetros simulados
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => void copy(item)}
-                        className="flex items-center gap-1 text-[10px] text-muted-foreground"
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span
+                        className="size-[9px] shrink-0 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      <h4
+                        className="truncate text-xs font-semibold text-muted-foreground"
+                        title={item.name}
                       >
-                        <Copy size={12} /> Copiar
-                      </button>
+                        {item.name}
+                      </h4>
                     </div>
-                    <div className="mt-1 rounded bg-muted/40 p-2 font-mono text-[11px]">
-                      {item.result.parameters.length
-                        ? item.result.parameters.map((p) => (
-                            <div key={p.name} className="flex justify-between gap-2">
-                              <span>{p.name}</span>
-                              <span>
-                                {format(p.value)} ± {format(p.uncertainty)}
-                              </span>
+                    {item.error ? (
+                      <p role="alert" className="flex gap-2 text-[13px] text-destructive">
+                        <b aria-hidden="true">✕</b>
+                        <span>
+                          <b>Falha no ajuste.</b> {item.error}
+                        </span>
+                      </p>
+                    ) : (
+                      result && (
+                        <>
+                          {latex && (
+                            <div className="overflow-x-auto whitespace-nowrap pb-0.5 text-[17px]">
+                              <Tex latex={`f(x) = ${latex}`} />
                             </div>
-                          ))
-                        : "Nenhum parâmetro"}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setDetailsId(item.id)}
-                      className="mt-3 flex w-full items-center justify-center gap-1 rounded border border-border py-1.5 text-[11px] hover:bg-muted"
-                    >
-                      Ver detalhes <ChevronRight size={12} />
-                    </button>
+                          )}
+                          <div className="grid gap-1.5 border-t border-border pt-2.5 text-[13px] tabular-nums">
+                            {result.parameters.slice(0, CARD_PARAMETER_LIMIT).map((p) => (
+                              <div
+                                key={p.name}
+                                className="grid grid-cols-[2.2em_1fr] items-baseline"
+                              >
+                                <Tex
+                                  latex={parameterToLatex(p.name)}
+                                  className="text-muted-foreground"
+                                />
+                                <ParameterValue value={p.value} uncertainty={p.uncertainty} />
+                              </div>
+                            ))}
+                            {result.parameters.length === 0 && (
+                              <span className="text-muted-foreground">Nenhum parâmetro livre</span>
+                            )}
+                            {hidden > 0 && (
+                              <span className="pl-[2.2em] text-xs text-muted-foreground">
+                                + {hidden} {hidden === 1 ? "parâmetro" : "parâmetros"}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setDetailsId(item.id)}
+                            aria-label={`Ver detalhes de ${item.name}`}
+                            className="mt-auto flex w-full items-center justify-between rounded-[7px] bg-muted px-2.5 py-1.5 text-xs font-semibold transition-colors after:absolute after:inset-0 after:rounded-[10px] group-hover:bg-ring group-hover:text-white focus-visible:bg-ring focus-visible:text-white"
+                          >
+                            Ver detalhes
+                            <ArrowRight
+                              aria-hidden="true"
+                              size={13}
+                              className="transition-transform group-hover:translate-x-0.5"
+                            />
+                          </button>
+                        </>
+                      )
+                    )}
                   </article>
-                ))}
-              </div>
-            </>
+                );
+              })}
+            </div>
           )}
-          <p role="status" className="sr-only">
-            {copyStatus}
-          </p>
         </div>
       )}
-      <Dialog.Root
-        open={!!details}
-        onOpenChange={(value) => {
-          if (!value) setDetailsId(null);
-        }}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(90vw,600px)] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg bg-white p-5 shadow-xl">
-            <Dialog.Title className="text-sm font-semibold">
-              Resultados detalhados: {details?.name}
-            </Dialog.Title>
-            <Dialog.Description className="mt-2 text-xs text-[#8a6a38]">
-              Valores fictícios para demonstração. Nenhum ajuste científico foi executado.
-            </Dialog.Description>
-            {details && (
-              <>
-                <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                  <div className="rounded border border-border p-3">
-                    χ² simulado{" "}
-                    <strong className="mt-2 block font-mono">
-                      {format(details.result.chiSquared)}
-                    </strong>
-                  </div>
-                  <div className="rounded border border-border p-3">
-                    Graus de liberdade simulados{" "}
-                    <strong className="mt-2 block font-mono">
-                      {details.result.degreesOfFreedom}
-                    </strong>
-                  </div>
-                </div>
-                <h3 className="mt-4 text-xs font-semibold">Parâmetros simulados</h3>
-                <div className="mt-2 space-y-1 font-mono text-xs">
-                  {details.result.parameters.map((p) => (
-                    <p key={p.name}>
-                      {p.name} = {format(p.value)} ± {format(p.uncertainty)}
-                    </p>
-                  ))}
-                </div>
-                <p className="mt-4 text-xs text-muted-foreground">
-                  Matrizes e intervalos de confiança estarão disponíveis com o motor científico.
-                </p>
-              </>
-            )}
-            <div className="mt-5 flex justify-end">
-              <Dialog.Close className="rounded border border-border px-3 py-1.5 text-xs">
-                Fechar
-              </Dialog.Close>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      {details && <FitDetailsDialog item={details} onClose={() => setDetailsId(null)} />}
     </section>
   );
 }

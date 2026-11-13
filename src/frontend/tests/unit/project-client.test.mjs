@@ -1,8 +1,14 @@
 /** Project persistence adapter contracts and recent-project behavior. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const native = vi.hoisted(() => ({ invoke: vi.fn(), open: vi.fn(), save: vi.fn() }));
+const native = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  open: vi.fn(),
+  save: vi.fn(),
+  reveal: vi.fn(),
+}));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: native.invoke }));
+vi.mock("@tauri-apps/plugin-opener", () => ({ revealItemInDir: native.reveal }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: native.open, save: native.save }));
 
 import {
@@ -14,6 +20,7 @@ import {
   projectClient,
   recentPaths,
   rememberProject,
+  replaceRecentPath,
 } from "../../src/features/projects/project-client";
 
 const key = "atus.recent-projects.v1";
@@ -57,6 +64,18 @@ describe("recent projects", () => {
     expect(recentPaths()).not.toContain("p2");
   });
 
+  it("replaces a path in place, drops it, and avoids duplicates", () => {
+    store.set(key, '["a","b","c"]');
+    replaceRecentPath("b", "x");
+    expect(recentPaths()).toEqual(["a", "x", "c"]);
+    replaceRecentPath("a", "c");
+    expect(recentPaths()).toEqual(["c", "x"]);
+    replaceRecentPath("x", null);
+    expect(recentPaths()).toEqual(["c"]);
+    replaceRecentPath("missing", "y");
+    expect(recentPaths()).toEqual(["c"]);
+  });
+
   it("tolerates unavailable browser storage without throwing", () => {
     vi.stubGlobal("localStorage", {
       getItem() {
@@ -96,6 +115,26 @@ describe("native project operations", () => {
       filters: [{ name: "Projeto ATUS", extensions: ["atus"] }],
       defaultPath: "project.atus",
     });
+  });
+
+  it("forwards management operations to the native commands", async () => {
+    native.invoke.mockResolvedValue("/new.atus");
+    await projectClient.listArchived();
+    await projectClient.details(["a"]);
+    await projectClient.rename("a", "b");
+    await projectClient.archive("a");
+    await projectClient.unarchive("a");
+    await projectClient.remove("a");
+    await projectClient.reveal("a");
+    expect(native.invoke.mock.calls).toEqual([
+      ["project_list_archived"],
+      ["project_details", { paths: ["a"] }],
+      ["project_rename", { path: "a", newName: "b" }],
+      ["project_archive", { path: "a" }],
+      ["project_unarchive", { path: "a" }],
+      ["project_delete", { path: "a" }],
+    ]);
+    expect(native.reveal).toHaveBeenCalledWith("a");
   });
 
   it("forwards project operations and propagates errors from native commands", async () => {

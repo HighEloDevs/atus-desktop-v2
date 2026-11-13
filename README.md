@@ -1,42 +1,81 @@
-# ATUS Desktop v2
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="ATUS" width="100%">
+</p>
 
-O ATUS Desktop é uma ferramenta científica gratuita e de código aberto para análise de dados de física experimental. A v2 busca oferecer um fluxo simples e reproduzível, preservando e verificando as capacidades científicas relevantes da versão anterior.
+# ATUS Desktop
 
-O projeto está em fase inicial. A stack escolhida é React, Tailwind CSS e shadcn para o frontend, Tauri com Rust para o desktop e C++ para o motor científico. A aplicação inclui uma tela de análise demonstrativa conectada a um motor C++ que retorna valores fixos; nenhum ajuste científico é realizado. O contrato científico definitivo e os detalhes de distribuição ainda serão definidos. O frontend inicial usa Tailwind CSS e shadcn/ui; é possível importar séries e retomar análises em projetos SQLite `.atus`.
+O ATUS Desktop é uma ferramenta científica gratuita e de código aberto para análise de dados de física experimental. Importe ou cole seus dados, mapeie variáveis e incertezas, informe o modelo, ajuste, inspecione os resultados e salve o projeto.
 
-## Desenvolvimento
+## Recursos
 
-Instale Node.js, npm, Rust e Cargo, além dos [pré-requisitos do Tauri](https://v2.tauri.app/start/prerequisites/). No macOS, para desenvolvimento desktop, as Command Line Tools da Apple são suficientes.
+- Importação de CSV/TXT/DAT ou colagem da área de transferência (`Cmd/Ctrl+B`), com várias séries sobrepostas e personalizáveis.
+- Gráfico com barras de incerteza, tooltip, eixos em cruz, escala logarítmica e exportação de imagem (PNG/JPEG).
+- Editor de equação com prévia em LaTeX, parâmetros e intervalo de ajuste.
+- Projetos `.atus` (SQLite versionado) com salvamento automático, Salvar como, recentes, renomear, arquivar e excluir.
+
+## Stack
+
+| Camada   | Tecnologia                                                |
+| -------- | --------------------------------------------------------- |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, shadcn/ui, D3 |
+| Desktop  | Tauri 2 e Rust                                            |
+| Motor    | C++, integrado via C ABI e compilado pelo `build.rs`      |
+
+## Pré-requisitos
+
+- **Node.js 22** e npm.
+- **Rust** estável com Cargo, via [rustup](https://rustup.rs/).
+- **Compilador C/C++** com suporte a C++17.
+- **Dependências de sistema do Tauri 2**, conforme a plataforma ([guia oficial](https://v2.tauri.app/start/prerequisites/)):
+  - **macOS:** Command Line Tools (`xcode-select --install`). O Xcode completo não é necessário.
+  - **Windows:** Microsoft C++ Build Tools (carga de trabalho "Desenvolvimento para desktop com C++") e WebView2.
+  - **Linux (Debian/Ubuntu):**
+    ```sh
+    sudo apt install libwebkit2gtk-4.1-dev build-essential clang curl wget file \
+      libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+    ```
+
+## Como rodar localmente
 
 ```sh
-cd src/frontend
+git clone https://github.com/HighEloDevs/atus-desktop-v2.git
+cd atus-desktop-v2/src/frontend
 npm ci
 npm run tauri -- dev
 ```
 
-Para compilar o frontend, execute `npm run build` no mesmo diretório. Para gerar um pacote de teste na plataforma atual, execute `npm run tauri -- build`. Os ícones são derivados do brandbook. O identificador `org.atus.desktop` é provisório: confirme-o antes da primeira distribuição pública. Os pacotes ainda não são assinados nem estão prontos para publicação.
+A primeira execução compila as dependências Rust e pode demorar alguns minutos. O comando abre a janela do aplicativo com recarga automática do frontend (servidor Vite na porta `1420`, que precisa estar livre).
 
-O workflow de build gera pacotes de teste para macOS e Windows. A instalação e a remoção em uma máquina Windows limpa ainda precisam de validação manual.
+Para ver só a interface no navegador, sem o núcleo desktop (projetos em disco e clipboard nativo não funcionam), execute `npm run dev` e abra <http://127.0.0.1:1420>.
 
-## Qualidade do frontend
+## Comandos úteis
 
-Em `src/frontend/`, execute `npm run lint` e `npm run format:check` para verificar o código. Para aplicar correções automáticas, use `npm run lint:fix` e `npm run format`. Essas verificações também são executadas no CI.
+Todos em `src/frontend/`, salvo indicação.
+
+| Comando                                             | O que faz                                   |
+| --------------------------------------------------- | ------------------------------------------- |
+| `npm run build`                                     | Verifica tipos e gera o frontend em `dist/` |
+| `npm test`                                          | Testes do frontend (Vitest)                 |
+| `npm run test:coverage`                             | Testes com cobertura                        |
+| `npm run lint` / `npm run lint:fix`                 | ESLint                                      |
+| `npm run format:check` / `npm run format`           | Prettier                                    |
+| `cargo test --manifest-path src/desktop/Cargo.toml` | Testes Rust, na raiz do repositório         |
+| `npm run tauri -- build`                            | Pacote para a plataforma atual              |
+
+Os pacotes gerados não são assinados. No macOS, `npm run tauri -- build --debug --bundles app` gera o `ATUS Desktop.app`, que associa a extensão `.atus` ao aplicativo: dê dois cliques em um `.atus` para abri-lo.
+
+## Projetos `.atus`
+
+**Nova análise** cria um arquivo em `ATUS/projects`, dentro da pasta Documentos do sistema. **Abrir projeto** aceita arquivos de outras pastas e os inclui nos recentes. As mudanças são gravadas automaticamente. **Salvar** antecipa a gravação e **Salvar como** cria uma cópia em um caminho livre. Se o arquivo mudar em outra instância, use **Salvar como** para preservar a edição atual. A primeira abertura de um arquivo v1 cria um backup ao lado dele e migra o esquema para v2.
 
 ## Referências
 
-- [Especificações funcionais e técnicas 0.1](docs/references/atus-desktop-v2-especificacoes-0.1.pdf) — escopo proposto, catálogo funcional e decisões em avaliação.
-- [Brandbook ATUS / Recorte 1.0](docs/references/atus-recorte-brandbook-1.0.html) — identidade visual e assets; abra o HTML no navegador.
-- [AGENTS.md](AGENTS.md) — contexto vivo, orientações e decisões do repositório.
-
-A especificação é um retrato inicial: seus critérios de aceite e estimativas precisam de validação. O legado usado como referência é [Analysis-Tool-for-Undergrad-Students](https://github.com/HighEloDevs/Analysis-Tool-for-Undergrad-Students), no commit `ab7673488849838a8a317279f8b4f1e611148734`.
+- [Especificações funcionais e técnicas](docs/references/atus-desktop-v2-especificacoes-0.1.pdf)
+- [Brandbook ATUS / Recorte](docs/references/atus-recorte-brandbook-1.0.html): identidade visual e assets; abra o HTML no navegador.
+- [AGENTS.md](AGENTS.md): contexto, orientações e decisões do repositório.
+- [CONTRIBUTING.md](CONTRIBUTING.md): como contribuir.
+- Versão anterior: [Analysis-Tool-for-Undergrad-Students](https://github.com/HighEloDevs/Analysis-Tool-for-Undergrad-Students).
 
 ## Licença
 
 Consulte [LICENSE](LICENSE).
-
-
-No desktop, **Nova análise** cria um arquivo em `ATUS/projects` dentro da pasta Documentos do sistema. **Abrir projeto** aceita arquivos de outras pastas e os inclui nos recentes. As mudanças são gravadas automaticamente. **Salvar** antecipa a gravação e **Salvar como** cria uma cópia em um caminho livre. Se o arquivo mudar em outra instância, use **Salvar como** para preservar a edição atual. A primeira abertura de um arquivo v1 cria um backup ao lado dele e migra o esquema para v2. Resultados simulados continuam identificados como simulação.
-
-Para conferir a abertura na interface, crie uma análise e importe um CSV com pontos conhecidos. Use **Salvar como** para criar uma cópia `.atus` numa pasta temporária fora de Documentos/ATUS/projects. Volte ao início, escolha **Abrir projeto**, selecione a cópia e confira o nome da série, os pontos e as configurações. Volte ao início e reabra a mesma cópia em **Projetos recentes**. O teste Rust `project_commands_save_copy_and_reopen_without_the_original` verifica o retorno da abertura depois de remover o original.
-
-No macOS, o pacote `ATUS Desktop.app` associa a extensão `.atus` ao aplicativo. Abra o pacote pelo Finder (ou instale-o em Aplicativos) e dê dois cliques num `.atus`. Se já houver uma análise aberta, confirme a troca na janela do ATUS. Para gerar o pacote localmente, execute `npm run tauri -- build --debug --bundles app` em `src/frontend`.
