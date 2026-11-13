@@ -143,13 +143,11 @@ it("reports a missing dataset index without reading the clipboard", async () => 
   expect(readText).toHaveBeenCalledTimes(1);
 });
 
-it("reports empty, oversized and denied clipboards and keeps existing data", async () => {
+it("reports empty and denied clipboards and keeps existing data", async () => {
   await render();
   await paste("1;2\n2;4");
   await paste("   ");
   expect(errorTitle()).toBe("A área de transferência está vazia.");
-  await paste("1".repeat(1024 * 1024 + 1));
-  expect(errorTitle()).toContain("excede 1 MB");
   readText.mockRejectedValue(new Error("denied"));
   await press("KeyB");
   expect(errorTitle()).toContain("Verifique as permissões");
@@ -242,4 +240,44 @@ it("ignores the shortcuts in text fields, and with other modifiers", async () =>
   await press("Space");
   expect(readText).not.toHaveBeenCalled();
   expect(chart()).toBeUndefined();
+});
+
+it("imports clipboard text above 1 MB without a size error", async () => {
+  await render();
+  const rows = Array.from({ length: 140000 }, (_, i) => `${i};${i}`).join("\n");
+  expect(rows.length).toBeGreaterThan(1024 * 1024);
+  await paste(rows);
+  expect(chart()).toBe(`${NAME}:140000:0`);
+  expect(notify.error).not.toHaveBeenCalled();
+});
+
+it("Ctrl+Enter runs the fits and shows a success toast, even from the equation input", async () => {
+  await render();
+  await paste("1;2\n2;4");
+  await setInput(`Função de ajuste de ${NAME}`, "a*x");
+  const input = node.querySelector(`input[aria-label="Função de ajuste de ${NAME}"]`);
+  await press("Enter", input);
+  expect(chart()).toBe(`${NAME}:2:2`);
+  expect(notify.success).toHaveBeenLastCalledWith("Ajuste executado com sucesso", {
+    id: "fit-success",
+  });
+});
+
+it("Ctrl+Enter does nothing without an equation", async () => {
+  await render();
+  await paste("1;2\n2;4");
+  notify.success.mockClear();
+  await press("Enter");
+  expect(chart()).toBe(`${NAME}:2:0`);
+  expect(notify.success).not.toHaveBeenCalled();
+});
+
+it("Ctrl+Enter reports the failure instead of a success toast for an invalid equation", async () => {
+  await render();
+  await paste("1;2\n2;4");
+  await setInput(`Função de ajuste de ${NAME}`, "sin(");
+  notify.success.mockClear();
+  await press("Enter");
+  expect(errorTitle()).toContain("Falha no ajuste");
+  expect(notify.success).not.toHaveBeenCalled();
 });

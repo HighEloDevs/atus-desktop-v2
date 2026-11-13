@@ -80,7 +80,7 @@ it("removes a series and returns to the empty state", async () => {
   await render();
   await act(async () => button("Remover").click());
   expect(node.querySelector('[data-testid="chart"]')).toBeNull();
-  expect(node.textContent).toContain("Comece sua análise");
+  expect(node.textContent).toContain("Esperando seus dados");
 });
 
 it("opens the table showing imported points", async () => {
