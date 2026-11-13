@@ -13,6 +13,7 @@ use project::commands::*;
 use project::e2e::project_test_directory;
 #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
 use project::e2e::project_test_finder;
+use project::manage::*;
 #[cfg(target_os = "macos")]
 use project::{finder::take_finder_project, menu::project_menu_enabled};
 use serde::Serialize;
@@ -77,6 +78,12 @@ fn main() {
             project_save_as,
             project_list,
             project_available,
+            project_details,
+            project_list_archived,
+            project_rename,
+            project_archive,
+            project_unarchive,
+            project_delete,
             #[cfg(feature = "desktop-e2e")]
             project_test_directory,
             #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]

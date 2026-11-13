@@ -32,8 +32,8 @@ vi.mock("../../src/features/projects/project-client", () => ({
   rememberProject: bridge.rememberProject,
   projectClient: bridge.projectClient,
 }));
-vi.mock("../../src/features/projects/RecentProjects", () => ({
-  RecentProjects: ({ onOpen }) =>
+vi.mock("../../src/features/projects/ProjectTables", () => ({
+  ProjectTables: ({ onOpen }) =>
     createElement("button", { onClick: () => onOpen("/recent.atus") }, "Recent fixture"),
 }));
 vi.mock("../../src/features/analysis/AnalysisPage", () => ({
