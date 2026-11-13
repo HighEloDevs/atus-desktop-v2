@@ -88,4 +88,5 @@ Consulte o brandbook para aplicar a identidade Recorte e seus assets oficiais. A
 - `src/scientific-engine/`: motor científico C++, com interfaces públicas em `include/`, implementação em `src/` e testes unitários e de integração em `tests/`.
 - `docs/decisions/`: decisões arquiteturais, incluindo o componente de gráficos com D3.
 - `docs/references/`: documentos originais de especificação e identidade.
+- `docs/assets/`: imagens do README; `banner.svg` usa o logo e a paleta do brandbook (edite o SVG à mão, sem fontes externas).
 - `LICENSE`: licença do repositório; preserve seu conteúdo.
