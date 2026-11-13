@@ -17,7 +17,10 @@ export const QUICK_SHOWN_EVENT = "quick-analysis-shown";
 /** Name of the dataset created from a quick analysis. */
 export const QUICK_DATASET_NAME = "Dados da análise rápida";
 
-/** Equation and points submitted from the quick window. */
+/**
+ * Points and optional equation submitted from the quick window. An empty equation opens the
+ * project with the data only, without running a fit.
+ */
 export type QuickAnalysis = { equation: string; points: ChartPoint[] };
 
 /** Native quick analysis commands. Each method rejects with a readable message on failure. */
@@ -32,7 +35,7 @@ export const quickAnalysisClient = {
 
 /**
  * Builds a new project snapshot whose first analysis holds the submitted points as one dataset
- * with the submitted equation. Display and fit options keep the analysis screen defaults.
+ * with the submitted equation, if any. Display and fit options keep the analysis screen defaults.
  *
  * @param analysis - Submitted equation and points.
  * @returns A fresh project snapshot, ready for `projectClient.create`.
@@ -46,7 +49,7 @@ export function quickAnalysisSnapshot({ equation, points }: QuickAnalysis): Proj
       id: crypto.randomUUID(),
       name: QUICK_DATASET_NAME,
       points: points.map(({ x, y, sx, sy }) => ({ x, y, sx: sx ?? null, sy: sy ?? null })),
-      state: { equation: equation.trim() },
+      state: equation.trim() ? { equation: equation.trim() } : {},
     },
   ];
   return snapshot;

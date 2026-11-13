@@ -98,12 +98,9 @@ export function QuickAnalysisWindow() {
 
   const parsed = useMemo(() => (text === null ? null : parse(text, separator)), [text, separator]);
   const points = parsed?.points ?? null;
-  const equationError = equation.trim()
-    ? validateFitConfig({ ...defaultFitConfig, equation })
-    : triedSubmit
-      ? "Informe uma função de ajuste."
-      : null;
-  const parameters = equation.trim() && !equationError ? resolveFitParameters("", equation) : null;
+  const hasEquation = equation.trim() !== "";
+  const equationError = hasEquation ? validateFitConfig({ ...defaultFitConfig, equation }) : null;
+  const parameters = hasEquation && !equationError ? resolveFitParameters("", equation) : null;
   const dataMissing = triedSubmit && !points && text === null;
 
   const loadText = useCallback((value: string, from: DataSource) => {
@@ -143,7 +140,7 @@ export function QuickAnalysisWindow() {
 
   const submit = useCallback(async () => {
     setTriedSubmit(true);
-    if (submitting || !equation.trim() || equationError || !points) return;
+    if (submitting || equationError || !points) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -260,7 +257,7 @@ export function QuickAnalysisWindow() {
         <div>
           <div className="mb-1.5 flex items-baseline justify-between gap-3">
             <label htmlFor={equationId} className="text-[12px] font-semibold">
-              Função de ajuste
+              Função de ajuste <span className="font-normal text-muted-foreground">(opcional)</span>
             </label>
             <span className="truncate text-[11px] text-muted-foreground">
               Use x como variável; os outros nomes viram parâmetros.
@@ -303,6 +300,8 @@ export function QuickAnalysisWindow() {
                 ))}
                 <span className="ml-1">começam em 1; ajuste depois no ATUS.</span>
               </>
+            ) : !hasEquation ? (
+              <span>Sem função, o ATUS abre só com os dados e você ajusta depois.</span>
             ) : null}
           </div>
         </div>
@@ -435,7 +434,7 @@ export function QuickAnalysisWindow() {
         )}
         <Button type="button" onClick={() => void submit()} disabled={submitting} className="h-9">
           <Activity aria-hidden="true" />
-          {submitting ? "Abrindo o ATUS…" : "Ajustar no ATUS"}
+          {submitting ? "Abrindo o ATUS…" : hasEquation ? "Ajustar no ATUS" : "Abrir no ATUS"}
           <kbd className="font-sans text-[10.5px] font-medium opacity-75">{modifier} ↵</kbd>
         </Button>
       </footer>

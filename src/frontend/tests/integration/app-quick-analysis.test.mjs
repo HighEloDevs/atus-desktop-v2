@@ -105,6 +105,17 @@ it("opens a waiting quick analysis from the home page as a new project with an a
   expect(node.textContent).toContain("Projetos");
 });
 
+it("opens a quick analysis without an equation without asking for a fit", async () => {
+  bridge.invoke.mockImplementation(async (command) =>
+    command === "take_quick_analysis" ? { equation: " ", points: request.points } : null,
+  );
+  await render();
+  await settle();
+  expect(bridge.projectClient.create).toHaveBeenCalledTimes(1);
+  expect(node.querySelector('[data-testid="analysis"]').textContent).toBe("/quick.atus");
+  expect(bridge.analysisProps.runFitsOnOpen).toBe(false);
+});
+
 it("hands a quick analysis to the open analysis, which confirms or cancels it", async () => {
   await render();
   await act(async () =>

@@ -52,6 +52,11 @@ it("calls the native quick analysis commands", async () => {
   ]);
 });
 
+it("leaves the dataset without an equation when none was submitted", () => {
+  const snapshot = quickAnalysisSnapshot({ equation: "  ", points: [{ x: 1, y: 2 }] });
+  expect(snapshot.analyses[0].datasets[0].state).toEqual({});
+});
+
 it("builds a new project with one dataset holding the points and the equation", () => {
   const snapshot = quickAnalysisSnapshot({
     equation: "  a*x + b ",

@@ -242,7 +242,7 @@ function App() {
     async (request: QuickAnalysis) => {
       await runProjectAction(async () => {
         const opened = await projectClient.create(quickAnalysisSnapshot(request));
-        setAutoFitPath(opened.path);
+        if (request.equation.trim()) setAutoFitPath(opened.path);
         return opened;
       });
       setQuickRequest((pending) => (pending === request ? null : pending));

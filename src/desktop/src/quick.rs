@@ -32,7 +32,7 @@ const MAX_EQUATION_CHARS: usize = 500;
 /// Equation and points submitted from the quick window.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct QuickAnalysis {
-    /// Fit model in the syntax of the analysis screen, for example `a*x + b`.
+    /// Fit model in the syntax of the analysis screen, for example `a*x + b`. May be empty.
     pub equation: String,
     /// Measurements in input order; uncertainties are optional.
     pub points: Vec<Point>,
@@ -56,15 +56,13 @@ impl PendingQuickAnalysis {
 
 /// Checks that a submitted analysis can open as a project.
 ///
+/// The equation is optional: an empty one opens the project with the data only.
+///
 /// # Errors
-/// Returns a Portuguese message when the equation is empty or too long, when there are no
+/// Returns a Portuguese message when the equation is too long, when there are no
 /// points, when a value is not finite or when an uncertainty is negative.
 pub fn validate(analysis: &QuickAnalysis) -> Result<(), String> {
-    let equation = analysis.equation.trim();
-    if equation.is_empty() {
-        return Err("Informe uma função de ajuste.".into());
-    }
-    if equation.chars().count() > MAX_EQUATION_CHARS {
+    if analysis.equation.trim().chars().count() > MAX_EQUATION_CHARS {
         return Err("A função de ajuste é longa demais.".into());
     }
     if analysis.points.is_empty() {
@@ -249,12 +247,9 @@ mod tests {
     }
 
     #[test]
-    fn rejects_missing_equation_and_points() {
+    fn accepts_an_empty_equation_but_not_missing_points() {
         let points = vec![point(1.0, 2.0, None, None)];
-        assert_eq!(
-            validate(&analysis("  ", points.clone())),
-            Err("Informe uma função de ajuste.".into())
-        );
+        assert_eq!(validate(&analysis("  ", points.clone())), Ok(()));
         assert_eq!(
             validate(&analysis(&"x".repeat(MAX_EQUATION_CHARS + 1), points)),
             Err("A função de ajuste é longa demais.".into())

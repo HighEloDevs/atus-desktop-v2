@@ -97,6 +97,26 @@ it("reads data from the clipboard when shown and submits with Cmd+Enter", async 
   expect(equation().value).toBe("R * x");
 });
 
+it("submits only the data when the equation is left empty", async () => {
+  await render();
+  await show();
+  expect(node.textContent).toContain("(opcional)");
+  expect(node.textContent).toContain("Sem função, o ATUS abre só com os dados");
+  expect(button("Abrir no ATUS")).toBeTruthy();
+  await type("a*x");
+  expect(node.textContent).not.toContain("Sem função");
+  expect(button("Ajustar no ATUS")).toBeTruthy();
+  await type("  ");
+  await act(async () => button("Abrir no ATUS").click());
+  expect(api.invoke).toHaveBeenCalledWith("quick_submit", {
+    analysis: {
+      equation: "",
+      points: expect.arrayContaining([expect.objectContaining({ x: 0.1 })]),
+    },
+  });
+  expect(alerts()).toEqual([]);
+});
+
 it("ignores a clipboard that is not data and keeps data already entered", async () => {
   api.readText.mockResolvedValueOnce("uma frase qualquer com 1 número");
   await render();
@@ -116,12 +136,14 @@ it("ignores a clipboard that is not data and keeps data already entered", async 
 it("explains what is missing instead of submitting", async () => {
   api.readText.mockResolvedValue("");
   await render();
-  await act(async () => button("Ajustar no ATUS").click());
-  expect(alerts()).toEqual(["Informe uma função de ajuste.", "Cole ao menos um ponto."]);
+  await act(async () => button("Abrir no ATUS").click());
+  expect(alerts()).toEqual(["Cole ao menos um ponto."]);
   expect(api.invoke).not.toHaveBeenCalled();
   await type("sin(");
   expect(alerts()[0]).toContain("Função inválida");
   expect(equation().getAttribute("aria-invalid")).toBe("true");
+  await key({ code: "Enter", key: "Enter", metaKey: true }, equation());
+  expect(api.invoke).not.toHaveBeenCalled();
   await act(async () => button("Colar do clipboard").click());
   expect(alerts()).toContain("A área de transferência está vazia.");
 });
