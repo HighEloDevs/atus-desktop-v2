@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ATUS Desktop",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "identifier": "org.atus.desktop",
   "build": {
     "beforeDevCommand": "npm --prefix frontend run dev",
@@ -34,6 +34,15 @@
       "wix": {
         "upgradeCode": "97dd0dfd-d632-4793-b897-b5cc46245d97"
       }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI1MDdENkI0RkE5RjI2OUIKUldTYkpwLzZ0TllIdGVUbStFamxXSEIvN01kK3hSbzlkM3JMVitWMStVMGs0WlprS3NCRktueGYK",
+      "endpoints": [
+        "https://github.com/HighEloDevs/atus-desktop-v2/releases/latest/download/latest.json"
+      ]
     }
   }
 }

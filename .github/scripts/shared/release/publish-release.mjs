@@ -5,25 +5,57 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import { createManifest, formatChecksums, verifyManifest } from './check-release-artifacts.mjs';
-import { parseReleaseNotes, renderReleaseBody } from './check-release-notes.mjs';
+import { parseReleaseNotes, renderReleaseBody, versionFromFileName } from './check-release-notes.mjs';
+import { checkSignature } from './check-updater-signatures.mjs';
 import { pathToFileURL } from 'node:url';
 
 /**
- * Select exactly one regular file per expected build artifact.
+ * Release assets, the build job folder they come from, the suffix that finds them and whether the
+ * bundler signs them for the updater (a `.sig` file next to the asset).
+ */
+export const ARTIFACTS = [
+  { folder: 'linux-bundles', suffix: '.deb', name: 'atus-linux.deb', signed: true },
+  { folder: 'linux-bundles', suffix: '.rpm', name: 'atus-linux.rpm', signed: true },
+  { folder: 'linux-bundles', suffix: '.AppImage', name: 'atus-linux.AppImage', signed: true },
+  { folder: 'windows-installer', suffix: '.exe', name: 'atus-windows.exe', signed: true },
+  { folder: 'windows-installer', suffix: '.msi', name: 'atus-windows.msi', signed: true },
+  { folder: 'macos-arm64-app', suffix: '.app.tar.gz', name: 'atus-macos-arm64.app.tar.gz', signed: true },
+  { folder: 'macos-intel-app', suffix: '.app.tar.gz', name: 'atus-macos-intel.app.tar.gz', signed: true },
+  { folder: 'macos-arm64-app', suffix: '.zip', name: 'atus-macos-arm64.zip', signed: false },
+  { folder: 'macos-intel-app', suffix: '.zip', name: 'atus-macos-intel.zip', signed: false },
+  { folder: 'macos-arm64-app', suffix: '.dmg', name: 'atus-macos-arm64.dmg', signed: false },
+  { folder: 'macos-intel-app', suffix: '.dmg', name: 'atus-macos-intel.dmg', signed: false },
+];
+
+/**
+ * Updater targets in `latest.json`, mapped to the asset that updates them. The updater looks up
+ * `{os}-{arch}-{bundle}` first, so each installed format receives its own package; the bare
+ * `{os}-{arch}` keys are the fallback for an app that cannot tell how it was installed.
+ */
+export const UPDATER_TARGETS = {
+  'darwin-aarch64-app': 'atus-macos-arm64.app.tar.gz',
+  'darwin-aarch64': 'atus-macos-arm64.app.tar.gz',
+  'darwin-x86_64-app': 'atus-macos-intel.app.tar.gz',
+  'darwin-x86_64': 'atus-macos-intel.app.tar.gz',
+  'windows-x86_64-nsis': 'atus-windows.exe',
+  'windows-x86_64-msi': 'atus-windows.msi',
+  'windows-x86_64': 'atus-windows.exe',
+  'linux-x86_64-appimage': 'atus-linux.AppImage',
+  'linux-x86_64-deb': 'atus-linux.deb',
+  'linux-x86_64-rpm': 'atus-linux.rpm',
+  'linux-x86_64': 'atus-linux.AppImage',
+};
+
+/**
+ * Select exactly one regular file per expected build artifact, and its updater signature.
  * @param {string} root Directory holding the downloaded artifacts, one folder per build job.
  * @param {string} version Release version, such as `0.2.4`.
- * @returns {Array<{path: string, name: string}>} The selected files and their release asset names.
- * @throws {Error} When the version is not `M.m.p` or a file is missing or ambiguous.
+ * @returns {Array<{path: string, name: string, signature: string|null}>} The selected files, their
+ *   release asset names and, for signed assets, the path of the `.sig` file.
+ * @throws {Error} When the version is not `M.m.p` or a file or signature is missing or ambiguous.
  */
 export function selectArtifacts(root, version) {
   assertStableVersion(version);
-  const specs = [
-    ['linux-bundles', '.deb', 'atus-linux.deb'], ['linux-bundles', '.rpm', 'atus-linux.rpm'],
-    ['linux-bundles', '.AppImage', 'atus-linux.AppImage'], ['windows-installer', '.exe', 'atus-windows.exe'],
-    ['windows-installer', '.msi', 'atus-windows.msi'],
-    ['macos-arm64-app', '.zip', 'atus-macos-arm64.zip'], ['macos-intel-app', '.zip', 'atus-macos-intel.zip'],
-    ['macos-arm64-app', '.dmg', 'atus-macos-arm64.dmg'], ['macos-intel-app', '.dmg', 'atus-macos-intel.dmg'],
-  ];
   function walk(dir) {
     return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
       const path = join(dir, entry.name);
@@ -31,10 +63,96 @@ export function selectArtifacts(root, version) {
       return entry.isDirectory() ? walk(path) : entry.isFile() ? [path] : [];
     });
   }
-  return specs.map(([folder, suffix, name]) => {
-    const candidates = walk(join(root, folder)).filter((path) => basename(path).endsWith(suffix));
+  return ARTIFACTS.map(({ folder, suffix, name, signed }) => {
+    const files = walk(join(root, folder));
+    const candidates = files.filter((path) => basename(path).endsWith(suffix));
     if (candidates.length !== 1 || !lstatSync(candidates[0]).isFile()) throw new Error(`Expected exactly one ${folder} ${suffix}`);
-    return { path: candidates[0], name };
+    if (!signed) return { path: candidates[0], name, signature: null };
+    const signature = `${candidates[0]}.sig`;
+    if (!files.includes(signature)) throw new Error(`Missing updater signature for ${folder} ${suffix}`);
+    return { path: candidates[0], name, signature };
+  });
+}
+
+/**
+ * Verify every updater signature against the public key the released app trusts.
+ * @param {Array<{path: string, name: string, signature: string|null}>} selected Result of {@link selectArtifacts}.
+ * @param {string} publicKey `plugins.updater.pubkey` at the released commit.
+ * @returns {Record<string, string>} Signature text by asset name.
+ * @throws {Error} When a signature is invalid, listing every failing asset.
+ */
+export function verifySignatures(selected, publicKey) {
+  const signatures = {};
+  const problems = [];
+  for (const { path, name, signature } of selected.filter((entry) => entry.signature)) {
+    const text = readFileSync(signature, 'utf8');
+    const problem = checkSignature(readFileSync(path), text, publicKey);
+    if (problem) problems.push(`${name}: ${problem}`);
+    signatures[name] = text.trim();
+  }
+  if (problems.length) throw new Error(`Invalid updater signatures (check TAURI_SIGNING_PRIVATE_KEY against plugins.updater.pubkey):\n${problems.join('\n')}`);
+  return signatures;
+}
+
+/**
+ * Create the `latest.json` manifest the updater downloads from the latest release.
+ * @param {{version: string, notes: string, pubDate: string, repository: string, signatures: Record<string, string>}} release
+ *   Version, short notes, RFC 3339 publication date, `owner/name` and signatures by asset name.
+ * @returns {object} Manifest in the Tauri static JSON format.
+ * @throws {Error} When an updater target has no signature.
+ */
+export function createUpdateManifest({ version, notes, pubDate, repository, signatures }) {
+  const platforms = {};
+  for (const [target, name] of Object.entries(UPDATER_TARGETS)) {
+    if (!signatures[name]) throw new Error(`No signature for ${name} (${target})`);
+    platforms[target] = { signature: signatures[name], url: `https://github.com/${repository}/releases/download/v${version}/${name}` };
+  }
+  return { version, notes, pub_date: pubDate, platforms };
+}
+
+/**
+ * Create `changelog.json`, the notes of every version for the app's Novidades page.
+ * Image paths become raw URLs at the released commit, so older notes keep working.
+ * @param {Array<{version: string, notes: object}>} entries Parsed notes by version.
+ * @param {{repository: string, sha: string}} source Repository (`owner/name`) and released commit.
+ * @returns {{schema: number, versions: object[]}} Versions from newest to oldest.
+ */
+export function createChangelog(entries, { repository, sha }) {
+  const raw = (path) => (path ? `https://raw.githubusercontent.com/${repository}/${sha}/docs/releases/${path}` : null);
+  const order = (version) => version.split('.').map(Number);
+  const versions = [...entries].sort((a, b) => {
+    const [x, y] = [order(a.version), order(b.version)];
+    return y[0] - x[0] || y[1] - x[1] || y[2] - x[2];
+  }).map(({ version, notes }) => ({
+    version,
+    date: notes.date,
+    title: notes.title,
+    summary: notes.summary,
+    cover: raw(notes.cover),
+    features: notes.features.map((feature) => ({
+      title: feature.title,
+      text: feature.text,
+      images: feature.images.map((image) => ({ alt: image.alt, url: raw(image.src) })),
+      video: feature.video && { title: feature.video.title, url: feature.video.url, poster: raw(feature.video.poster) },
+    })),
+    improvements: notes.improvements,
+    fixes: notes.fixes,
+  }));
+  return { schema: 1, versions };
+}
+
+/**
+ * Read and parse every notes file at a commit.
+ * @param {string} sha Released commit.
+ * @returns {Array<{version: string, notes: object}>} Parsed notes.
+ * @throws {Error} When a notes file is invalid.
+ */
+function notesAt(sha) {
+  const names = execFileSync('git', ['ls-tree', '--name-only', `${sha}:docs/releases`], { encoding: 'utf8' }).split('\n');
+  return names.filter((name) => versionFromFileName(name)).map((name) => {
+    const { notes, errors } = parseReleaseNotes(execFileSync('git', ['show', `${sha}:docs/releases/${name}`], { encoding: 'utf8' }), name);
+    if (!notes) throw new Error(`Invalid release notes:\n${errors.join('\n')}`);
+    return { version: versionFromFileName(name), notes };
   });
 }
 
@@ -105,6 +223,9 @@ export function publish({ run, artifacts, repository }) {
   const selected = selectArtifacts(artifacts, version);
   // The release-version job already validated the notes and their images at this commit.
   const { title, body } = releaseText(execFileSync('git', ['show', `${sha}:docs/releases/${tag}.md`], { encoding: 'utf8' }), { version, repository, sha });
+  const signatures = verifySignatures(selected, config.plugins?.updater?.pubkey);
+  const history = notesAt(sha);
+  const current = history.find((entry) => entry.version === version);
   const directory = mkdtempSync(join(tmpdir(), 'atus-release-'));
   for (const entry of selected) copyFileSync(entry.path, join(directory, entry.name));
   const names = selected.map(({ name }) => name);
@@ -112,6 +233,9 @@ export function publish({ run, artifacts, repository }) {
   verifyManifest(manifest, directory, { sha, version, names });
   writeFileSync(join(directory, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
   writeFileSync(join(directory, 'SHA256SUMS'), formatChecksums(manifest));
+  const updateManifest = createUpdateManifest({ version, notes: current.notes.summary, pubDate: execFileSync('git', ['show', '-s', '--format=%cI', sha], { encoding: 'utf8' }).trim(), repository, signatures });
+  writeFileSync(join(directory, 'latest.json'), JSON.stringify(updateManifest, null, 2) + '\n');
+  writeFileSync(join(directory, 'changelog.json'), JSON.stringify(createChangelog(history, { repository, sha }), null, 2) + '\n');
   const ref = apiOptional(`repos/${repository}/git/ref/tags/${tag}`);
   if (ref && (ref.object.type !== 'commit' || ref.object.sha !== sha)) throw new Error('Tag points to another object');
   const existing = findRelease(repository, tag);
@@ -128,7 +252,8 @@ export function publish({ run, artifacts, repository }) {
     verifiedRef = apiOptional(`repos/${repository}/git/ref/tags/${tag}`);
   }
   if (!verifiedRef || verifiedRef.object.type !== 'commit' || verifiedRef.object.sha !== sha) throw new Error('Created tag does not match commit');
-  const files = [...names, 'manifest.json', 'SHA256SUMS'];
+  // Every file must be identical when a draft is resumed, so latest.json uses the commit date, not the clock.
+  const files = [...names, 'manifest.json', 'SHA256SUMS', 'changelog.json', 'latest.json'];
   const draft = findRelease(repository, tag);
   if (!draft?.draft) throw new Error('Expected draft release');
   const digests = Object.fromEntries(files.map((name) => [name, createHash('sha256').update(readFileSync(join(directory, name))).digest('hex')]));
