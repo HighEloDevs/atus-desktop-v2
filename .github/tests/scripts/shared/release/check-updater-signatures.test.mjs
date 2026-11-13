@@ -48,5 +48,5 @@ test('rejects a changed file, another key, a forged comment and malformed input'
 
 test('decodes the public key committed in tauri.conf.json', () => {
   const { plugins } = JSON.parse(readFileSync('src/desktop/tauri.conf.json', 'utf8'));
-  assert.equal(decodePublicKey(plugins.updater.pubkey).keyId, 'B507D6B4FA9F269B');
+  assert.equal(decodePublicKey(plugins.updater.pubkey).keyId, '895E126F456242E6');
 });
