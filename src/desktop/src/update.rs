@@ -198,11 +198,16 @@ pub fn check_gate(
 }
 
 /// The state after a check, from the newest release found, whether this installation updates
-/// itself and the version whose installation already failed once (if any).
+/// itself, the version whose installation already failed once (if any) and the version already
+/// downloaded and ready (if any).
+///
+/// Finding the version that is already `ready` keeps it ready, so a periodic check never throws
+/// away a package that was downloaded.
 pub fn state_after_check(
     found: Option<Found>,
     support: Support,
     failed_before: Option<&str>,
+    ready: Option<&str>,
 ) -> UpdateState {
     let Some(found) = found else {
         return UpdateState::UpToDate;
@@ -214,6 +219,9 @@ pub fn state_after_check(
     };
     match support {
         Support::Manual(reason) => manual(reason),
+        Support::Automatic if ready == Some(found.version.as_str()) => UpdateState::Ready {
+            version: found.version,
+        },
         Support::Automatic if failed_before == Some(found.version.as_str()) => {
             manual(ManualReason::PreviousAttemptFailed)
         }
@@ -221,6 +229,20 @@ pub fn state_after_check(
             version: found.version,
             notes: found.notes,
         },
+    }
+}
+
+/// The state after a check that failed. While an update is already announced, downloaded or
+/// waiting for a manual install, a failed periodic check changes nothing: the interface keeps
+/// offering it instead of switching to an error.
+pub fn state_after_failed_check(previous: &UpdateState, error: &UpdaterError) -> UpdateState {
+    if previous.shows_checking() {
+        UpdateState::Error {
+            stage: Stage::Check,
+            message: describe_error(error),
+        }
+    } else {
+        previous.clone()
     }
 }
 
@@ -308,6 +330,16 @@ fn busy(what: &str) -> String {
 }
 
 impl UpdateState {
+    /// Whether a check should be shown as `checking`. When an update is already announced,
+    /// downloaded or waiting for a manual install, a new check runs quietly so that the interface
+    /// does not flicker.
+    pub fn shows_checking(&self) -> bool {
+        !matches!(
+            self,
+            Self::Available { .. } | Self::Ready { .. } | Self::Manual { .. }
+        )
+    }
+
     /// A check may start unless another step is running.
     pub fn check_allowed(&self) -> Result<(), String> {
         match self {
@@ -318,12 +350,13 @@ impl UpdateState {
         }
     }
 
-    /// A download may start from an announced update or after a failed download.
+    /// A download may start from an announced update or after a failed download or installation
+    /// (the package is downloaded again, since installing consumed it).
     pub fn download_allowed(&self) -> Result<(), String> {
         match self {
             Self::Available { .. }
             | Self::Error {
-                stage: Stage::Download,
+                stage: Stage::Download | Stage::Install,
                 ..
             } => Ok(()),
             Self::Downloading { .. } | Self::Installing { .. } => Err(busy("baixar")),
@@ -566,7 +599,10 @@ pub async fn update_check(
         Ok(support) => support,
         Err(reason) => return Ok(set_state(&app, UpdateState::Unavailable { reason })),
     };
-    set_state(&app, UpdateState::Checking);
+    let previous = store.state();
+    if previous.shows_checking() {
+        set_state(&app, UpdateState::Checking);
+    }
     let checked = match build_updater(&app) {
         Ok(updater) => updater.check().await,
         Err(error) => Err(error),
@@ -578,16 +614,24 @@ pub async fn update_check(
                 notes: update.body.clone().filter(|notes| !notes.trim().is_empty()),
             });
             let failed = store.failed_before.lock().unwrap().clone();
-            let state = state_after_check(found, support, failed.as_deref());
-            *store.update.lock().unwrap() = update;
-            *store.package.lock().unwrap() = None;
+            let ready = match &previous {
+                UpdateState::Ready { version } => Some(version.as_str()),
+                _ => None,
+            };
+            let state = state_after_check(found, support, failed.as_deref(), ready);
+            // The package that is ready stays; anything else found replaces what was held.
+            if !matches!(state, UpdateState::Ready { .. }) {
+                *store.update.lock().unwrap() = update;
+                *store.package.lock().unwrap() = None;
+            }
             state
         }
-        Err(error) => UpdateState::Error {
-            stage: Stage::Check,
-            message: describe_error(&error),
-        },
+        Err(error) => state_after_failed_check(&previous, &error),
     };
+    // A quiet check that changed nothing sends no event.
+    if state == previous {
+        return Ok(state);
+    }
     Ok(set_state(&app, state))
 }
 
@@ -904,11 +948,11 @@ mod tests {
     #[test]
     fn the_check_result_decides_the_state() {
         assert_eq!(
-            state_after_check(None, Support::Automatic, None),
+            state_after_check(None, Support::Automatic, None, None),
             UpdateState::UpToDate
         );
         assert_eq!(
-            state_after_check(found("0.3.0"), Support::Automatic, None),
+            state_after_check(found("0.3.0"), Support::Automatic, None, None),
             UpdateState::Available {
                 version: "0.3.0".to_owned(),
                 notes: Some("Resumo.".to_owned())
@@ -923,20 +967,76 @@ mod tests {
             state_after_check(
                 found("0.3.0"),
                 Support::Manual(ManualReason::NotWritable),
+                None,
                 None
             ),
             manual(ManualReason::NotWritable)
         );
         // The version that already failed to install is not offered again automatically...
         assert_eq!(
-            state_after_check(found("0.3.0"), Support::Automatic, Some("0.3.0")),
+            state_after_check(found("0.3.0"), Support::Automatic, Some("0.3.0"), None),
             manual(ManualReason::PreviousAttemptFailed)
         );
         // ...but a newer one is.
         assert!(matches!(
-            state_after_check(found("0.3.1"), Support::Automatic, Some("0.3.0")),
+            state_after_check(found("0.3.1"), Support::Automatic, Some("0.3.0"), None),
             UpdateState::Available { .. }
         ));
+    }
+
+    #[test]
+    fn a_check_keeps_the_version_that_is_already_downloaded() {
+        let ready = |version: &str| UpdateState::Ready {
+            version: version.to_owned(),
+        };
+        // The same version stays ready, so the package is not thrown away...
+        assert_eq!(
+            state_after_check(found("0.3.0"), Support::Automatic, None, Some("0.3.0")),
+            ready("0.3.0")
+        );
+        // ...a newer one replaces it...
+        assert!(matches!(
+            state_after_check(found("0.3.1"), Support::Automatic, None, Some("0.3.0")),
+            UpdateState::Available { .. }
+        ));
+        // ...and nothing newer than the running version means there is nothing to install.
+        assert_eq!(
+            state_after_check(None, Support::Automatic, None, Some("0.3.0")),
+            UpdateState::UpToDate
+        );
+    }
+
+    #[test]
+    fn a_failed_check_changes_nothing_while_an_update_is_already_offered() {
+        let error = UpdaterError::Network("x".to_owned());
+        let offered = [
+            UpdateState::Available {
+                version: "0.3.0".to_owned(),
+                notes: None,
+            },
+            UpdateState::Ready {
+                version: "0.3.0".to_owned(),
+            },
+            UpdateState::Manual {
+                version: "0.3.0".to_owned(),
+                reason: ManualReason::NotWritable,
+                url: RELEASES_URL.to_owned(),
+            },
+        ];
+        for state in offered {
+            assert!(!state.shows_checking(), "{state:?}");
+            assert_eq!(state_after_failed_check(&state, &error), state);
+        }
+        for state in [UpdateState::Idle, UpdateState::UpToDate] {
+            assert!(state.shows_checking(), "{state:?}");
+            assert!(matches!(
+                state_after_failed_check(&state, &error),
+                UpdateState::Error {
+                    stage: Stage::Check,
+                    ..
+                }
+            ));
+        }
     }
 
     #[test]
@@ -1048,6 +1148,8 @@ mod tests {
         }
         assert!(available.download_allowed().is_ok());
         assert!(failed(Stage::Download).download_allowed().is_ok());
+        // Installing consumed the package, so a failed installation downloads it again.
+        assert!(failed(Stage::Install).download_allowed().is_ok());
         assert!(downloading
             .download_allowed()
             .unwrap_err()
@@ -1056,7 +1158,7 @@ mod tests {
             .download_allowed()
             .unwrap_err()
             .contains("em andamento"));
-        for other in [UpdateState::Idle, ready.clone(), failed(Stage::Install)] {
+        for other in [UpdateState::Idle, ready.clone(), failed(Stage::Check)] {
             assert_eq!(
                 other.download_allowed().unwrap_err(),
                 "Não há atualização para baixar."

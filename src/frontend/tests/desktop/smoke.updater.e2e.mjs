@@ -151,6 +151,15 @@ test("downloads in the background with progress, verifies the signature and inst
     [...downloaded].sort((a, b) => a - b),
     "progress never goes backwards",
   );
+  // A periodic check while the package is ready keeps it, quietly: no `checking` in between and
+  // no event at all, so the interface does not flicker. The same holds when the check fails.
+  const quiet = (await events()).length;
+  assert.deepEqual(await main.invoke("update_check"), { kind: "ready", version: NEWER });
+  const original = server.routes["/latest.json"];
+  server.routes = { ...server.routes, "/latest.json": { status: 500 } };
+  assert.deepEqual(await main.invoke("update_check"), { kind: "ready", version: NEWER });
+  server.routes = { ...server.routes, "/latest.json": original };
+  assert.equal((await events()).length, quiet, "a quiet check sends no events");
   // Nothing was installed by downloading.
   assert.equal(await main.invoke("update_test_installed"), null);
   // Installing returns at once; the package that reaches the installer is the verified one.
