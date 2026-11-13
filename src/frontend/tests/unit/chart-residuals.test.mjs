@@ -288,3 +288,30 @@ it("paints the option switches with the general-control colors, not cobalt or co
   expect(track(off).className).toContain("bg-muted");
   for (const row of rows) expect(row.innerHTML).not.toMatch(/364cff|brand-coral|f25a3c/i);
 });
+
+it("paints each band with its series color at low alpha, one band per series", async () => {
+  const second = {
+    ...fitted,
+    id: "two",
+    name: "Segunda",
+    color: "#abcdef",
+    residuals: [
+      { x: 1, residual: 0.3, sy: 0.4 },
+      { x: 2, residual: -0.2, sy: 0.4 },
+    ],
+  };
+  await render({ series: [fitted, second], initial: { residuals: true, residualBand: true } });
+  const bands = [...panel().querySelectorAll('[data-testid="residual-band"]')];
+  expect(bands.map((band) => band.getAttribute("fill"))).toEqual(["#123456", "#abcdef"]);
+  for (const band of bands) expect(Number(band.getAttribute("opacity"))).toBeLessThan(0.2);
+  const [narrow, wide] = bands.map((band) => Number(band.getAttribute("height")));
+  expect(wide).toBeGreaterThan(narrow);
+  expect([...panel().querySelectorAll("text")].map((node) => node.textContent)).not.toContain("±σ");
+});
+
+it("uses the series color for the single band and keeps its ±σ label", async () => {
+  await render({ initial: { residuals: true, residualBand: true } });
+  const band = panel().querySelector('[data-testid="residual-band"]');
+  expect(band.getAttribute("fill")).toBe("#123456");
+  expect([...panel().querySelectorAll("text")].map((node) => node.textContent)).toContain("±σ");
+});

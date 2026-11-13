@@ -86,6 +86,9 @@ export function ResidualPanel({
     (item.residuals ?? []).filter((r) => Number.isFinite(r.x) && Number.isFinite(r.residual)),
   );
   const sigma = residualSigma(visible);
+  const withSigma = visible.filter((item) => residualSigma([item]) !== null);
+  /** The ±σ label is only unambiguous when a single band is drawn. */
+  const labeledSigma = residualBand && withSigma.length === 1 ? residualSigma(withSigma) : null;
   const domainValues = all.flatMap((r) => [
     r.residual,
     ...(residualErrorBars && r.sy ? [r.residual - r.sy, r.residual + r.sy] : []),
@@ -150,17 +153,6 @@ export function ResidualPanel({
               ))}
               <path d={`M0 0V${h}H${w}`} fill="none" stroke="#aebbb0" />
               <g clipPath="url(#residual-clip)">
-                {residualBand && sigma !== null && (
-                  <rect
-                    data-testid="residual-band"
-                    x={0}
-                    y={y(sigma)}
-                    width={w}
-                    height={Math.max(0, y(-sigma) - y(sigma))}
-                    fill="#364cff"
-                    opacity="0.08"
-                  />
-                )}
                 <line
                   x1={0}
                   x2={w}
@@ -170,63 +162,83 @@ export function ResidualPanel({
                   strokeWidth="1.1"
                   opacity="0.7"
                 />
-                {visible.map((item) => (
-                  <g
-                    key={item.id}
-                    opacity={highlightedSeriesId && highlightedSeriesId !== item.id ? 0.15 : 1}
-                  >
-                    {(item.residuals ?? [])
-                      .filter((r) => Number.isFinite(r.x) && Number.isFinite(r.residual))
-                      .filter(inside)
-                      .map((r, index) => (
-                        <g key={`${r.x}-${r.residual}`}>
-                          {residualStems && (
-                            <line
-                              data-testid="residual-stem"
-                              className="residual-stem"
-                              x1={x(r.x)}
-                              x2={x(r.x)}
-                              y1={y(0)}
-                              y2={y(r.residual)}
-                              stroke={item.color}
-                              strokeWidth="2.2"
-                              strokeLinecap="round"
-                              opacity="0.35"
-                              style={
-                                {
-                                  "--length": Math.abs(y(r.residual) - y(0)) + 0.5,
-                                  animationDelay: `${120 + index * 45}ms`,
-                                } as CSSProperties
-                              }
-                            />
-                          )}
-                          {residualErrorBars && r.sy ? (
-                            <line
-                              data-testid="residual-error"
-                              x1={x(r.x)}
-                              x2={x(r.x)}
-                              y1={y(r.residual - r.sy)}
-                              y2={y(r.residual + r.sy)}
-                              stroke={item.color}
-                            />
-                          ) : null}
-                          <circle
-                            cx={x(r.x)}
-                            cy={y(r.residual)}
-                            r={4.2}
-                            fill={item.color}
-                            className="residual-point"
-                            style={{ animationDelay: `${260 + index * 45}ms` }}
-                          >
-                            <title>{`x = ${formatTick(r.x)}; resíduo = ${formatTick(r.residual)}`}</title>
-                          </circle>
-                        </g>
-                      ))}
-                  </g>
-                ))}
+                {visible.map((item) => {
+                  const itemSigma = residualBand ? residualSigma([item]) : null;
+                  return (
+                    <g
+                      key={item.id}
+                      opacity={highlightedSeriesId && highlightedSeriesId !== item.id ? 0.15 : 1}
+                    >
+                      {itemSigma !== null && (
+                        <rect
+                          data-testid="residual-band"
+                          x={0}
+                          y={y(itemSigma)}
+                          width={w}
+                          height={Math.max(0, y(-itemSigma) - y(itemSigma))}
+                          fill={item.color}
+                          opacity="0.12"
+                        />
+                      )}
+                      {(item.residuals ?? [])
+                        .filter((r) => Number.isFinite(r.x) && Number.isFinite(r.residual))
+                        .filter(inside)
+                        .map((r, index) => (
+                          <g key={`${r.x}-${r.residual}`}>
+                            {residualStems && (
+                              <line
+                                data-testid="residual-stem"
+                                className="residual-stem"
+                                x1={x(r.x)}
+                                x2={x(r.x)}
+                                y1={y(0)}
+                                y2={y(r.residual)}
+                                stroke={item.color}
+                                strokeWidth="2.2"
+                                strokeLinecap="round"
+                                opacity="0.35"
+                                style={
+                                  {
+                                    "--length": Math.abs(y(r.residual) - y(0)) + 0.5,
+                                    animationDelay: `${120 + index * 45}ms`,
+                                  } as CSSProperties
+                                }
+                              />
+                            )}
+                            {residualErrorBars && r.sy ? (
+                              <line
+                                data-testid="residual-error"
+                                x1={x(r.x)}
+                                x2={x(r.x)}
+                                y1={y(r.residual - r.sy)}
+                                y2={y(r.residual + r.sy)}
+                                stroke={item.color}
+                              />
+                            ) : null}
+                            <circle
+                              cx={x(r.x)}
+                              cy={y(r.residual)}
+                              r={4.2}
+                              fill={item.color}
+                              className="residual-point"
+                              style={{ animationDelay: `${260 + index * 45}ms` }}
+                            >
+                              <title>{`x = ${formatTick(r.x)}; resíduo = ${formatTick(r.residual)}`}</title>
+                            </circle>
+                          </g>
+                        ))}
+                    </g>
+                  );
+                })}
               </g>
-              {residualBand && sigma !== null && y(sigma) > 12 && (
-                <text x={w - 6} y={y(sigma) - 5} textAnchor="end" fontSize="10" fill="#78857d">
+              {labeledSigma !== null && y(labeledSigma) > 12 && (
+                <text
+                  x={w - 6}
+                  y={y(labeledSigma) - 5}
+                  textAnchor="end"
+                  fontSize="10"
+                  fill="#78857d"
+                >
                   ±σ
                 </text>
               )}
