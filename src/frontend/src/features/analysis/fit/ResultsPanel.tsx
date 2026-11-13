@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { Activity, ChevronDown, ChevronUp, ChevronRight, Copy } from "lucide-react";
 import { Dialog } from "radix-ui";
+import { notify } from "@/lib/notify";
 import type { FitResponse } from "./fit-service";
 
 type ResultItem = { id: string; name: string; color: string; result: FitResponse };
@@ -26,16 +27,15 @@ export function ResultsPanel({
 }) {
   const [open, setOpen] = useState(true);
   const [detailsId, setDetailsId] = useState<string | null>(null);
-  const [copyStatus, setCopyStatus] = useState("");
   const details = results.find((item) => item.id === detailsId);
   async function copy(item: ResultItem) {
     try {
       await navigator.clipboard.writeText(
         `SIMULAÇÃO — valores fictícios\n${item.result.parameters.map((p) => `${p.name} = ${p.value} ± ${p.uncertainty}`).join("\n")}`,
       );
-      setCopyStatus(`Parâmetros de ${item.name} copiados.`);
+      notify.success(`Parâmetros de ${item.name} copiados.`);
     } catch {
-      setCopyStatus("Não foi possível copiar os parâmetros.");
+      notify.error("Não foi possível copiar os parâmetros.");
     }
   }
   return (
@@ -128,9 +128,6 @@ export function ResultsPanel({
               </div>
             </>
           )}
-          <p role="status" className="sr-only">
-            {copyStatus}
-          </p>
         </div>
       )}
       <Dialog.Root

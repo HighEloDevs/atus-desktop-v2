@@ -20,6 +20,10 @@
   --color-popover: #ffffff;
   --color-popover-foreground: #20272c;
   --color-ring: #364cff;
+  --color-success: #1e7b4f;
+  --color-warning: #8a5a00;
+  --color-destructive: #b3321a;
+  --color-info: #364cff;
   --radius-md: 6px;
 }
 
@@ -130,5 +134,29 @@ a:focus-visible {
   .chart-navigation {
     pointer-events: auto;
     opacity: 1;
+  }
+}
+
+/* Snackbar timer bar: shrinks over the toast lifetime and freezes while the pointer is over it. */
+@keyframes toast-timer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+.toast-timer {
+  transform-origin: left;
+  animation: toast-timer var(--toast-duration) linear forwards;
+}
+[data-sonner-toast]:hover .toast-timer {
+  animation-play-state: paused;
+  opacity: 0.2;
+}
+/* The bar is the only indicator of the remaining time, so reduced motion keeps it but in coarse steps. */
+@media (prefers-reduced-motion: reduce) {
+  .toast-timer {
+    animation-timing-function: steps(10, end);
   }
 }
