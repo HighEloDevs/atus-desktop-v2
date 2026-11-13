@@ -193,7 +193,8 @@ test("pressing the shortcut again hides the window while it has the focus", asyn
 });
 
 test("the quick window comes back when it was destroyed", async () => {
-  await native("quick_test_destroy_quick");
+  // Call from the main window: the quick window's own page dies in the middle of its call.
+  await withWindow("main", (main) => main.invoke("quick_test_destroy_quick").catch(() => {}));
   await until(
     async () => !(await nativeState()).quick_exists,
     "The quick window was not destroyed",
