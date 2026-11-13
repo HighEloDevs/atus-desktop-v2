@@ -134,7 +134,7 @@ export function ResidualPanel({
             <g transform={`translate(${margin.left},${TOP})`}>
               {xTicks.map((t) => (
                 <g key={t} transform={`translate(${x(t)},0)`}>
-                  {grid && <line y2={h} stroke="#e8ece7" strokeDasharray="2 5" />}
+                  {grid && <line y2={h} stroke="#e8ece7" />}
                   <text y={h + 16} textAnchor="middle" fontSize="10" fill="#78857d">
                     {formatTick(t)}
                   </text>
@@ -142,7 +142,7 @@ export function ResidualPanel({
               ))}
               {yTicks.map((t) => (
                 <g key={t} transform={`translate(0,${y(t)})`}>
-                  {grid && <line x2={w} stroke="#e8ece7" strokeDasharray="2 5" />}
+                  {grid && <line x2={w} stroke="#e8ece7" />}
                   <text x={-8} dy=".32em" textAnchor="end" fontSize="10" fill="#78857d">
                     {signed(t)}
                   </text>

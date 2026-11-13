@@ -254,3 +254,17 @@ it("clears manual Y limits and closes the options menu from its own buttons", as
   await act(async () => document.querySelector('button[aria-label="Fechar"]').click());
   expect(document.querySelector('[data-slot="popover-content"]')).toBeNull();
 });
+
+it("draws the panel grid exactly like the main chart grid", async () => {
+  await render({ initial: { residuals: true } });
+  const grid = (svg) => [
+    ...new Set(
+      [...svg.querySelectorAll('line[stroke="#e8ece7"]')].map(
+        (line) => `${line.getAttribute("stroke-width")}|${line.getAttribute("stroke-dasharray")}`,
+      ),
+    ),
+  ];
+  const main = node.querySelector('svg[aria-label="Experimento"]');
+  expect(grid(panel()).length).toBeGreaterThan(0);
+  expect(grid(panel())).toEqual(grid(main));
+});
