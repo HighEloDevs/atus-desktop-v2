@@ -19,7 +19,7 @@ export const residualDefaults = {
   stems: true,
   band: true,
   errorBars: false,
-  histogram: true,
+  histogram: false,
 };
 
 /**

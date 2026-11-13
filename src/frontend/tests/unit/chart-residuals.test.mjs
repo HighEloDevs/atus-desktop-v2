@@ -87,11 +87,11 @@ it("shows no notice and no panel while the panel is off, even with residuals", a
   expect(node.querySelector('[role="status"]')).toBeNull();
 });
 
-it("draws one stem and one point per residual, the band and the histogram by default", async () => {
+it("draws one stem and one point per residual and the band by default, without the histogram", async () => {
   await render({ initial: { residuals: true } });
   expect(count("residual-stem")).toBe(3);
   expect(count("residual-band")).toBe(1);
-  expect(count("residual-histogram")).toBe(1);
+  expect(count("residual-histogram")).toBe(0);
   expect(count("residual-error")).toBe(0);
   expect(panel().querySelectorAll('circle[fill="#123456"]')).toHaveLength(3);
 });
@@ -123,7 +123,7 @@ it("omits the band and uncertainty bars when the residuals carry no uncertainty"
 });
 
 it("keeps the panel aligned with the main plot when the histogram column is reserved", async () => {
-  await render({ initial: { residuals: true, residualHistogram: false } });
+  await render({ initial: { residuals: true, residualHistogram: true } });
   const translate = (svg) => svg.querySelector("g").getAttribute("transform");
   const main = node.querySelector('svg[aria-label="Experimento"]');
   expect(translate(panel())).toMatch(/^translate\(65,/);
@@ -178,8 +178,9 @@ it("sets the Y limits and switches elements from the options popover", async () 
     [...document.querySelectorAll('[role="switch"]')].find((s) => s.textContent.includes(label));
   await act(async () => toggle("Hastes até o zero").click());
   expect(count("residual-stem")).toBe(0);
-  await act(async () => toggle("Histograma lateral").click());
   expect(count("residual-histogram")).toBe(0);
+  await act(async () => toggle("Histograma lateral").click());
+  expect(count("residual-histogram")).toBe(1);
   await act(async () => toggle("Barras de incerteza").click());
   expect(count("residual-error")).toBe(3);
   await act(async () =>
@@ -190,7 +191,9 @@ it("sets the Y limits and switches elements from the options popover", async () 
   expect(latest.residualYMin).toBe("");
   expect(latest.residualStems).toBe(true);
   expect(latest.residualErrorBars).toBe(false);
+  expect(latest.residualHistogram).toBe(false);
   expect(count("residual-stem")).toBe(3);
+  expect(count("residual-histogram")).toBe(0);
 });
 
 it("disables the uncertainty options and says why when there is no Y uncertainty", async () => {
@@ -225,7 +228,7 @@ it("has no divider bar between the main chart and the residuals panel", async ()
 });
 
 it("labels the band and the histogram, and animates stems and points", async () => {
-  await render({ initial: { residuals: true } });
+  await render({ initial: { residuals: true, residualHistogram: true } });
   const text = [...panel().querySelectorAll("text")].map((node) => node.textContent);
   expect(text).toContain("±σ");
   expect(text).toContain("distr.");
