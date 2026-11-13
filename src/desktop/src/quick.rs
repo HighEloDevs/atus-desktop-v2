@@ -147,6 +147,24 @@ pub fn show<R: Runtime>(app: &AppHandle<R>) {
     let _ = window.emit(SHOWN_EVENT, ());
 }
 
+/// Keeps the quick window a transient panel: losing focus or closing it only hides it, so the
+/// process and the loaded page survive for the next shortcut press. Other windows are ignored.
+pub fn on_window_event<R: Runtime>(window: &tauri::Window<R>, event: &tauri::WindowEvent) {
+    if window.label() != QUICK_LABEL {
+        return;
+    }
+    match event {
+        tauri::WindowEvent::Focused(false) => {
+            let _ = window.hide();
+        }
+        tauri::WindowEvent::CloseRequested { api, .. } => {
+            api.prevent_close();
+            let _ = window.hide();
+        }
+        _ => {}
+    }
+}
+
 /// Hides the quick window, keeping its state loaded for the next time.
 pub fn hide<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window(QUICK_LABEL) {

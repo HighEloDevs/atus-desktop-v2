@@ -152,6 +152,29 @@ test("Esc hides the window, which keeps its data for the next time", async () =>
   });
 });
 
+test("losing focus or closing the quick window only hides it", async () => {
+  await showQuick();
+  await native("quick_test_blur_quick");
+  await until(quickIsHidden, "Losing focus should hide the quick window");
+  await showQuick();
+  await native("quick_test_close_quick");
+  await until(quickIsHidden, "Closing should hide the quick window");
+  const state = await nativeState();
+  assert.equal(state.quick_exists, true, "Closing must not destroy the quick window");
+  await showQuick();
+  assert.equal(await withWindow("quick", (quick) => quick.rows()), 6);
+  await native("quick_dismiss");
+  await until(quickIsHidden, "The quick window did not hide");
+});
+
+test("the tray menu shows the quick window", async () => {
+  await native("quick_test_tray_menu", { id: "quick" });
+  await until(async () => (await nativeState()).quick_visible, "The tray item did not show it");
+  await native("quick_test_tray_menu", { id: "unknown" });
+  await native("quick_dismiss");
+  await until(quickIsHidden, "The quick window did not hide");
+});
+
 test("data alone opens the main window in a new project without running a fit", async () => {
   const before = await projectFiles();
   await withWindow("quick", (quick) => quick.clickButton("Abrir no ATUS"));
@@ -285,11 +308,19 @@ test("closing the main window keeps ATUS running and the shortcut opens a new wi
   assert.equal((await readDataset(file)).points.length, 6);
 });
 
+test("a second launch brings the main window back after it was closed", async () => {
+  await native("quick_test_close_main");
+  await until(async () => !(await nativeState()).main_exists, "The main window did not close");
+  await native("quick_test_second_launch");
+  const main = await mainWindow();
+  await main.close();
+});
+
 test("the tray reopens the main window after it was closed", async () => {
   await native("quick_test_close_main");
   await until(async () => !(await nativeState()).main_exists, "The main window did not close");
   assert.equal(await appIsAlive(), true);
-  await native("quick_test_tray_open");
+  await native("quick_test_tray_menu", { id: "open" });
   const main = await mainWindow();
   try {
     await main.waitForText("Nova análise");
@@ -315,7 +346,7 @@ test("quitting saves the open project and ends the application", async () => {
     await main.close();
   }
   // Quit right after the edit: the debounced autosave may not have run yet.
-  await native("quick_test_tray_quit");
+  await native("quick_test_tray_menu", { id: "quit" });
   await until(async () => !(await appIsAlive()), "The application did not quit", 30 * SECOND);
   const siblings = (await readdir(projectDir)).filter((name) =>
     name.startsWith(path.basename(file)),

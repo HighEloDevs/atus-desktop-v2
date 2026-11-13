@@ -81,22 +81,7 @@ fn main() {
             }
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if window.label() != quick::QUICK_LABEL {
-                return;
-            }
-            match event {
-                // The quick window is a transient panel: losing focus or closing only hides it.
-                tauri::WindowEvent::Focused(false) => {
-                    let _ = window.hide();
-                }
-                tauri::WindowEvent::CloseRequested { api, .. } => {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
-                _ => {}
-            }
-        })
+        .on_window_event(quick::on_window_event)
         .plugin(quick::shortcut_plugin())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -127,9 +112,13 @@ fn main() {
             #[cfg(feature = "desktop-e2e")]
             quick_e2e::quick_test_press_shortcut,
             #[cfg(feature = "desktop-e2e")]
-            quick_e2e::quick_test_tray_open,
+            quick_e2e::quick_test_tray_menu,
             #[cfg(feature = "desktop-e2e")]
-            quick_e2e::quick_test_tray_quit,
+            quick_e2e::quick_test_second_launch,
+            #[cfg(feature = "desktop-e2e")]
+            quick_e2e::quick_test_blur_quick,
+            #[cfg(feature = "desktop-e2e")]
+            quick_e2e::quick_test_close_quick,
             #[cfg(feature = "desktop-e2e")]
             quick_e2e::quick_test_set_clipboard,
             #[cfg(feature = "desktop-e2e")]

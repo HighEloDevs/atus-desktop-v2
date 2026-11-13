@@ -54,21 +54,45 @@ pub fn quick_test_press_shortcut(app: AppHandle) {
     quick::toggle(&app);
 }
 
-/// Runs what the tray **Abrir ATUS** item runs. `async` for the same reason as `quick_submit`.
-///
-/// # Errors
-/// Returns the failure to show or recreate the main window.
+/// Runs what a tray menu item runs: `quick`, `open` or `quit`.
 #[tauri::command]
-pub async fn quick_test_tray_open(app: AppHandle) -> Result<(), String> {
-    quick::show_main(&app)
-        .map(|_| ())
-        .map_err(|error| error.to_string())
+pub fn quick_test_tray_menu(app: AppHandle, id: String) {
+    background::on_menu_event(&app, &id);
 }
 
-/// Runs what the tray **Sair do ATUS** item runs.
+/// Runs what a second launch of the application runs.
 #[tauri::command]
-pub fn quick_test_tray_quit(app: AppHandle) {
-    background::request_quit(&app);
+pub fn quick_test_second_launch(app: AppHandle) {
+    quick::spawn_show_main(&app);
+}
+
+/// Delivers a focus-lost event to the quick window, as the system does when the person clicks
+/// elsewhere.
+///
+/// # Errors
+/// Returns a message when the quick window does not exist.
+#[tauri::command]
+pub fn quick_test_blur_quick(app: AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window(quick::QUICK_LABEL)
+        .ok_or("A janela rápida não existe")?;
+    quick::on_window_event(
+        &window.as_ref().window(),
+        &tauri::WindowEvent::Focused(false),
+    );
+    Ok(())
+}
+
+/// Closes the quick window the way its close button does.
+///
+/// # Errors
+/// Returns a message when the quick window does not exist or cannot be asked to close.
+#[tauri::command]
+pub fn quick_test_close_quick(app: AppHandle) -> Result<(), String> {
+    app.get_webview_window(quick::QUICK_LABEL)
+        .ok_or("A janela rápida não existe")?
+        .close()
+        .map_err(|error| error.to_string())
 }
 
 /// Replaces the system clipboard text, so the quick window has something to read.

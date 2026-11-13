@@ -83,17 +83,22 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .tooltip("ATUS")
         .menu(&menu)
         .show_menu_on_left_click(true)
-        .on_menu_event(|app, event| match tray_action(event.id().as_ref()) {
-            Some(TrayAction::Quick) => quick::show(app),
-            Some(TrayAction::Open) => quick::spawn_show_main(app),
-            Some(TrayAction::Quit) => request_quit(app),
-            None => {}
-        });
+        .on_menu_event(|app, event| on_menu_event(app, event.id().as_ref()));
     if let Some(icon) = app.default_window_icon() {
         tray = tray.icon(icon.clone());
     }
     tray.build(app)?;
     Ok(())
+}
+
+/// Runs the action of a tray menu item. Unknown ids are ignored.
+pub fn on_menu_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
+    match tray_action(id) {
+        Some(TrayAction::Quick) => quick::show(app),
+        Some(TrayAction::Open) => quick::spawn_show_main(app),
+        Some(TrayAction::Quit) => request_quit(app),
+        None => {}
+    }
 }
 
 /// Asks the main window to save and quit, or quits at once when there is no main window.
