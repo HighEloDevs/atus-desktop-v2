@@ -216,3 +216,38 @@ it("does not include the options button in the exported image", async () => {
   const trigger = node.querySelector('button[aria-label="Opções do painel de resíduos"]');
   expect(trigger.closest("[data-html2canvas-ignore]")).not.toBeNull();
 });
+
+it("has no divider bar between the main chart and the residuals panel", async () => {
+  await render({ initial: { residuals: true } });
+  const container = panel().closest(".flex-\\[32_1_0\\%\\]");
+  expect(container).not.toBeNull();
+  expect(container.className).not.toMatch(/\bborder/);
+});
+
+it("labels the band and the histogram, and animates stems and points", async () => {
+  await render({ initial: { residuals: true } });
+  const text = [...panel().querySelectorAll("text")].map((node) => node.textContent);
+  expect(text).toContain("±σ");
+  expect(text).toContain("distr.");
+  const stem = panel().querySelector('[data-testid="residual-stem"]');
+  expect(stem.getAttribute("class")).toBe("residual-stem");
+  expect(stem.getAttribute("stroke-linecap")).toBe("round");
+  expect(stem.style.getPropertyValue("--length")).not.toBe("");
+  expect(panel().querySelectorAll(".residual-point")).toHaveLength(3);
+});
+
+it("clears manual Y limits and closes the options menu from its own buttons", async () => {
+  await render({ initial: { residuals: true, residualYMin: "-1", residualYMax: "1" } });
+  await act(async () =>
+    node.querySelector('button[aria-label="Opções do painel de resíduos"]').click(),
+  );
+  expect(document.body.textContent).toContain("manual");
+  await act(async () =>
+    [...document.querySelectorAll("button")].find((b) => b.textContent === "Limpar").click(),
+  );
+  expect(latest.residualYMin).toBe("");
+  expect(latest.residualYMax).toBe("");
+  expect(document.body.textContent).toContain("automática");
+  await act(async () => document.querySelector('button[aria-label="Fechar"]').click());
+  expect(document.querySelector('[data-slot="popover-content"]')).toBeNull();
+});

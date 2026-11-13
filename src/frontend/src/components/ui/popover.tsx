@@ -52,4 +52,13 @@ function PopoverContent({
   );
 }
 
-export { Popover, PopoverContent, PopoverTrigger };
+/**
+ * Renders the control that closes a popover.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
+function PopoverClose({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Close>) {
+  return <PopoverPrimitive.Close data-slot="popover-close" {...props} />;
+}
+
+export { Popover, PopoverClose, PopoverContent, PopoverTrigger };
