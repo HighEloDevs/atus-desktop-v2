@@ -4,6 +4,15 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 
+const notify = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+  loading: vi.fn(),
+  dismiss: vi.fn(),
+}));
+vi.mock("@/lib/notify", () => ({ notify }));
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => false, invoke: vi.fn() }));
 vi.mock("../../src/features/projects/useProjectSave", () => ({
   useProjectSave: () => ({
@@ -31,6 +40,7 @@ let node;
 let readText;
 
 beforeEach(() => {
+  Object.values(notify).forEach((fn) => fn.mockClear());
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   readText = vi.fn();
   Object.defineProperty(navigator, "clipboard", { value: { readText }, configurable: true });
@@ -79,7 +89,12 @@ async function paste(text) {
 }
 
 const chart = () => node.querySelector('[data-testid="chart"]')?.textContent;
-const alertText = () => node.querySelector('[role="alert"]')?.textContent ?? "";
+const errorTitle = () => notify.error.mock.lastCall?.[0] ?? "";
+const errorText = () =>
+  notify.error.mock.lastCall
+    ?.flat()
+    .map((x) => x?.description ?? x)
+    .join(" ") ?? "";
 const dialog = () => document.body.querySelector('[role="dialog"]');
 
 async function setSelect(select, value) {
@@ -104,9 +119,7 @@ it("Ctrl+B creates a dataset from the clipboard and announces it", async () => {
   expect(node.textContent).toContain("1–9");
   await paste("x;y\n1;2\n2;4");
   expect(chart()).toBe(`${NAME}:2:0`);
-  expect(node.querySelector('[data-testid="import-notice"]').textContent).toBe(
-    "Dados colados importados com sucesso.",
-  );
+  expect(notify.success).toHaveBeenLastCalledWith("Dados colados importados com sucesso.");
   await paste("5,5\t6,5");
   expect(chart()).toBe(`${NAME}:2:0;${NAME}:1:0`);
 });
@@ -120,16 +133,14 @@ it("Ctrl+N replaces the data of dataset N and keeps its fit configuration", asyn
   await press("Digit1");
   expect(chart()).toBe(`${NAME}:4:0;${NAME}:1:0`);
   expect(node.querySelector(`input[aria-label="Função de ajuste de ${NAME}"]`).value).toBe("a*x");
-  expect(node.querySelector('[data-testid="import-notice"]').textContent).toContain(
-    "Dados do conjunto 1",
-  );
+  expect(notify.success.mock.lastCall[0]).toContain("Dados do conjunto 1");
 });
 
 it("reports a missing dataset index without reading the clipboard", async () => {
   await render();
   await paste("1;2");
   await press("Digit3");
-  expect(alertText()).toBe("Não há conjunto de dados 3.");
+  expect(errorTitle()).toBe("Não há conjunto de dados 3.");
   expect(readText).toHaveBeenCalledTimes(1);
 });
 
@@ -137,19 +148,20 @@ it("reports empty, oversized and denied clipboards and keeps existing data", asy
   await render();
   await paste("1;2\n2;4");
   await paste("   ");
-  expect(alertText()).toBe("A área de transferência está vazia.");
+  expect(errorTitle()).toBe("A área de transferência está vazia.");
   await paste("1".repeat(1024 * 1024 + 1));
-  expect(alertText()).toContain("excede 1 MB");
+  expect(errorTitle()).toContain("excede 1 MB");
   readText.mockRejectedValue(new Error("denied"));
   await press("KeyB");
-  expect(alertText()).toContain("Verifique as permissões");
+  expect(errorTitle()).toContain("Verifique as permissões");
   expect(chart()).toBe(`${NAME}:2:0`);
 });
 
 it("rejects clipboard data with negative uncertainties without opening the dialog", async () => {
   await render();
   await paste("1;2;-1");
-  expect(alertText()).toContain("incertezas não podem ser negativas");
+  expect(errorTitle()).toBe("Dados inválidos");
+  expect(errorText()).toContain("incertezas não podem ser negativas");
   expect(dialog()).toBeNull();
   expect(chart()).toBeUndefined();
 });
@@ -172,9 +184,7 @@ it("opens the separator dialog on a parse failure and retries with the chosen se
   );
   expect(dialog()).toBeNull();
   expect(chart()).toBe(`${NAME}:2:0`);
-  expect(node.querySelector('[data-testid="import-notice"]').textContent).toContain(
-    "importados com sucesso",
-  );
+  expect(notify.success.mock.lastCall[0]).toContain("importados com sucesso");
 });
 
 it("keeps the dialog open with the new error when the retry still fails", async () => {

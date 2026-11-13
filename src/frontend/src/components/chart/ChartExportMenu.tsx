@@ -4,6 +4,7 @@
  */
 
 import { useState, type RefObject } from "react";
+import { notify } from "@/lib/notify";
 import html2canvas from "html2canvas";
 import { ChevronDown, Copy, Download, FileImage } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,12 +29,10 @@ export function ChartExportMenu({
   graphic: RefObject<HTMLDivElement | null>;
   disabled: boolean;
 }) {
-  const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   async function exportImage(type: "png" | "jpeg" | "copy") {
     if (!graphic.current || busy) return;
     setBusy(true);
-    setMessage("");
     try {
       const canvas = await html2canvas(graphic.current, { scale: 2, backgroundColor: "#ffffff" });
       if (type === "copy") {
@@ -42,25 +41,22 @@ export function ChartExportMenu({
         );
         if (!blob || !navigator.clipboard?.write) throw new Error();
         await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        setMessage("Imagem copiada.");
+        notify.success("Imagem copiada.");
       } else {
         const link = document.createElement("a");
         link.download = `grafico.${type}`;
         link.href = canvas.toDataURL(`image/${type}`);
         link.click();
-        setMessage("Imagem exportada.");
+        notify.success("Imagem exportada.");
       }
     } catch {
-      setMessage("Não foi possível exportar ou copiar a imagem.");
+      notify.error("Não foi possível exportar ou copiar a imagem.");
     } finally {
       setBusy(false);
     }
   }
   return (
     <div className="ml-auto flex items-center gap-2">
-      <span role="status" className="text-[11px] text-[#66716e]">
-        {message}
-      </span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="outline" size="sm" disabled={disabled || busy}>

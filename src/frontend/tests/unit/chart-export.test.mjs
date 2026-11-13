@@ -4,6 +4,15 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, createElement, Fragment } from "react";
 import { createRoot } from "react-dom/client";
 
+const notify = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+  loading: vi.fn(),
+  dismiss: vi.fn(),
+}));
+vi.mock("@/lib/notify", () => ({ notify }));
 const api = vi.hoisted(() => ({ render: vi.fn() }));
 vi.mock("html2canvas", () => ({ default: api.render }));
 vi.mock("../../src/components/ui/dropdown-menu", () => ({
@@ -72,7 +81,7 @@ it.each([
   expect(clicks).toEqual([
     { name: `grafico.${extension}`, href: `data:image/${extension};base64,AA==` },
   ]);
-  expect(node.querySelector('[role="status"]').textContent).toBe("Imagem exportada.");
+  expect(notify.success).toHaveBeenLastCalledWith("Imagem exportada.");
 });
 
 it("copies a PNG blob to the clipboard", async () => {
@@ -90,18 +99,19 @@ it("copies a PNG blob to the clipboard", async () => {
   await act(async () => button("Copiar para área").click());
   expect(canvas.toBlob).toHaveBeenCalledWith(expect.any(Function), "image/png");
   expect(write.mock.calls[0][0][0].data["image/png"]).toBeInstanceOf(Blob);
-  expect(node.querySelector('[role="status"]').textContent).toBe("Imagem copiada.");
+  expect(notify.success).toHaveBeenLastCalledWith("Imagem copiada.");
 });
 
 it("reports rendering and unavailable clipboard failures", async () => {
   api.render.mockRejectedValueOnce(new Error("canvas unavailable"));
   await render();
   await act(async () => button("Salvar como PNG").click());
-  expect(node.querySelector('[role="status"]').textContent).toContain("Não foi possível");
+  expect(notify.error).toHaveBeenCalledTimes(1);
+  expect(notify.error).toHaveBeenLastCalledWith("Não foi possível exportar ou copiar a imagem.");
   api.render.mockResolvedValue(canvas);
   Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
   await act(async () => button("Copiar para área").click());
-  expect(node.querySelector('[role="status"]').textContent).toContain("Não foi possível");
+  expect(notify.error).toHaveBeenCalledTimes(2);
 });
 
 it("prevents duplicate work while the chart is rendering", async () => {
