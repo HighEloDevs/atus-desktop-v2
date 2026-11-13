@@ -7,7 +7,8 @@ import { FinderProjectDialog } from "@/features/projects/FinderProjectDialog";
 import { Button } from "@/components/ui/button";
 import { useProjectSave } from "@/features/projects/useProjectSave";
 import type { OpenProject } from "@/features/projects/project-client";
-import { useLayoutEffect, useRef, useState, type SetStateAction } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type SetStateAction } from "react";
+import { notify } from "@/lib/notify";
 import { FitControls } from "./fit/FitControls";
 import { defaultFitConfig, validateFitConfig, type FitConfig } from "./fit/fit-config";
 import { ResultsPanel } from "./fit/ResultsPanel";
@@ -22,7 +23,7 @@ import {
 } from "./clipboard/read-clipboard-text";
 import { useClipboardShortcuts, type ClipboardShortcut } from "./clipboard/clipboard-shortcuts";
 import { Chart, type ChartSeries } from "@/components/chart/Chart";
-import { Dialog } from "radix-ui";
+import { DataTableDialog } from "./DataTableDialog";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -75,8 +76,6 @@ type MockAnalysis = {
   x: number[];
   y: number[];
 };
-const format = (value: number) =>
-  new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(value);
 
 /** Parsed data that is readable but invalid, so a different separator cannot fix it. */
 class DataValidationError extends Error {}
@@ -121,7 +120,6 @@ type AnalysisState = {
   chart?: ChartValues;
   selectedId?: string | null;
   tableId?: string | null;
-  editingText?: string | null;
   separator?: SeparatorType;
 };
 
@@ -134,14 +132,12 @@ export function AnalysisPage({
   onBack,
   project = null,
   finderPath,
-  projectError,
   onOpenFinderProject,
   onCancelFinderProject,
 }: {
   onBack: () => void;
   project?: OpenProject | null;
   finderPath: string | null;
-  projectError: string;
   onOpenFinderProject: (path: string) => Promise<void>;
   onCancelFinderProject: () => void;
 }) {
@@ -167,11 +163,7 @@ export function AnalysisPage({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [tableId, setTableId] = useState<string | null>(initial?.tableId ?? null);
-  const [editingText, setEditingText] = useState<string | null>(initial?.editingText ?? null);
-  const [editError, setEditError] = useState("");
   const [separator, setSeparator] = useState<SeparatorType>(initial?.separator ?? "auto");
-  const [importError, setImportError] = useState("");
-  const [importNotice, setImportNotice] = useState("");
   const [pendingImports, setPendingImports] = useState<PendingImport[]>([]);
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
   const modifier = isMac ? "⌘" : "Ctrl";
@@ -209,7 +201,7 @@ export function AnalysisPage({
         ? [
             {
               ...initialAnalysis,
-              state: { chart: chartSettings, selectedId, tableId, editingText, separator },
+              state: { chart: chartSettings, selectedId, tableId, separator },
               datasets: datasets.map(({ id, name, points, ...state }) => ({
                 id,
                 name,
@@ -222,6 +214,13 @@ export function AnalysisPage({
         : [],
     ),
   );
+  useEffect(() => {
+    if (saving.error)
+      notify.error("Não foi possível salvar o projeto", {
+        description: saving.error,
+        id: "save-error",
+      });
+  }, [saving.error]);
   function updateSeries(id: string, updates: Partial<ChartSeries>) {
     setDatasets((items) => items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
   }
@@ -258,7 +257,7 @@ export function AnalysisPage({
         visible: typeof value === "function" ? value(selected.visible) : value,
       }),
   });
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "loading">("idle");
   const [panelOpen, setPanelOpen] = useState(true);
   const [mode, setMode] = useState<"analysis" | "visual">("analysis");
   const [highlightedSeriesId, setHighlightedSeriesId] = useState<string | null>(null);
@@ -352,8 +351,7 @@ export function AnalysisPage({
         );
       }
     }
-    setImportNotice("");
-    setImportError(errors.join(" "));
+    if (errors.length) notify.error("Não foi possível importar", { description: errors.join(" ") });
     if (queue.length) setPendingImports((items) => [...items, ...queue]);
   }
 
@@ -363,16 +361,14 @@ export function AnalysisPage({
     try {
       const text = await readImportFile(file);
       const failure = tryImport(file.name, text, target, separator);
-      setImportNotice("");
       if (failure && !failure.validation) {
-        setImportError("");
         setPendingImports((items) => [
           ...items,
           { name: file.name, text, target, error: failure.message },
         ]);
-      } else setImportError(failure?.message ?? "");
+      } else if (failure) notify.error(failure.message);
     } catch (error) {
-      setImportError(
+      notify.error(
         error instanceof Error ? error.message : "Não foi possível substituir os dados.",
       );
     }
@@ -385,8 +381,7 @@ export function AnalysisPage({
     if (shortcut.kind === "replace") {
       replaced = datasets[shortcut.index - 1];
       if (!replaced) {
-        setImportNotice("");
-        setImportError(`Não há conjunto de dados ${shortcut.index}.`);
+        notify.error(`Não há conjunto de dados ${shortcut.index}.`);
         return;
       }
       target = { kind: "replace", id: replaced.id };
@@ -395,8 +390,7 @@ export function AnalysisPage({
     try {
       text = await readClipboardText();
     } catch (error) {
-      setImportNotice("");
-      setImportError(
+      notify.error(
         error instanceof ClipboardReadError
           ? error.message
           : "Não foi possível ler a área de transferência.",
@@ -404,18 +398,15 @@ export function AnalysisPage({
       return;
     }
     const failure = tryImport(CLIPBOARD_NAME, text, target, separator);
-    setImportNotice("");
     if (!failure) {
-      setImportError("");
-      setImportNotice(
+      notify.success(
         replaced
           ? `Dados do conjunto ${shortcut.kind === "replace" ? shortcut.index : ""} ("${replaced.name}") substituídos com sucesso.`
           : "Dados colados importados com sucesso.",
       );
     } else if (failure.validation) {
-      setImportError(`${CLIPBOARD_NAME}: ${failure.message}`);
+      notify.error("Dados inválidos", { description: `${CLIPBOARD_NAME}: ${failure.message}` });
     } else {
-      setImportError("");
       setPendingImports((items) => [
         ...items,
         { name: CLIPBOARD_NAME, text, target, error: failure.message },
@@ -430,49 +421,12 @@ export function AnalysisPage({
     const failure = tryImport(current.name, current.text, current.target, sep);
     if (!failure) {
       setPendingImports((items) => items.slice(1));
-      setImportError("");
-      setImportNotice(`Dados de "${current.name}" importados com sucesso.`);
+      notify.success(`Dados de "${current.name}" importados com sucesso.`);
     } else if (failure.validation) {
       setPendingImports((items) => items.slice(1));
-      setImportNotice("");
-      setImportError(`${current.name}: ${failure.message}`);
+      notify.error("Dados inválidos", { description: `${current.name}: ${failure.message}` });
     } else {
       setPendingImports((items) => [{ ...items[0], error: failure.message }, ...items.slice(1)]);
-    }
-  }
-
-  function startEdit(selected: ChartSeries) {
-    setSelectedId(selected.id);
-    setEditingText(
-      selected.points
-        .map((point) => [point.x, point.y, point.sy ?? 0, point.sx ?? 0].join("; "))
-        .join("\n"),
-    );
-    setEditError("");
-  }
-
-  function saveEdit() {
-    if (!selected || editingText === null) return;
-    try {
-      const points = parseValidPoints(editingText, ";");
-      setDatasets((items) =>
-        items.map((item) =>
-          item.id === selected.id
-            ? {
-                ...item,
-                points,
-                linePoints: [],
-                data: null,
-                fitState: "idle",
-                fitError: undefined,
-                result: undefined,
-              }
-            : item,
-        ),
-      );
-      setEditingText(null);
-    } catch (error) {
-      setEditError(error instanceof Error ? error.message : "Dados inválidos.");
     }
   }
 
@@ -505,6 +459,12 @@ export function AnalysisPage({
         }
       }),
     );
+    for (const { item, error } of results)
+      if (error)
+        notify.error(`Falha no ajuste de ${item.name}`, {
+          description: error,
+          id: `fit-error-${item.id}`,
+        });
     setDatasets((items) =>
       items.map((current) => {
         const result = results.find(
@@ -547,9 +507,17 @@ export function AnalysisPage({
     );
   }
 
+  function reportExampleError() {
+    setStatus("idle");
+    notify.error("Não foi possível carregar o exemplo", {
+      description: "Abra o aplicativo desktop e tente novamente.",
+      id: "example-error",
+    });
+  }
+
   async function loadExample() {
     if (!isTauri()) {
-      setStatus("error");
+      reportExampleError();
       return;
     }
     setStatus("loading");
@@ -583,7 +551,7 @@ export function AnalysisPage({
       setSelectedId(id);
       setStatus("idle");
     } catch {
-      setStatus("error");
+      reportExampleError();
     }
   }
 
@@ -669,7 +637,6 @@ export function AnalysisPage({
                       <DropdownMenuItem
                         onSelect={() => {
                           setTableId(item.id);
-                          setEditingText(null);
                         }}
                       >
                         <Eye />
@@ -697,7 +664,6 @@ export function AnalysisPage({
                           setDatasets((items) => items.filter((entry) => entry.id !== item.id));
                           if (selectedId === item.id) {
                             setSelectedId(null);
-                            setEditingText(null);
                           }
                         }}
                       >
@@ -786,97 +752,7 @@ export function AnalysisPage({
           })();
         }}
       />
-      {projectError && (
-        <p
-          role="alert"
-          className="fixed right-4 top-4 z-40 max-w-sm rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-md"
-        >
-          {projectError}
-        </p>
-      )}
-      <Dialog.Root
-        open={!!table}
-        onOpenChange={(open) => {
-          if (!open) {
-            setTableId(null);
-            setEditingText(null);
-          }
-        }}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[min(90vw,680px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg bg-white p-5 shadow-xl">
-            <Dialog.Title className="text-sm font-semibold">Dados: {table?.name}</Dialog.Title>
-            <Dialog.Description className="mt-1 text-xs text-[#66716e]">
-              Pontos e incertezas do conjunto.
-            </Dialog.Description>
-            {table && (
-              <div className="mt-4 min-h-0 overflow-auto">
-                {editingText !== null ? (
-                  <>
-                    <label className="block text-xs">
-                      Uma linha por ponto: x; y; σy; σx
-                      <textarea
-                        aria-label="Editar pontos"
-                        value={editingText}
-                        onChange={(event) => setEditingText(event.target.value)}
-                        rows={10}
-                        className="mt-1 w-full rounded border p-2 font-mono text-xs"
-                      />
-                    </label>
-                    {editError && (
-                      <p role="alert" className="text-xs text-red-700">
-                        {editError}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr>
-                        <th>Ponto</th>
-                        <th>x</th>
-                        <th>y</th>
-                        <th>σy</th>
-                        <th>σx</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {table.points.map((point, i) => (
-                        <tr key={i} className="border-t">
-                          <td className="py-2">{i + 1}</td>
-                          <td>{format(point.x)}</td>
-                          <td>{format(point.y)}</td>
-                          <td>{point.sy === undefined ? "—" : format(point.sy)}</td>
-                          <td>{point.sx === undefined ? "—" : format(point.sx)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
-            <div className="mt-4 flex justify-end gap-4 text-xs">
-              {table &&
-                (editingText === null ? (
-                  <button type="button" onClick={() => startEdit(table)} className="text-[#364cff]">
-                    Editar dados
-                  </button>
-                ) : (
-                  <>
-                    <button type="button" onClick={() => setEditingText(null)}>
-                      Cancelar edição
-                    </button>
-                    <button type="button" onClick={saveEdit} className="text-[#364cff]">
-                      Salvar dados
-                    </button>
-                  </>
-                ))}
-              <Dialog.Close>Fechar</Dialog.Close>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      <DataTableDialog dataset={table ?? null} onClose={() => setTableId(null)} />
       {panelOpen && (
         <aside className="analysis-panel flex h-full w-[360px] shrink-0 flex-col border-r border-[#d8ded7] bg-[#f7f8f5]">
           <header className="border-b border-border bg-white px-3 py-3">
@@ -934,14 +810,6 @@ export function AnalysisPage({
                 </DropdownMenu>
               )}
             </div>
-            {saving.error && (
-              <p
-                role="alert"
-                className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
-              >
-                {saving.error}
-              </p>
-            )}
           </header>
           <div className="border-b border-[#d8ded7] px-4 py-3">
             <div
@@ -1037,24 +905,6 @@ export function AnalysisPage({
                 ) : (
                   cards("analysis")
                 )}
-                {importError && (
-                  <p role="alert" className="mt-3 text-[12px] text-[#a43d35]">
-                    {importError}
-                  </p>
-                )}
-                <p
-                  role="status"
-                  data-testid="import-notice"
-                  className="mt-3 text-[12px] text-[#35443a] empty:hidden"
-                >
-                  {importNotice}
-                </p>
-                {status === "error" && (
-                  <p role="alert" className="mt-3 text-[12px] leading-5 text-[#a43d35]">
-                    Não foi possível carregar o exemplo. Abra o aplicativo desktop e tente
-                    novamente.
-                  </p>
-                )}
               </>
             ) : (
               <div>
@@ -1080,13 +930,6 @@ export function AnalysisPage({
             <p className="mt-2 text-center text-[10px] text-[#87938a]">
               Simulação: nenhum ajuste científico é calculado
             </p>
-            {datasets
-              .filter((item) => item.fitState === "error")
-              .map((item) => (
-                <p key={item.id} role="alert" className="mt-2 text-[11px] text-[#a43d35]">
-                  {item.name}: {item.fitError}
-                </p>
-              ))}
           </div>
         </aside>
       )}
@@ -1143,11 +986,6 @@ export function AnalysisPage({
                   </button>
                 </div>
               </div>
-              {status === "error" && (
-                <p role="alert" className="mt-3 text-[12px] text-[#a43d35]">
-                  Não foi possível carregar o exemplo. Abra o aplicativo desktop e tente novamente.
-                </p>
-              )}
               <div className="mx-auto mt-6 max-w-[360px] text-left">
                 <p className="mb-3 text-center text-[10px] font-semibold uppercase tracking-wider text-[#9aa59c]">
                   Próximos passos

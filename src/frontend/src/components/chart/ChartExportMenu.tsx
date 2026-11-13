@@ -5,8 +5,9 @@
  */
 
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { Check, ChevronDown, Copy, FileImage, LoaderCircle, TriangleAlert } from "lucide-react";
+import { ChevronDown, Copy, FileImage, LoaderCircle } from "lucide-react";
 import { cn } from "cn";
+import { notify } from "@/lib/notify";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,7 +19,8 @@ import {
 import { copyImage, errorMessage, renderImage, saveImage, type ImageFormat } from "./export-image";
 
 type Action = "copy" | ImageFormat;
-type Notice = { kind: "ok" | "error"; text: string; retry?: Action };
+/** Snackbar id shared by every export result, so a new result replaces the previous one. */
+const NOTICE_ID = "chart-export";
 
 const BUSY_LABEL: Record<Action, string> = {
   copy: "Copiando…",
@@ -32,7 +34,7 @@ const COPY_SHORTCUT = isMac ? "⇧⌘C" : "Ctrl+Shift+C";
  * Renders controls to export the referenced chart as an image.
  *
  * The main button copies the image to the clipboard; the arrow opens a menu to copy or save as
- * PNG or JPEG. `Cmd/Ctrl+Shift+C` copies too. Results and errors appear in a status toast.
+ * PNG or JPEG. `Cmd/Ctrl+Shift+C` copies too. Results and errors appear in the global snackbar (`notify`).
  * @param props - Chart element ref and whether there is nothing to export yet.
  * @returns The rendered React element.
  */
@@ -44,39 +46,32 @@ export function ChartExportMenu({
   disabled: boolean;
 }) {
   const [busy, setBusy] = useState<Action | null>(null);
-  const [notice, setNotice] = useState<Notice | null>(null);
   const running = useRef(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   async function run(action: Action) {
     const element = graphic.current;
     if (!element || running.current) return;
     running.current = true;
     setBusy(action);
-    clearTimeout(timer.current);
-    setNotice(null);
-    let next: Notice;
     try {
       if (action === "copy") {
         await copyImage(await renderImage(element, "png"));
-        next = { kind: "ok", text: "Imagem copiada para a área de transferência." };
+        notify.success("Imagem copiada", { id: NOTICE_ID });
       } else {
         const path = await saveImage(await renderImage(element, action), action);
-        next = path
-          ? { kind: "ok", text: `Salvo em ${path}` }
-          : { kind: "ok", text: "Exportação cancelada." };
+        if (path) notify.success("Imagem salva", { id: NOTICE_ID, description: path });
+        else notify.info("Exportação cancelada", { id: NOTICE_ID });
       }
     } catch (error) {
-      next = {
-        kind: "error",
-        text: `Não foi possível exportar: ${errorMessage(error)}`,
-        retry: action,
-      };
+      notify.error("Não foi possível exportar", {
+        id: NOTICE_ID,
+        description: errorMessage(error),
+        actions: [{ label: "Tentar de novo", onClick: () => void latestRun.current(action) }],
+      });
+    } finally {
+      running.current = false;
+      setBusy(null);
     }
-    setNotice(next);
-    timer.current = setTimeout(() => setNotice(null), next.kind === "error" ? 8000 : 3000);
-    running.current = false;
-    setBusy(null);
   }
 
   // The shortcut listener is bound once per `disabled` change but must call the latest `run`.
@@ -84,7 +79,6 @@ export function ChartExportMenu({
   useEffect(() => {
     latestRun.current = run;
   });
-  useEffect(() => () => clearTimeout(timer.current), []);
 
   useEffect(() => {
     if (disabled) return;
@@ -152,39 +146,6 @@ export function ChartExportMenu({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-      <div
-        role="status"
-        aria-live="polite"
-        className={cn(
-          "pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2",
-          !notice && "hidden",
-        )}
-      >
-        {notice && (
-          <div
-            className={cn(
-              "pointer-events-auto flex max-w-[90vw] items-center gap-2.5 rounded-lg border-l-4 bg-[#20272c] px-3.5 py-2.5 text-xs text-white shadow-lg",
-              notice.kind === "error" ? "border-[#f25a3c]" : "border-[#4cc38a]",
-            )}
-          >
-            {notice.kind === "error" ? (
-              <TriangleAlert className="size-4 shrink-0" />
-            ) : (
-              <Check className="size-4 shrink-0" />
-            )}
-            <span>{notice.text}</span>
-            {notice.retry && (
-              <button
-                type="button"
-                className="rounded-md border border-white/35 px-2 py-0.5 outline-none hover:bg-white/10 focus-visible:outline-3 focus-visible:outline-[#364cff]"
-                onClick={() => void run(notice.retry!)}
-              >
-                Tentar de novo
-              </button>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

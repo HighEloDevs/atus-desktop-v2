@@ -15,6 +15,15 @@ const api = vi.hoisted(() => ({
   projectClient: { list: vi.fn(), available: vi.fn() },
   recentPaths: vi.fn(),
 }));
+const notify = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+  loading: vi.fn(),
+  dismiss: vi.fn(),
+}));
+vi.mock("@/lib/notify", () => ({ notify }));
 vi.mock("../../src/features/projects/project-client", () => api);
 import { RecentProjects } from "../../src/features/projects/RecentProjects";
 
@@ -72,7 +81,10 @@ it("shows a clear error if discovery fails and retains recent projects", async (
   api.projectClient.list.mockRejectedValue(new Error("unavailable"));
   api.projectClient.available.mockResolvedValue(true);
   await render();
-  expect(node.querySelector('[role="alert"]').textContent).toContain("unavailable");
+  expect(notify.error).toHaveBeenCalledWith("Projetos recentes", {
+    description: expect.stringContaining("unavailable"),
+    id: "recent-projects-error",
+  });
   expect(node.querySelector('button[title="/a.atus"]')).not.toBeNull();
 });
 
@@ -81,6 +93,9 @@ it("shows an error when the relocation dialog fails", async () => {
   api.chooseProject.mockRejectedValue(new Error("dialog failed"));
   await render();
   await act(async () => node.querySelector('button[title="/missing.atus"]').click());
-  expect(node.querySelector('[role="alert"]').textContent).toContain("dialog failed");
+  expect(notify.error).toHaveBeenCalledWith("Projetos recentes", {
+    description: expect.stringContaining("dialog failed"),
+    id: "recent-projects-error",
+  });
   expect(onOpen).not.toHaveBeenCalled();
 });

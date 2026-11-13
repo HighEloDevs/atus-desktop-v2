@@ -3,6 +3,15 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
+const notify = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+  loading: vi.fn(),
+  dismiss: vi.fn(),
+}));
+vi.mock("@/lib/notify", () => ({ notify }));
 import { ResultsPanel } from "../../src/features/analysis/fit/ResultsPanel";
 
 let root;
@@ -67,10 +76,10 @@ it("copies labelled simulated values and reports clipboard failures", async () =
   await render([item]);
   await act(async () => button("Copiar").click());
   expect(writeText).toHaveBeenCalledWith("SIMULAÇÃO — valores fictícios\na = 1.25 ± 0.1");
-  expect(node.querySelector('[role="status"]').textContent).toContain("copiados");
+  expect(notify.success).toHaveBeenLastCalledWith("Parâmetros de Ensaio copiados.");
   writeText.mockRejectedValueOnce(new Error("denied"));
   await act(async () => button("Copiar").click());
-  expect(node.querySelector('[role="status"]').textContent).toContain("Não foi possível");
+  expect(notify.error).toHaveBeenLastCalledWith("Não foi possível copiar os parâmetros.");
 });
 
 it("opens details with a warning that the numbers are fictitious", async () => {

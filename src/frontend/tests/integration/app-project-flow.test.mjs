@@ -4,6 +4,15 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 
+const notify = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+  loading: vi.fn(),
+  dismiss: vi.fn(),
+}));
+vi.mock("@/lib/notify", () => ({ notify }));
 const bridge = vi.hoisted(() => ({
   isTauri: vi.fn(),
   invoke: vi.fn(),
@@ -96,7 +105,11 @@ it("shows an understandable error and remains on home when project creation fail
   bridge.projectClient.create.mockRejectedValue(new Error("disk failure"));
   await render();
   await act(async () => button("Nova análise").click());
-  expect(node.querySelector('[role="alert"]').textContent).toContain("disk failure");
+  expect(notify.error).toHaveBeenCalledWith("Não foi possível abrir o projeto", {
+    description: expect.stringContaining("disk failure"),
+    id: "project-error",
+  });
+  expect(node.querySelector('[role="alert"]')).toBeNull();
   expect(node.querySelector('[data-testid="analysis"]')).toBeNull();
 });
 
@@ -151,9 +164,10 @@ it("navigates to about and reports a failed external profile opening", async () 
   expect(bridge.openUrl).toHaveBeenCalledWith(
     "https://www.linkedin.com/in/willian-gama-maximo-85297017b/",
   );
-  expect(node.querySelector('[role="alert"]').textContent).toContain(
-    "Não foi possível abrir o navegador",
-  );
+  expect(notify.error).toHaveBeenCalledWith("Não foi possível abrir o navegador", {
+    description: "Tente novamente.",
+    id: "profile-error",
+  });
 });
 
 it("opens a Finder request on macOS", async () => {
@@ -188,7 +202,10 @@ it("shows an error when the Finder request cannot be read", async () => {
   Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true });
   bridge.invoke.mockRejectedValueOnce(new Error("Finder unavailable"));
   await render();
-  expect(node.querySelector('[role="alert"]').textContent).toContain("Finder unavailable");
+  expect(notify.error).toHaveBeenCalledWith("Não foi possível abrir o projeto", {
+    description: expect.stringContaining("Finder unavailable"),
+    id: "project-error",
+  });
   expect(bridge.projectClient.open).not.toHaveBeenCalled();
 });
 

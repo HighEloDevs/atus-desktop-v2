@@ -4,6 +4,15 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, createElement, Fragment } from "react";
 import { createRoot } from "react-dom/client";
 
+const notify = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+  loading: vi.fn(),
+  dismiss: vi.fn(),
+}));
+vi.mock("@/lib/notify", () => ({ notify }));
 const api = vi.hoisted(() => ({
   render: vi.fn(),
   isTauri: vi.fn(),
@@ -65,10 +74,11 @@ async function render(disabled = false) {
     root.render(createElement(ChartExportMenu, { graphic: { current: graphic }, disabled })),
   );
 }
+/** Options of the most recent error snackbar. */
+const lastError = () => notify.error.mock.lastCall[1];
 function button(text) {
   return [...node.querySelectorAll("button")].find((item) => item.textContent.includes(text));
 }
-const status = () => node.querySelector('[role="status"]').textContent;
 
 it("disables both segments when there is no chart data", async () => {
   await render(true);
@@ -82,7 +92,7 @@ it("copies a PNG through the native clipboard plugin in one click", async () => 
   expect(api.render).toHaveBeenCalledWith(graphic, { scale: 2, backgroundColor: "#ffffff" });
   expect(canvas.toBlob).toHaveBeenCalledWith(expect.any(Function), "image/png", undefined);
   expect(api.writeImage).toHaveBeenCalledWith(expect.any(Uint8Array));
-  expect(status()).toContain("Imagem copiada");
+  expect(notify.success).toHaveBeenLastCalledWith("Imagem copiada", { id: "chart-export" });
 });
 
 it.each([
@@ -101,7 +111,10 @@ it.each([
   expect(command).toBe("export_image_write");
   expect(body).toBeInstanceOf(Uint8Array);
   expect(options.headers.path).toBe(encodeURIComponent(`/Users/ana/Meus gráficos/grafico.${ext}`));
-  expect(status()).toContain(`Salvo em /Users/ana/Meus gráficos/grafico.${ext}`);
+  expect(notify.success).toHaveBeenLastCalledWith("Imagem salva", {
+    id: "chart-export",
+    description: `/Users/ana/Meus gráficos/grafico.${ext}`,
+  });
 });
 
 it("writes nothing when the save dialog is cancelled", async () => {
@@ -109,7 +122,7 @@ it("writes nothing when the save dialog is cancelled", async () => {
   await render();
   await act(async () => button("PNG").click());
   expect(api.invoke).not.toHaveBeenCalled();
-  expect(status()).toBe("Exportação cancelada.");
+  expect(notify.info).toHaveBeenLastCalledWith("Exportação cancelada", { id: "chart-export" });
 });
 
 it("downloads through an object URL in a plain browser", async () => {
@@ -141,36 +154,37 @@ it("copies with the Clipboard API in a plain browser and reports when it is miss
   await render();
   await act(async () => button("Copiar imagem").click());
   expect(write.mock.calls[0][0][0].data["image/png"]).toBeInstanceOf(Blob);
-  expect(status()).toContain("Imagem copiada");
+  expect(notify.success).toHaveBeenCalledTimes(1);
 
   Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
   await act(async () => button("Copiar imagem").click());
-  expect(status()).toContain("Este navegador não permite copiar imagens.");
+  expect(lastError().description).toBe("Este navegador não permite copiar imagens.");
 });
 
 it("shows the real error, never claims success, and retries", async () => {
   api.writeImage.mockRejectedValueOnce("clipboard-manager.write_image not allowed");
   await render();
   await act(async () => button("Copiar imagem").click());
-  expect(status()).toContain("Não foi possível exportar: clipboard-manager.write_image");
-  expect(status()).not.toContain("copiada");
-  await act(async () => button("Tentar de novo").click());
-  expect(status()).toContain("Imagem copiada");
+  expect(lastError().description).toBe("clipboard-manager.write_image not allowed");
+  expect(notify.success).not.toHaveBeenCalled();
+  await act(async () => lastError().actions[0].onClick());
+  expect(lastError().actions[0].label).toBe("Tentar de novo");
+  expect(notify.success).toHaveBeenLastCalledWith("Imagem copiada", { id: "chart-export" });
 });
 
 it("reports rendering, encoding and write failures", async () => {
   await render();
   api.render.mockRejectedValueOnce(new Error("canvas unavailable"));
   await act(async () => button("PNG").click());
-  expect(status()).toContain("canvas unavailable");
+  expect(lastError().description).toBe("canvas unavailable");
 
   canvas.toBlob.mockImplementationOnce((callback) => callback(null));
   await act(async () => button("PNG").click());
-  expect(status()).toContain("Não foi possível gerar a imagem");
+  expect(lastError().description).toContain("Não foi possível gerar a imagem");
 
   api.invoke.mockRejectedValueOnce("Não foi possível gravar o arquivo: permissão negada");
   await act(async () => button("PNG").click());
-  expect(status()).toContain("permissão negada");
+  expect(lastError().description).toContain("permissão negada");
 });
 
 it("copies with the keyboard shortcut and ignores it when disabled", async () => {

@@ -3,6 +3,7 @@
  * Discovery and presentation of recent projects.
  */
 
+import { notify } from "@/lib/notify";
 import { EmptyRecentProjects } from "./EmptyRecentProjects";
 import { ProjectFilePath } from "./ProjectFilePath";
 import { ArrowUpRight, FileChartColumn, FileWarning, MoreHorizontal } from "lucide-react";
@@ -22,6 +23,11 @@ import {
   recentPaths,
 } from "./project-client";
 
+/** Reports a recent-projects failure as a global snackbar. */
+function reportError(message: string) {
+  notify.error("Projetos recentes", { description: message, id: "recent-projects-error" });
+}
+
 /**
  * Lists discovered and recent projects, including missing files.
  * @param props - Callback that opens a selected or relocated project.
@@ -36,7 +42,6 @@ export function RecentProjects({
   const [entries, setEntries] = useState<{ path: string; available: boolean; recent: boolean }[]>(
     [],
   );
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,7 +49,7 @@ export function RecentProjects({
     async function load() {
       const recent = recentPaths();
       const discovered = await projectClient.list().catch((reason: unknown) => {
-        if (active) setError(`Não foi possível listar a pasta de projetos: ${String(reason)}`);
+        if (active) reportError(`Não foi possível listar a pasta de projetos: ${String(reason)}`);
         return [] as string[];
       });
       const paths = [...new Set([...recent, ...discovered])];
@@ -62,7 +67,7 @@ export function RecentProjects({
     }
     void load().catch((reason) => {
       if (active) {
-        setError(String(reason));
+        reportError(String(reason));
         setLoading(false);
       }
     });
@@ -76,7 +81,7 @@ export function RecentProjects({
       const replacement = await chooseProject();
       if (replacement) await onOpen(replacement, path);
     } catch (reason) {
-      setError(String(reason));
+      reportError(String(reason));
     }
   }
 
@@ -85,14 +90,6 @@ export function RecentProjects({
       <h2 id="recent-heading" className="mb-3 text-sm font-semibold">
         Projetos recentes
       </h2>
-      {error && (
-        <p
-          role="alert"
-          className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
-        >
-          {error}
-        </p>
-      )}
       {loading ? (
         <p role="status" className="text-sm text-muted-foreground">
           Carregando projetos…
