@@ -15,6 +15,6 @@ Cada arquivo termina com `#[cfg(test)] mod tests { ... }` que testa o próprio a
 
 ## Consequências
 
-- O `llvm-cov` só exclui arquivos por nome. `.github/scripts/coverage/rust-strip-tests.mjs` descarta do LCOV tudo a partir do `#[cfg(test)] mod tests` e recalcula os contadores. Ele falha se houver código depois do módulo, mais de um módulo ou módulo fora de linha.
+- O `llvm-cov` só exclui arquivos por nome. `.github/scripts/shared/coverage/strip-rust-tests.mjs` descarta do LCOV tudo a partir do `#[cfg(test)] mod tests` e recalcula os contadores. Ele falha se houver código depois do módulo, mais de um módulo ou módulo fora de linha.
 - `project/e2e.rs` (feature `desktop-e2e`) e `project/test_support.rs` continuam excluídos por nome e registrados em `testOnly` no inventário.
 - Se surgir uma biblioteca, testes de API pública poderão ir para `tests/`; esta decisão deve então ser revista.
