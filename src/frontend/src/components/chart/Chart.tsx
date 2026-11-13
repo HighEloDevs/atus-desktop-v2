@@ -28,6 +28,7 @@ import {
 import { chartLinePatterns, type ChartSettings } from "./useChartSettings";
 import { EditableChartLabel } from "./EditableChartLabel";
 import { ChartTooltip } from "./ChartTooltip";
+import { axisPosition } from "./axisPosition";
 import {
   describeTooltip,
   groupNearbyPoints,
@@ -168,6 +169,14 @@ export function Chart({ series, label, settings, graphicRef, highlightedSeriesId
     .range([h, 0]);
   const x = transform.rescaleX(baseX);
   const y = transform.rescaleY(baseY);
+  const axes = axisPosition(
+    (v) => x(v),
+    (v) => y(v),
+    w,
+    h,
+    xLog,
+    yLog,
+  );
   const xt = x.ticks(ticks);
   const yt = y.ticks(ticks);
   const zoomBy = (factor: number) => {
@@ -411,7 +420,8 @@ export function Chart({ series, label, settings, graphicRef, highlightedSeriesId
                       </text>
                     </g>
                   ))}
-                  <path d={`M0 0V${h}H${w}`} fill="none" stroke="#aebbb0" />
+                  <line x1={0} x2={w} y1={axes.y} y2={axes.y} stroke="#aebbb0" />
+                  <line x1={axes.x} x2={axes.x} y1={0} y2={h} stroke="#aebbb0" />
                   <g clipPath={`url(#${clipId})`}>
                     {visibleSeries.map(
                       ({ id, points, linePoints, color, radius, symbol, lineStyle, lineWidth }) => {

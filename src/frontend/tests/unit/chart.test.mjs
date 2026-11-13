@@ -80,6 +80,28 @@ it("excludes non-positive values from logarithmic axes", async () => {
   }
 });
 
+const axisLines = (svg) => [...svg.querySelectorAll('line[stroke="#aebbb0"]')];
+
+it("draws the axes as a cross through zero, sticking to an edge when zero is out of range", async () => {
+  await act(async () => root.render(createElement(Harness)));
+  const [horizontal, vertical] = axisLines(node.querySelector('svg[role="img"]'));
+  // x spans negative to positive values, so the Y axis passes through x = 0 inside the plot.
+  expect(horizontal.getAttribute("y1")).toBe(horizontal.getAttribute("y2"));
+  expect(vertical.getAttribute("x1")).toBe(vertical.getAttribute("x2"));
+  expect(Number(vertical.getAttribute("x1"))).toBeGreaterThan(0);
+  // y stays positive, so the X axis sticks to the bottom edge of the plot.
+  expect(Number(horizontal.getAttribute("y1"))).toBe(Number(vertical.getAttribute("y2")));
+});
+
+it("keeps the axes on the left and bottom edges on logarithmic scales", async () => {
+  await act(async () =>
+    root.render(createElement(Harness, { initial: { xLog: true, yLog: true } })),
+  );
+  const [horizontal, vertical] = axisLines(node.querySelector('svg[role="img"]'));
+  expect(Number(vertical.getAttribute("x1"))).toBe(0);
+  expect(Number(horizontal.getAttribute("y1"))).toBe(Number(vertical.getAttribute("y2")));
+});
+
 const tooltip = () => node.querySelector('[role="tooltip"]');
 const plot = () => node.querySelector('[role="group"][tabindex="0"]');
 const press = (key) =>
