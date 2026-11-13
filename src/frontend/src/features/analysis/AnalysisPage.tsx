@@ -921,17 +921,17 @@ export function AnalysisPage({
             onClick={() => {
               if (residualsAvailable) chartSettings.setResiduals(!chartSettings.residuals);
             }}
-            className={`flex h-8 items-center gap-2 rounded-md border px-3 text-xs font-medium focus-visible:outline-3 focus-visible:outline-[#364cff] ${residualsAvailable ? `${residualsOn ? "border-[#364cff]/40" : "border-[#d8ded7]"} bg-white text-foreground hover:bg-[#eff2ed]` : "cursor-not-allowed border-dashed border-[#d8ded7] text-[#66716e] opacity-70"}`}
+            className={`flex h-8 items-center gap-2 rounded-md border px-3 text-xs font-medium focus-visible:outline-3 focus-visible:outline-brand-coral ${residualsAvailable ? `${residualsOn ? "border-foreground/40" : "border-[#d8ded7]"} bg-white text-foreground hover:bg-[#eff2ed]` : "cursor-not-allowed border-dashed border-[#d8ded7] text-[#66716e] opacity-70"}`}
           >
             <TrendingUp
               size={14}
               aria-hidden="true"
-              className={residualsOn ? "text-[#364cff]" : "text-[#66716e]"}
+              className={residualsOn ? "text-foreground" : "text-[#66716e]"}
             />
             Resíduos
             <span
               aria-hidden="true"
-              className={`flex h-[18px] w-[30px] shrink-0 items-center rounded-full p-0.5 transition-colors ${residualsOn ? "bg-[#364cff]" : "bg-[#d8ded7]"}`}
+              className={`flex h-[18px] w-[30px] shrink-0 items-center rounded-full p-0.5 transition-colors ${residualsOn ? "bg-foreground" : "bg-muted ring-1 ring-inset ring-border"}`}
             >
               <span
                 className={`size-3.5 rounded-full bg-white shadow-sm transition-transform ${residualsOn ? "translate-x-3" : ""}`}

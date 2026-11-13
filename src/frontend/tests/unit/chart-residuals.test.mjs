@@ -268,3 +268,17 @@ it("draws the panel grid exactly like the main chart grid", async () => {
   expect(grid(panel()).length).toBeGreaterThan(0);
   expect(grid(panel())).toEqual(grid(main));
 });
+
+it("paints the option switches with the general-control colors, not cobalt or coral", async () => {
+  await render({ initial: { residuals: true } });
+  await act(async () =>
+    node.querySelector('button[aria-label="Opções do painel de resíduos"]').click(),
+  );
+  const rows = [...document.querySelectorAll('[role="switch"]')];
+  const on = rows.find((row) => row.getAttribute("aria-checked") === "true");
+  const off = rows.find((row) => row.getAttribute("aria-checked") === "false");
+  const track = (row) => row.querySelector("span[aria-hidden]:last-child");
+  expect(track(on).className).toContain("bg-foreground");
+  expect(track(off).className).toContain("bg-muted");
+  for (const row of rows) expect(row.innerHTML).not.toMatch(/364cff|brand-coral|f25a3c/i);
+});

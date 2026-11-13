@@ -145,6 +145,8 @@ it("keeps the residuals switch disabled until a fit produces residuals, then tog
   expect(node.querySelector("#residuals-unavailable")).toBeNull();
   await act(async () => residuals().click());
   expect(residuals().getAttribute("aria-checked")).toBe("true");
+  expect(residuals().innerHTML).toContain("bg-foreground");
+  expect(residuals().innerHTML).not.toMatch(/364cff|brand-coral/i);
   await act(async () => residuals().click());
   expect(residuals().getAttribute("aria-checked")).toBe("false");
 });

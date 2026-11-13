@@ -106,7 +106,7 @@ export function ResidualPanel({
   const inside = (r: ChartResidual) => !xLog || r.x > 0;
   return (
     <div className="flex min-h-0 flex-[32_1_0%]">
-      <div className="flex w-16 shrink-0 items-center justify-center text-[11px] text-[#66716e]">
+      <div className="flex w-16 shrink-0 items-center justify-center text-[11px] text-muted-foreground">
         <EditableChartLabel
           value={residualYLabel}
           onChange={setResidualYLabel}
@@ -148,7 +148,7 @@ export function ResidualPanel({
                   </text>
                 </g>
               ))}
-              <path d={`M0 0V${h}H${w}`} fill="none" stroke="#66716e" strokeOpacity="0.55" />
+              <path d={`M0 0V${h}H${w}`} fill="none" stroke="#aebbb0" />
               <g clipPath="url(#residual-clip)">
                 {residualBand && sigma !== null && (
                   <rect
@@ -320,11 +320,11 @@ function OptionRow({
       onClick={() => {
         if (!disabled) onChange(!value);
       }}
-      className={`grid w-full grid-cols-[26px_1fr_auto] items-center gap-2.5 rounded-lg px-2 py-[7px] text-left transition-colors hover:bg-background focus-visible:outline-2 focus-visible:outline-[#364cff] ${disabled ? "cursor-not-allowed opacity-55 hover:bg-transparent" : ""}`}
+      className={`grid w-full grid-cols-[26px_1fr_auto] items-center gap-2.5 rounded-lg px-2 py-[7px] text-left transition-colors hover:bg-background focus-visible:outline-2 focus-visible:outline-brand-coral ${disabled ? "cursor-not-allowed opacity-55 hover:bg-transparent" : ""}`}
     >
       <span
         aria-hidden="true"
-        className={`grid size-[26px] place-items-center rounded-md ${value ? "bg-[#364cff]/10 text-[#364cff]" : "bg-muted text-muted-foreground"}`}
+        className={`grid size-[26px] place-items-center rounded-md ${value ? "bg-foreground/10 text-foreground" : "bg-muted text-muted-foreground"}`}
       >
         <svg
           width="15"
@@ -344,7 +344,7 @@ function OptionRow({
       </span>
       <span
         aria-hidden="true"
-        className={`flex h-[18px] w-[30px] shrink-0 items-center rounded-full p-0.5 transition-colors ${value ? "bg-[#364cff]" : "bg-border"}`}
+        className={`flex h-[18px] w-[30px] shrink-0 items-center rounded-full p-0.5 transition-colors ${value ? "bg-foreground" : "bg-muted ring-1 ring-inset ring-border"}`}
       >
         <span
           className={`size-3.5 rounded-full bg-white shadow-sm transition-transform ${value ? "translate-x-3" : ""}`}
@@ -396,7 +396,7 @@ function ResidualOptions({ settings, hasSigma }: { settings: ChartSettings; hasS
           type="button"
           aria-label="Opções do painel de resíduos"
           title="Opções do painel de resíduos"
-          className="grid size-[30px] place-items-center rounded-lg border border-[#d8ded7] bg-white text-[#66716e] hover:bg-[#eff2ed] hover:text-foreground focus-visible:outline-2 focus-visible:outline-[#364cff] data-[state=open]:bg-[#eff2ed]"
+          className="grid size-[30px] place-items-center rounded-lg border border-border bg-white text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-brand-coral data-[state=open]:bg-muted"
         >
           <SlidersHorizontal size={15} />
         </button>
@@ -406,7 +406,7 @@ function ResidualOptions({ settings, hasSigma }: { settings: ChartSettings; hasS
           <h2 className="text-[13px] font-semibold">Painel de resíduos</h2>
           <PopoverClose
             aria-label="Fechar"
-            className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-[#364cff]"
+            className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-brand-coral"
           >
             <X size={15} />
           </PopoverClose>
