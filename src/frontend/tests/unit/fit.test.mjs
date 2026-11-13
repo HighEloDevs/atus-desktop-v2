@@ -116,6 +116,39 @@ describe("illustrative fit service", () => {
       { name: "b", value: 1 },
     ]);
   });
+  test("labels the report like V1: free parameters, covariance and uncertainty considered", async () => {
+    const result = await mockFitService.fit({ ...request, parameters: "a=$3", range: {} });
+    expect(result.parameters.map((p) => p.name)).toEqual(["b"]);
+    expect(result.covariance).toHaveLength(1);
+    expect(result.hasUncertainty).toBe(false);
+    expect(result.degreesOfFreedom).toBe(2);
+    const sumSquares = result.residuals.reduce((sum, r) => sum + r.residual ** 2, 0);
+    expect(result.chiSquared).toBeCloseTo(sumSquares, 12);
+    expect(result.uncertaintyUsed).toBeCloseTo(Math.sqrt(sumSquares / 2), 12);
+  });
+  test("weights the residuals by sy when every point has an uncertainty", async () => {
+    const points = request.points.map((p) => ({ ...p, sy: 0.5 }));
+    const result = await mockFitService.fit({ ...request, points, range: {}, useSy: true });
+    expect(result.hasUncertainty).toBe(true);
+    expect(result.uncertaintyUsed).toBeNull();
+    const expected = result.residuals.reduce((sum, r) => sum + (r.residual / 0.5) ** 2, 0);
+    expect(result.chiSquared).toBeCloseTo(expected, 12);
+    const partial = [{ ...points[0] }, { ...points[1], sy: 0 }, { ...points[2] }];
+    expect(
+      (await mockFitService.fit({ ...request, points: partial, range: {}, useSy: true }))
+        .hasUncertainty,
+    ).toBe(false);
+  });
+  test("has no uncertainty considered when there are no degrees of freedom", async () => {
+    const result = await mockFitService.fit({
+      ...request,
+      points: request.points.slice(0, 2),
+      range: {},
+      parameters: "a=1;b=1",
+    });
+    expect(result.degreesOfFreedom).toBe(0);
+    expect(result.uncertaintyUsed).toBe(0);
+  });
   test("rejects absent equations, insufficient points, duplicate x and invalid parameters", async () => {
     await expect(mockFitService.fit({ ...request, equation: " " })).rejects.toThrow(/função/);
     await expect(mockFitService.fit({ ...request, range: { min: 2 } })).rejects.toThrow(

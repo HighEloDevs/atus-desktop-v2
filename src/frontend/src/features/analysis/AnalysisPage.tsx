@@ -17,7 +17,7 @@ import { textParser, type SeparatorType } from "./data-import/text-data-parser";
 import { SeparatorDialog } from "./data-import/SeparatorDialog";
 import { SeparatorSelect } from "./data-import/SeparatorSelect";
 import { readClipboardText, ClipboardReadError } from "./clipboard/read-clipboard-text";
-import { ResultsPanel } from "./fit/ResultsPanel";
+import { ResultsPanel, type ResultItem } from "./fit/ResultsPanel";
 import { EmptyState } from "./EmptyState";
 import { useClipboardShortcuts, type ClipboardShortcut } from "./clipboard/clipboard-shortcuts";
 import { Chart, type ChartSeries } from "@/components/chart/Chart";
@@ -916,10 +916,12 @@ export function AnalysisPage({
                 highlightedSeriesId={highlightedSeriesId}
               />
               <ResultsPanel
-                results={datasets.flatMap((item) =>
+                results={datasets.flatMap((item): ResultItem[] =>
                   item.result
                     ? [{ id: item.id, name: item.name, color: item.color, result: item.result }]
-                    : [],
+                    : item.fitState === "error" && item.fitError
+                      ? [{ id: item.id, name: item.name, color: item.color, error: item.fitError }]
+                      : [],
                 )}
                 onHighlight={setHighlightedSeriesId}
               />
