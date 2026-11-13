@@ -2,6 +2,7 @@
 
 //! Desktop entry point and native demonstration bridge.
 
+mod export;
 mod project;
 
 #[cfg(all(feature = "desktop-e2e", not(debug_assertions)))]
@@ -69,6 +70,7 @@ fn main() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
             get_mock_analysis,
+            export::export_image_write,
             project_create,
             project_open,
             project_save,
