@@ -88,6 +88,6 @@ it("opens the table showing imported points", async () => {
   await render();
   await act(async () => button("Ver tabela").click());
   const dialog = document.querySelector('[role="dialog"]');
-  expect(dialog.textContent).toContain("Dados: a.csv");
+  expect(dialog.textContent).toContain("Dados · a.csv");
   expect(dialog.querySelectorAll("tbody tr")).toHaveLength(2);
 });

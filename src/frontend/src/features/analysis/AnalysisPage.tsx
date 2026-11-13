@@ -23,7 +23,7 @@ import {
 } from "./clipboard/read-clipboard-text";
 import { useClipboardShortcuts, type ClipboardShortcut } from "./clipboard/clipboard-shortcuts";
 import { Chart, type ChartSeries } from "@/components/chart/Chart";
-import { Dialog } from "radix-ui";
+import { DataTableDialog } from "./DataTableDialog";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -76,8 +76,6 @@ type MockAnalysis = {
   x: number[];
   y: number[];
 };
-const format = (value: number) =>
-  new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(value);
 
 /** Parsed data that is readable but invalid, so a different separator cannot fix it. */
 class DataValidationError extends Error {}
@@ -122,7 +120,6 @@ type AnalysisState = {
   chart?: ChartValues;
   selectedId?: string | null;
   tableId?: string | null;
-  editingText?: string | null;
   separator?: SeparatorType;
 };
 
@@ -166,8 +163,6 @@ export function AnalysisPage({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [tableId, setTableId] = useState<string | null>(initial?.tableId ?? null);
-  const [editingText, setEditingText] = useState<string | null>(initial?.editingText ?? null);
-  const [editError, setEditError] = useState("");
   const [separator, setSeparator] = useState<SeparatorType>(initial?.separator ?? "auto");
   const [pendingImports, setPendingImports] = useState<PendingImport[]>([]);
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -206,7 +201,7 @@ export function AnalysisPage({
         ? [
             {
               ...initialAnalysis,
-              state: { chart: chartSettings, selectedId, tableId, editingText, separator },
+              state: { chart: chartSettings, selectedId, tableId, separator },
               datasets: datasets.map(({ id, name, points, ...state }) => ({
                 id,
                 name,
@@ -435,41 +430,6 @@ export function AnalysisPage({
     }
   }
 
-  function startEdit(selected: ChartSeries) {
-    setSelectedId(selected.id);
-    setEditingText(
-      selected.points
-        .map((point) => [point.x, point.y, point.sy ?? 0, point.sx ?? 0].join("; "))
-        .join("\n"),
-    );
-    setEditError("");
-  }
-
-  function saveEdit() {
-    if (!selected || editingText === null) return;
-    try {
-      const points = parseValidPoints(editingText, ";");
-      setDatasets((items) =>
-        items.map((item) =>
-          item.id === selected.id
-            ? {
-                ...item,
-                points,
-                linePoints: [],
-                data: null,
-                fitState: "idle",
-                fitError: undefined,
-                result: undefined,
-              }
-            : item,
-        ),
-      );
-      setEditingText(null);
-    } catch (error) {
-      setEditError(error instanceof Error ? error.message : "Dados inválidos.");
-    }
-  }
-
   async function runFits() {
     const configured = datasets.filter((item) => item.equation.trim());
     const results = await Promise.all(
@@ -677,7 +637,6 @@ export function AnalysisPage({
                       <DropdownMenuItem
                         onSelect={() => {
                           setTableId(item.id);
-                          setEditingText(null);
                         }}
                       >
                         <Eye />
@@ -705,7 +664,6 @@ export function AnalysisPage({
                           setDatasets((items) => items.filter((entry) => entry.id !== item.id));
                           if (selectedId === item.id) {
                             setSelectedId(null);
-                            setEditingText(null);
                           }
                         }}
                       >
@@ -794,89 +752,7 @@ export function AnalysisPage({
           })();
         }}
       />
-      <Dialog.Root
-        open={!!table}
-        onOpenChange={(open) => {
-          if (!open) {
-            setTableId(null);
-            setEditingText(null);
-          }
-        }}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[min(90vw,680px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg bg-white p-5 shadow-xl">
-            <Dialog.Title className="text-sm font-semibold">Dados: {table?.name}</Dialog.Title>
-            <Dialog.Description className="mt-1 text-xs text-[#66716e]">
-              Pontos e incertezas do conjunto.
-            </Dialog.Description>
-            {table && (
-              <div className="mt-4 min-h-0 overflow-auto">
-                {editingText !== null ? (
-                  <>
-                    <label className="block text-xs">
-                      Uma linha por ponto: x; y; σy; σx
-                      <textarea
-                        aria-label="Editar pontos"
-                        value={editingText}
-                        onChange={(event) => setEditingText(event.target.value)}
-                        rows={10}
-                        className="mt-1 w-full rounded border p-2 font-mono text-xs"
-                      />
-                    </label>
-                    {editError && (
-                      <p role="alert" className="text-xs text-red-700">
-                        {editError}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr>
-                        <th>Ponto</th>
-                        <th>x</th>
-                        <th>y</th>
-                        <th>σy</th>
-                        <th>σx</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {table.points.map((point, i) => (
-                        <tr key={i} className="border-t">
-                          <td className="py-2">{i + 1}</td>
-                          <td>{format(point.x)}</td>
-                          <td>{format(point.y)}</td>
-                          <td>{point.sy === undefined ? "—" : format(point.sy)}</td>
-                          <td>{point.sx === undefined ? "—" : format(point.sx)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
-            <div className="mt-4 flex justify-end gap-4 text-xs">
-              {table &&
-                (editingText === null ? (
-                  <button type="button" onClick={() => startEdit(table)} className="text-[#364cff]">
-                    Editar dados
-                  </button>
-                ) : (
-                  <>
-                    <button type="button" onClick={() => setEditingText(null)}>
-                      Cancelar edição
-                    </button>
-                    <button type="button" onClick={saveEdit} className="text-[#364cff]">
-                      Salvar dados
-                    </button>
-                  </>
-                ))}
-              <Dialog.Close>Fechar</Dialog.Close>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      <DataTableDialog dataset={table ?? null} onClose={() => setTableId(null)} />
       {panelOpen && (
         <aside className="analysis-panel flex h-full w-[360px] shrink-0 flex-col border-r border-[#d8ded7] bg-[#f7f8f5]">
           <header className="border-b border-border bg-white px-3 py-3">
