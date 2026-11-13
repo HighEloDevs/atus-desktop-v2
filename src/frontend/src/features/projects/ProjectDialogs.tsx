@@ -8,7 +8,7 @@ import { Dialog } from "radix-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-const overlay = "fixed inset-0 z-40 bg-[#20272c]/35 backdrop-blur-sm";
+const overlay = "fixed inset-0 z-40 bg-foreground/35 backdrop-blur-sm";
 const content =
   "fixed left-1/2 top-1/2 z-50 w-[min(90vw,420px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-white p-5 shadow-xl";
 
@@ -66,7 +66,7 @@ export function RenameProjectDialog({
               onFocus={(event) => event.target.select()}
             />
             {error && (
-              <p role="alert" className="mt-2 text-[12px] text-[#a43d35]">
+              <p role="alert" className="mt-2 text-[12px] text-destructive">
                 {error}
               </p>
             )}
@@ -112,12 +112,7 @@ export function DeleteProjectDialog({
             <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
               Cancelar
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="bg-[#a43d35] text-white hover:bg-[#8d332c]"
-              onClick={onConfirm}
-            >
+            <Button type="button" size="sm" variant="destructive" onClick={onConfirm}>
               Mover para a Lixeira
             </Button>
           </div>

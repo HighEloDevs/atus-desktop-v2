@@ -88,7 +88,7 @@ export function ProjectTitle({
           />
         </h1>
         {error && (
-          <p role="alert" className="text-[11px] text-[#a43d35]">
+          <p role="alert" className="text-[11px] text-destructive">
             {error}
           </p>
         )}

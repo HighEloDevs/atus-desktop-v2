@@ -87,17 +87,18 @@ function Segmented<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div
-      role="group"
-      aria-label={label}
-      className="flex gap-0.5 rounded-md border border-input bg-white p-0.5"
-    >
+    <div role="group" aria-label={label} className="flex gap-0.5 rounded-md bg-muted p-0.5">
       {options.map((option) => (
         <Button
           key={option.value}
           type="button"
           size="xs"
-          variant={value === option.value ? "default" : "ghost"}
+          variant="ghost"
+          className={
+            value === option.value
+              ? "bg-white text-foreground shadow-sm hover:bg-white"
+              : "text-muted-foreground"
+          }
           aria-pressed={value === option.value}
           onClick={() => onChange(option.value)}
         >
@@ -164,7 +165,7 @@ function ActionsMenu({
 }
 
 const headClass =
-  "h-9 bg-[#fafbf8] px-4 text-[11px] font-medium uppercase tracking-[.04em] text-muted-foreground";
+  "h-9 bg-muted/40 px-4 text-[11px] font-medium uppercase tracking-[.04em] text-muted-foreground";
 const cellClass = "px-4 py-2.5";
 
 function NameCell({ project }: { project: ProjectDetails }) {
@@ -172,7 +173,7 @@ function NameCell({ project }: { project: ProjectDetails }) {
     <TableCell className={`${cellClass} max-w-[280px]`}>
       <div className="flex min-w-0 items-center gap-3">
         <span
-          className={`flex size-8 shrink-0 items-center justify-center rounded ${project.available ? "bg-[#eef0ff] text-ring" : "bg-[#fff1e8] text-[#8d432a]"}`}
+          className={`flex size-8 shrink-0 items-center justify-center rounded ${project.available ? "bg-ring/10 text-ring" : "bg-brand-coral/15 text-destructive"}`}
         >
           {project.available ? (
             <FileChartColumn aria-hidden="true" size={16} />
@@ -190,10 +191,10 @@ function NameCell({ project }: { project: ProjectDetails }) {
             )}
           </span>
           {!project.available && (
-            <span className="block truncate text-xs text-[#8d432a]">Arquivo indisponível</span>
+            <span className="block truncate text-xs text-destructive">Arquivo indisponível</span>
           )}
           {project.error && (
-            <span className="block truncate text-xs text-[#8d432a]">
+            <span className="block truncate text-xs text-destructive">
               Não foi possível ler o arquivo
             </span>
           )}
@@ -233,7 +234,7 @@ function ProjectsTable({
         </TableHeader>
         <TableBody>
           {projects.map((project) => (
-            <TableRow key={project.path} className="border-border hover:bg-[#f1f3ff]">
+            <TableRow key={project.path} className="border-border hover:bg-ring/5">
               <NameCell project={project} />
               <TableCell className={`${cellClass} text-muted-foreground`}>
                 {formatModified(project.modified)}
