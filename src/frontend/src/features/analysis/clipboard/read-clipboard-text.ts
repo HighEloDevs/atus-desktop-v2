@@ -6,16 +6,12 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
 
-/** Maximum size, in bytes, accepted for imported text (files and clipboard). */
-export const MAX_IMPORT_BYTES = 1024 * 1024;
-
 /** Reason why the clipboard text could not be used. */
-export type ClipboardReadErrorCode = "empty" | "denied" | "too-large";
+export type ClipboardReadErrorCode = "empty" | "denied";
 
 const MESSAGES: Record<ClipboardReadErrorCode, string> = {
   empty: "A área de transferência está vazia.",
   denied: "Não foi possível acessar a área de transferência. Verifique as permissões.",
-  "too-large": "O texto da área de transferência excede 1 MB.",
 };
 
 /** Error with a user-facing Portuguese message describing why the clipboard was not read. */
@@ -38,7 +34,7 @@ export class ClipboardReadError extends Error {
  *
  * @returns The clipboard text, untrimmed.
  * @throws {ClipboardReadError} When the API is unavailable or denied (`denied`), the text is
- * empty or whitespace only (`empty`), or it exceeds {@link MAX_IMPORT_BYTES} (`too-large`).
+ * empty or whitespace only (`empty`). There is no size limit.
  * @example
  * const text = await readClipboardText();
  */
@@ -50,8 +46,5 @@ export async function readClipboardText(): Promise<string> {
     throw new ClipboardReadError("denied");
   }
   if (!text || text.trim() === "") throw new ClipboardReadError("empty");
-  if (new TextEncoder().encode(text).length > MAX_IMPORT_BYTES) {
-    throw new ClipboardReadError("too-large");
-  }
   return text;
 }

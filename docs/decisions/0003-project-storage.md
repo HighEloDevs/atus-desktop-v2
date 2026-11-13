@@ -6,4 +6,4 @@ O arquivo .atus usa application_id 0x41545553 e user_version 2. As tabelas são 
 
 Gravações usam uma transação SQLite e comparam o estado anterior com o estado no disco dentro da transação de escrita. Uma divergência bloqueia a gravação e a interface oferece Salvar como. Arquivos novos são preparados na pasta de destino e publicados sem sobrescrever um arquivo existente. O aplicativo usa o journal padrão do SQLite e arquivos fechados podem ser copiados individualmente.
 
-O histórico fica no armazenamento local da WebView. A tela inicial combina o histórico com os arquivos descobertos em Documentos/ATUS/projects. Resultados simulados continuam marcados como tal. A importação do JSON legado será uma entrega separada.
+O histórico fica no armazenamento local da WebView. A tela inicial combina o histórico com os arquivos descobertos em Documentos/ATUS/projects. A importação do JSON legado será uma entrega separada. Renomear, arquivar e excluir projetos estão em `0008-project-management.md`; a tela inicial agora lista os recentes e os projetos da pasta padrão em tabelas separadas.

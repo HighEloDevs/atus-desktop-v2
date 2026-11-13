@@ -6,23 +6,22 @@
 import { FinderProjectDialog } from "@/features/projects/FinderProjectDialog";
 import { Button } from "@/components/ui/button";
 import { useProjectSave } from "@/features/projects/useProjectSave";
+import { ProjectTitle } from "@/features/projects/ProjectTitle";
 import type { OpenProject } from "@/features/projects/project-client";
-import { useLayoutEffect, useRef, useState, type SetStateAction } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type SetStateAction } from "react";
+import { notify } from "@/lib/notify";
 import { FitControls } from "./fit/FitControls";
 import { defaultFitConfig, validateFitConfig, type FitConfig } from "./fit/fit-config";
-import { ResultsPanel } from "./fit/ResultsPanel";
 import { mockFitService, type FitResponse } from "./fit/fit-service";
 import { textParser, type SeparatorType } from "./data-import/text-data-parser";
 import { SeparatorDialog } from "./data-import/SeparatorDialog";
 import { SeparatorSelect } from "./data-import/SeparatorSelect";
-import {
-  MAX_IMPORT_BYTES,
-  readClipboardText,
-  ClipboardReadError,
-} from "./clipboard/read-clipboard-text";
+import { readClipboardText, ClipboardReadError } from "./clipboard/read-clipboard-text";
+import { ResultsPanel } from "./fit/ResultsPanel";
+import { EmptyState } from "./EmptyState";
 import { useClipboardShortcuts, type ClipboardShortcut } from "./clipboard/clipboard-shortcuts";
 import { Chart, type ChartSeries } from "@/components/chart/Chart";
-import { Dialog } from "radix-ui";
+import { DataTableDialog } from "./DataTableDialog";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -33,7 +32,6 @@ import {
 import { ChartExportMenu } from "@/components/chart/ChartExportMenu";
 import { ChartSettingsPanel } from "@/components/chart/ChartSettingsPanel";
 import { useChartSettings, type ChartValues } from "@/components/chart/useChartSettings";
-import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   Activity,
   ArrowLeft,
@@ -42,7 +40,6 @@ import {
   Save,
   Database,
   FileInput,
-  FlaskConical,
   Palette,
   PanelLeft,
   Plus,
@@ -75,8 +72,6 @@ type MockAnalysis = {
   x: number[];
   y: number[];
 };
-const format = (value: number) =>
-  new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(value);
 
 /** Parsed data that is readable but invalid, so a different separator cannot fix it. */
 class DataValidationError extends Error {}
@@ -121,7 +116,6 @@ type AnalysisState = {
   chart?: ChartValues;
   selectedId?: string | null;
   tableId?: string | null;
-  editingText?: string | null;
   separator?: SeparatorType;
 };
 
@@ -134,14 +128,12 @@ export function AnalysisPage({
   onBack,
   project = null,
   finderPath,
-  projectError,
   onOpenFinderProject,
   onCancelFinderProject,
 }: {
   onBack: () => void;
   project?: OpenProject | null;
   finderPath: string | null;
-  projectError: string;
   onOpenFinderProject: (path: string) => Promise<void>;
   onCancelFinderProject: () => void;
 }) {
@@ -158,7 +150,6 @@ export function AnalysisPage({
   const initial = initialAnalysis?.state as AnalysisState | undefined;
   const chartSettings = useChartSettings(initial?.chart);
   const graphicRef = useRef<HTMLDivElement>(null);
-  const exampleNumber = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const sidebarContent = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef({ analysis: 0, visual: 0 });
@@ -167,11 +158,8 @@ export function AnalysisPage({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [tableId, setTableId] = useState<string | null>(initial?.tableId ?? null);
-  const [editingText, setEditingText] = useState<string | null>(initial?.editingText ?? null);
-  const [editError, setEditError] = useState("");
+  const [highlightedSeriesId, setHighlightedSeriesId] = useState<string | null>(null);
   const [separator, setSeparator] = useState<SeparatorType>(initial?.separator ?? "auto");
-  const [importError, setImportError] = useState("");
-  const [importNotice, setImportNotice] = useState("");
   const [pendingImports, setPendingImports] = useState<PendingImport[]>([]);
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
   const modifier = isMac ? "⌘" : "Ctrl";
@@ -209,7 +197,7 @@ export function AnalysisPage({
         ? [
             {
               ...initialAnalysis,
-              state: { chart: chartSettings, selectedId, tableId, editingText, separator },
+              state: { chart: chartSettings, selectedId, tableId, separator },
               datasets: datasets.map(({ id, name, points, ...state }) => ({
                 id,
                 name,
@@ -222,6 +210,13 @@ export function AnalysisPage({
         : [],
     ),
   );
+  useEffect(() => {
+    if (saving.error)
+      notify.error("Não foi possível salvar o projeto", {
+        description: saving.error,
+        id: "save-error",
+      });
+  }, [saving.error]);
   function updateSeries(id: string, updates: Partial<ChartSeries>) {
     setDatasets((items) => items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
   }
@@ -258,10 +253,8 @@ export function AnalysisPage({
         visible: typeof value === "function" ? value(selected.visible) : value,
       }),
   });
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [panelOpen, setPanelOpen] = useState(true);
   const [mode, setMode] = useState<"analysis" | "visual">("analysis");
-  const [highlightedSeriesId, setHighlightedSeriesId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useLayoutEffect(() => {
@@ -328,9 +321,8 @@ export function AnalysisPage({
     }
   }
 
-  /** Reads files, enforcing the size limit, and imports each one with the selected separator. */
+  /** Reads the text of an imported file. There is no size limit in the desktop app. */
   async function readImportFile(file: File) {
-    if (file.size > MAX_IMPORT_BYTES) throw new Error("O arquivo excede 1 MB.");
     return file.text();
   }
 
@@ -352,8 +344,7 @@ export function AnalysisPage({
         );
       }
     }
-    setImportNotice("");
-    setImportError(errors.join(" "));
+    if (errors.length) notify.error("Não foi possível importar", { description: errors.join(" ") });
     if (queue.length) setPendingImports((items) => [...items, ...queue]);
   }
 
@@ -363,16 +354,14 @@ export function AnalysisPage({
     try {
       const text = await readImportFile(file);
       const failure = tryImport(file.name, text, target, separator);
-      setImportNotice("");
       if (failure && !failure.validation) {
-        setImportError("");
         setPendingImports((items) => [
           ...items,
           { name: file.name, text, target, error: failure.message },
         ]);
-      } else setImportError(failure?.message ?? "");
+      } else if (failure) notify.error(failure.message);
     } catch (error) {
-      setImportError(
+      notify.error(
         error instanceof Error ? error.message : "Não foi possível substituir os dados.",
       );
     }
@@ -380,13 +369,16 @@ export function AnalysisPage({
 
   /** Imports clipboard text as a new dataset or into dataset N (1-based) of the list. */
   async function importFromClipboard(shortcut: ClipboardShortcut) {
+    if (shortcut.kind === "fit") {
+      await runFits();
+      return;
+    }
     let target: ImportTarget = { kind: "create" };
     let replaced: ChartSeries | undefined;
     if (shortcut.kind === "replace") {
       replaced = datasets[shortcut.index - 1];
       if (!replaced) {
-        setImportNotice("");
-        setImportError(`Não há conjunto de dados ${shortcut.index}.`);
+        notify.error(`Não há conjunto de dados ${shortcut.index}.`);
         return;
       }
       target = { kind: "replace", id: replaced.id };
@@ -395,8 +387,7 @@ export function AnalysisPage({
     try {
       text = await readClipboardText();
     } catch (error) {
-      setImportNotice("");
-      setImportError(
+      notify.error(
         error instanceof ClipboardReadError
           ? error.message
           : "Não foi possível ler a área de transferência.",
@@ -404,18 +395,15 @@ export function AnalysisPage({
       return;
     }
     const failure = tryImport(CLIPBOARD_NAME, text, target, separator);
-    setImportNotice("");
     if (!failure) {
-      setImportError("");
-      setImportNotice(
+      notify.success(
         replaced
           ? `Dados do conjunto ${shortcut.kind === "replace" ? shortcut.index : ""} ("${replaced.name}") substituídos com sucesso.`
           : "Dados colados importados com sucesso.",
       );
     } else if (failure.validation) {
-      setImportError(`${CLIPBOARD_NAME}: ${failure.message}`);
+      notify.error("Dados inválidos", { description: `${CLIPBOARD_NAME}: ${failure.message}` });
     } else {
-      setImportError("");
       setPendingImports((items) => [
         ...items,
         { name: CLIPBOARD_NAME, text, target, error: failure.message },
@@ -430,54 +418,18 @@ export function AnalysisPage({
     const failure = tryImport(current.name, current.text, current.target, sep);
     if (!failure) {
       setPendingImports((items) => items.slice(1));
-      setImportError("");
-      setImportNotice(`Dados de "${current.name}" importados com sucesso.`);
+      notify.success(`Dados de "${current.name}" importados com sucesso.`);
     } else if (failure.validation) {
       setPendingImports((items) => items.slice(1));
-      setImportNotice("");
-      setImportError(`${current.name}: ${failure.message}`);
+      notify.error("Dados inválidos", { description: `${current.name}: ${failure.message}` });
     } else {
       setPendingImports((items) => [{ ...items[0], error: failure.message }, ...items.slice(1)]);
     }
   }
 
-  function startEdit(selected: ChartSeries) {
-    setSelectedId(selected.id);
-    setEditingText(
-      selected.points
-        .map((point) => [point.x, point.y, point.sy ?? 0, point.sx ?? 0].join("; "))
-        .join("\n"),
-    );
-    setEditError("");
-  }
-
-  function saveEdit() {
-    if (!selected || editingText === null) return;
-    try {
-      const points = parseValidPoints(editingText, ";");
-      setDatasets((items) =>
-        items.map((item) =>
-          item.id === selected.id
-            ? {
-                ...item,
-                points,
-                linePoints: [],
-                data: null,
-                fitState: "idle",
-                fitError: undefined,
-                result: undefined,
-              }
-            : item,
-        ),
-      );
-      setEditingText(null);
-    } catch (error) {
-      setEditError(error instanceof Error ? error.message : "Dados inválidos.");
-    }
-  }
-
   async function runFits() {
     const configured = datasets.filter((item) => item.equation.trim());
+    if (configured.length === 0) return;
     const results = await Promise.all(
       configured.map(async (item) => {
         try {
@@ -500,11 +452,19 @@ export function AnalysisPage({
           return {
             item,
             response: undefined,
-            error: error instanceof Error ? error.message : "Falha na simulação.",
+            error: error instanceof Error ? error.message : "Falha ao executar o ajuste.",
           };
         }
       }),
     );
+    for (const { item, error } of results)
+      if (error)
+        notify.error(`Falha no ajuste de ${item.name}`, {
+          description: error,
+          id: `fit-error-${item.id}`,
+        });
+    if (results.every(({ error }) => !error))
+      notify.success("Ajuste executado com sucesso", { id: "fit-success" });
     setDatasets((items) =>
       items.map((current) => {
         const result = results.find(
@@ -545,46 +505,6 @@ export function AnalysisPage({
           : item,
       ),
     );
-  }
-
-  async function loadExample() {
-    if (!isTauri()) {
-      setStatus("error");
-      return;
-    }
-    setStatus("loading");
-    try {
-      const example = await invoke<MockAnalysis>("get_mock_analysis");
-      const id = crypto.randomUUID();
-      const name = `Exemplo ${++exampleNumber.current}`;
-      setDatasets((items) => [
-        ...items,
-        {
-          id,
-          name,
-          data: example,
-          ...defaultFitConfig,
-          fitState: "idle",
-          points: example.x.map((x, index) => ({ x, y: example.y[index] })),
-          linePoints: example.x.length
-            ? [Math.min(...example.x), Math.max(...example.x)].map((x) => ({
-                x,
-                y: example.slope * x + example.intercept,
-              }))
-            : [],
-          color: ["#f25a3c", "#364cff", "#16835d", "#a04cb0"][items.length % 4],
-          radius: 5,
-          symbol: "circle",
-          lineStyle: "solid",
-          lineWidth: 2,
-          visible: true,
-        },
-      ]);
-      setSelectedId(id);
-      setStatus("idle");
-    } catch {
-      setStatus("error");
-    }
   }
 
   const cards = (cardMode: "analysis" | "visual") => (
@@ -669,7 +589,6 @@ export function AnalysisPage({
                       <DropdownMenuItem
                         onSelect={() => {
                           setTableId(item.id);
-                          setEditingText(null);
                         }}
                       >
                         <Eye />
@@ -697,7 +616,6 @@ export function AnalysisPage({
                           setDatasets((items) => items.filter((entry) => entry.id !== item.id));
                           if (selectedId === item.id) {
                             setSelectedId(null);
-                            setEditingText(null);
                           }
                         }}
                       >
@@ -786,97 +704,7 @@ export function AnalysisPage({
           })();
         }}
       />
-      {projectError && (
-        <p
-          role="alert"
-          className="fixed right-4 top-4 z-40 max-w-sm rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-md"
-        >
-          {projectError}
-        </p>
-      )}
-      <Dialog.Root
-        open={!!table}
-        onOpenChange={(open) => {
-          if (!open) {
-            setTableId(null);
-            setEditingText(null);
-          }
-        }}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[min(90vw,680px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg bg-white p-5 shadow-xl">
-            <Dialog.Title className="text-sm font-semibold">Dados: {table?.name}</Dialog.Title>
-            <Dialog.Description className="mt-1 text-xs text-[#66716e]">
-              Pontos e incertezas do conjunto.
-            </Dialog.Description>
-            {table && (
-              <div className="mt-4 min-h-0 overflow-auto">
-                {editingText !== null ? (
-                  <>
-                    <label className="block text-xs">
-                      Uma linha por ponto: x; y; σy; σx
-                      <textarea
-                        aria-label="Editar pontos"
-                        value={editingText}
-                        onChange={(event) => setEditingText(event.target.value)}
-                        rows={10}
-                        className="mt-1 w-full rounded border p-2 font-mono text-xs"
-                      />
-                    </label>
-                    {editError && (
-                      <p role="alert" className="text-xs text-red-700">
-                        {editError}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr>
-                        <th>Ponto</th>
-                        <th>x</th>
-                        <th>y</th>
-                        <th>σy</th>
-                        <th>σx</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {table.points.map((point, i) => (
-                        <tr key={i} className="border-t">
-                          <td className="py-2">{i + 1}</td>
-                          <td>{format(point.x)}</td>
-                          <td>{format(point.y)}</td>
-                          <td>{point.sy === undefined ? "—" : format(point.sy)}</td>
-                          <td>{point.sx === undefined ? "—" : format(point.sx)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
-            <div className="mt-4 flex justify-end gap-4 text-xs">
-              {table &&
-                (editingText === null ? (
-                  <button type="button" onClick={() => startEdit(table)} className="text-[#364cff]">
-                    Editar dados
-                  </button>
-                ) : (
-                  <>
-                    <button type="button" onClick={() => setEditingText(null)}>
-                      Cancelar edição
-                    </button>
-                    <button type="button" onClick={saveEdit} className="text-[#364cff]">
-                      Salvar dados
-                    </button>
-                  </>
-                ))}
-              <Dialog.Close>Fechar</Dialog.Close>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      <DataTableDialog dataset={table ?? null} onClose={() => setTableId(null)} />
       {panelOpen && (
         <aside className="analysis-panel flex h-full w-[360px] shrink-0 flex-col border-r border-[#d8ded7] bg-[#f7f8f5]">
           <header className="border-b border-border bg-white px-3 py-3">
@@ -895,9 +723,14 @@ export function AnalysisPage({
                 <ArrowLeft aria-hidden="true" />
               </Button>
               <div className="min-w-0 flex-1">
-                <h1 className="truncate text-sm leading-5 font-semibold">
-                  {saving.project?.snapshot.name ?? "Projeto sem título"}
-                </h1>
+                <ProjectTitle
+                  name={saving.project?.snapshot.name ?? "Projeto sem título"}
+                  editable={Boolean(saving.project)}
+                  onRename={async (name) => {
+                    await saving.rename(name);
+                    notify.success("Projeto renomeado", { description: name.trim() });
+                  }}
+                />
                 <p
                   role="status"
                   className={`flex items-center gap-1.5 text-[11px] ${saving.error ? "text-red-800" : "text-muted-foreground"}`}
@@ -934,14 +767,6 @@ export function AnalysisPage({
                 </DropdownMenu>
               )}
             </div>
-            {saving.error && (
-              <p
-                role="alert"
-                className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
-              >
-                {saving.error}
-              </p>
-            )}
           </header>
           <div className="border-b border-[#d8ded7] px-4 py-3">
             <div
@@ -1019,7 +844,7 @@ export function AnalysisPage({
                     <FileInput size={22} className="mx-auto text-[#829087]" />
                     <p className="mt-3 text-[12px] font-semibold">Importar dados</p>
                     <p className="mt-1 text-[11px] leading-5 text-[#87938a]">
-                      Arquivos CSV, TXT ou DAT, com até 1 MB cada.
+                      Arquivos CSV, TXT ou DAT.
                     </p>
                     <p className="mt-2 text-[11px] leading-5 text-[#87938a]">
                       <kbd className="font-sans font-semibold">{modifier} B</kbd> adiciona do
@@ -1036,24 +861,6 @@ export function AnalysisPage({
                   </div>
                 ) : (
                   cards("analysis")
-                )}
-                {importError && (
-                  <p role="alert" className="mt-3 text-[12px] text-[#a43d35]">
-                    {importError}
-                  </p>
-                )}
-                <p
-                  role="status"
-                  data-testid="import-notice"
-                  className="mt-3 text-[12px] text-[#35443a] empty:hidden"
-                >
-                  {importNotice}
-                </p>
-                {status === "error" && (
-                  <p role="alert" className="mt-3 text-[12px] leading-5 text-[#a43d35]">
-                    Não foi possível carregar o exemplo. Abra o aplicativo desktop e tente
-                    novamente.
-                  </p>
                 )}
               </>
             ) : (
@@ -1075,18 +882,9 @@ export function AnalysisPage({
               onClick={() => void runFits()}
               className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-45"
             >
-              <Activity size={16} /> Executar ajustes
+              <Activity size={16} /> Executar ajustes{" "}
+              <kbd className="font-sans text-[10px] font-medium opacity-80">{modifier} ↵</kbd>
             </button>
-            <p className="mt-2 text-center text-[10px] text-[#87938a]">
-              Simulação: nenhum ajuste científico é calculado
-            </p>
-            {datasets
-              .filter((item) => item.fitState === "error")
-              .map((item) => (
-                <p key={item.id} role="alert" className="mt-2 text-[11px] text-[#a43d35]">
-                  {item.name}: {item.fitError}
-                </p>
-              ))}
           </div>
         </aside>
       )}
@@ -1101,74 +899,13 @@ export function AnalysisPage({
           >
             <PanelLeft size={17} />
           </button>
-          <span className="text-[12px] font-semibold">Gráfico</span>
           <ChartExportMenu graphic={graphicRef} disabled={!data} />
         </div>
         <div
           className={`analysis-canvas relative flex min-h-0 flex-1 ${data ? "overflow-hidden p-0" : "items-center justify-center overflow-auto px-6 py-8"}`}
         >
           {!data ? (
-            <div className="relative w-full max-w-[620px] text-center">
-              <h2 className="text-[18px] font-semibold">Comece sua análise</h2>
-              <p className="mt-1.5 text-[13px] text-[#758078]">
-                Importe seus dados para visualizar o gráfico e calcular ajustes.
-              </p>
-              <div className="mt-6 grid gap-3 rounded-xl border border-dashed border-[#c8d0c8] bg-white p-4 sm:grid-cols-2">
-                <div className="rounded-lg border border-[#e1e6df] bg-[#f8faf7] p-5">
-                  <Database size={22} className="mx-auto text-[#607568]" />
-                  <h3 className="mt-3 text-[13px] font-semibold">Importar no painel Dados</h3>
-                  <p className="mt-1 text-[11px] text-[#87938a]">CSV, TXT ou DAT</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPanelOpen(true);
-                      setMode("analysis");
-                    }}
-                    className="mt-4 rounded border border-[#d8ded7] bg-white px-3 py-2 text-[11px] font-medium"
-                  >
-                    Abrir painel de dados
-                  </button>
-                </div>
-                <div className="rounded-lg border border-[#e1e6df] bg-[#f8faf7] p-5">
-                  <FlaskConical size={22} className="mx-auto text-[#607568]" />
-                  <h3 className="mt-3 text-[13px] font-semibold">Explorar demonstração</h3>
-                  <p className="mt-1 text-[11px] text-[#87938a]">Dados fixos retornados pelo C++</p>
-                  <button
-                    type="button"
-                    onClick={loadExample}
-                    disabled={status === "loading"}
-                    className="mt-4 rounded border border-[#d8ded7] bg-white px-3 py-2 text-[11px] font-medium hover:bg-[#eff2ed]"
-                  >
-                    {status === "loading" ? "Carregando…" : "Carregar exemplo"}
-                  </button>
-                </div>
-              </div>
-              {status === "error" && (
-                <p role="alert" className="mt-3 text-[12px] text-[#a43d35]">
-                  Não foi possível carregar o exemplo. Abra o aplicativo desktop e tente novamente.
-                </p>
-              )}
-              <div className="mx-auto mt-6 max-w-[360px] text-left">
-                <p className="mb-3 text-center text-[10px] font-semibold uppercase tracking-wider text-[#9aa59c]">
-                  Próximos passos
-                </p>
-                {[
-                  "Importe dados no painel à esquerda",
-                  "Escreva a equação de ajuste",
-                  "Execute os ajustes e veja os resultados",
-                ].map((step, i) => (
-                  <div
-                    key={step}
-                    className="flex items-center gap-3 py-1.5 text-[11px] text-[#929e95]"
-                  >
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#e9ece7] text-[10px] font-semibold">
-                      {i + 1}
-                    </span>
-                    {step}
-                  </div>
-                ))}
-              </div>
-            </div>
+            <EmptyState modifier={modifier} />
           ) : (
             <div className="relative flex h-full min-h-0 w-full flex-col bg-white p-5">
               <Chart
@@ -1178,11 +915,6 @@ export function AnalysisPage({
                 series={datasets}
                 highlightedSeriesId={highlightedSeriesId}
               />
-              {datasets.some((item) => item.data) && (
-                <p className="mt-2 text-[11px] text-[#8a6a38]">
-                  Exemplo demonstrativo: nenhum ajuste foi executado.
-                </p>
-              )}
               <ResultsPanel
                 results={datasets.flatMap((item) =>
                   item.result

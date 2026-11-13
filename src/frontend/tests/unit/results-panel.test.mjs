@@ -1,8 +1,17 @@
 // @vitest-environment jsdom
-/** Explicitly simulated results, details, clipboard and focus feedback. */
+/** Fit results, details, clipboard and focus feedback. */
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
+const notify = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+  loading: vi.fn(),
+  dismiss: vi.fn(),
+}));
+vi.mock("@/lib/notify", () => ({ notify }));
 import { ResultsPanel } from "../../src/features/analysis/fit/ResultsPanel";
 
 let root;
@@ -48,9 +57,10 @@ it("shows an empty state and clears highlighted series when collapsed", async ()
   expect(button("Resultados da análise").getAttribute("aria-expanded")).toBe("false");
 });
 
-it("highlights the selected series on hover and shows its simulated parameters", async () => {
+it("highlights the selected series on hover and shows its parameters", async () => {
   await render([item]);
-  expect(node.textContent).toContain("Parâmetros simulados");
+  expect(node.textContent).toContain("Parâmetros");
+  expect(node.textContent).not.toContain("simulado");
   expect(node.textContent).toContain("1,25 ± 0,1");
   const card = node.querySelector("article");
   await act(async () => card.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
@@ -61,24 +71,25 @@ it("highlights the selected series on hover and shows its simulated parameters",
   expect(node.textContent).toContain("1 ajuste(s)");
 });
 
-it("copies labelled simulated values and reports clipboard failures", async () => {
+it("copies the parameter values and reports clipboard failures", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
   await render([item]);
   await act(async () => button("Copiar").click());
-  expect(writeText).toHaveBeenCalledWith("SIMULAÇÃO — valores fictícios\na = 1.25 ± 0.1");
-  expect(node.querySelector('[role="status"]').textContent).toContain("copiados");
+  expect(writeText).toHaveBeenCalledWith("a = 1.25 ± 0.1");
+  expect(notify.success).toHaveBeenLastCalledWith("Parâmetros de Ensaio copiados.");
   writeText.mockRejectedValueOnce(new Error("denied"));
   await act(async () => button("Copiar").click());
-  expect(node.querySelector('[role="status"]').textContent).toContain("Não foi possível");
+  expect(notify.error).toHaveBeenLastCalledWith("Não foi possível copiar os parâmetros.");
 });
 
-it("opens details with a warning that the numbers are fictitious", async () => {
+it("opens details without simulation wording", async () => {
   await render([item]);
   await act(async () => button("Ver detalhes").click());
   const dialog = document.querySelector('[role="dialog"]');
-  expect(dialog.textContent).toContain("Nenhum ajuste científico foi executado");
-  expect(dialog.textContent).toContain("Graus de liberdade simulados");
+  expect(dialog.textContent).not.toContain("fictício");
+  expect(dialog.textContent).not.toContain("simulado");
+  expect(dialog.textContent).toContain("Graus de liberdade");
   expect(dialog.textContent).toContain("2,5");
   await act(async () =>
     [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Fechar").click(),

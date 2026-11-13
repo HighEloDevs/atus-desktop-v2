@@ -5,7 +5,7 @@
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ProjectQuickActions } from "@/features/projects/ProjectQuickActions";
-import { RecentProjects } from "@/features/projects/RecentProjects";
+import { ProjectTables } from "@/features/projects/ProjectTables";
 import {
   chooseProject,
   newSnapshot,
@@ -15,6 +15,7 @@ import {
 } from "@/features/projects/project-client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { notify } from "@/lib/notify";
 import { AnalysisPage } from "@/features/analysis/AnalysisPage";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ChevronRight, CircleHelp, FileClock, House, Info } from "lucide-react";
@@ -117,20 +118,25 @@ async function openProfile(url: string) {
   }
 }
 
+/** Reports a failure to open or create a project as a global snackbar. */
+function reportProjectError(error: unknown) {
+  notify.error("Não foi possível abrir o projeto", {
+    description: String(error),
+    id: "project-error",
+  });
+}
+
 function App() {
   const [page, setPage] = useState<Page>("home");
-  const [profileError, setProfileError] = useState(false);
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 
   const [project, setProject] = useState<OpenProject | null>(null);
-  const [projectError, setProjectError] = useState("");
   const opening = useRef(false);
   const [finderPath, setFinderPath] = useState<string | null>(null);
   const runProjectAction = useCallback(
     async (action: () => Promise<OpenProject | null>, replaces?: string) => {
       if (opening.current) return;
       opening.current = true;
-      setProjectError("");
       try {
         const opened = await action();
         if (!opened) return;
@@ -138,7 +144,7 @@ function App() {
         setPage("analysis");
         rememberProject(opened.path, replaces);
       } catch (error) {
-        setProjectError(String(error));
+        reportProjectError(error);
       } finally {
         opening.current = false;
       }
@@ -188,12 +194,12 @@ function App() {
         const path = await invoke<string | null>("take_finder_project");
         if (active && path) setFinderPath(path);
       } catch (error) {
-        if (active) setProjectError(String(error));
+        if (active) reportProjectError(error);
       }
     }
     const listener = getCurrentWindow().listen("finder-project-requested", () => void receive());
     void listener.then(receive).catch((error) => {
-      if (active) setProjectError(String(error));
+      if (active) reportProjectError(error);
     });
     return () => {
       active = false;
@@ -221,7 +227,6 @@ function App() {
         key={project?.path}
         project={project}
         finderPath={finderPath}
-        projectError={projectError}
         onOpenFinderProject={openFinderProject}
         onCancelFinderProject={() => setFinderPath(null)}
         onBack={() => {
@@ -267,15 +272,7 @@ function App() {
                       : undefined
                   }
                 />
-                {projectError && (
-                  <p
-                    role="alert"
-                    className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
-                  >
-                    {projectError}
-                  </p>
-                )}
-                {isTauri() && <RecentProjects onOpen={openProject} />}
+                {isTauri() && <ProjectTables onOpen={openProject} />}
               </>
             ) : (
               <section className="max-w-[980px]" aria-labelledby="about-title">
@@ -363,8 +360,12 @@ function App() {
                               aria-label={`Abrir LinkedIn de ${person.name} no navegador`}
                               title={`LinkedIn de ${person.name}`}
                               onClick={() => {
-                                setProfileError(false);
-                                void openProfile(person.url).catch(() => setProfileError(true));
+                                void openProfile(person.url).catch(() =>
+                                  notify.error("Não foi possível abrir o navegador", {
+                                    description: "Tente novamente.",
+                                    id: "profile-error",
+                                  }),
+                                );
                               }}
                               className="ml-auto rounded p-2 text-[#66766c] hover:bg-[#eff2ed] hover:text-[#364cff]"
                             >
@@ -380,11 +381,6 @@ function App() {
                             </button>
                           </div>
                         ))}
-                        {profileError && (
-                          <p role="alert" className="px-5 py-3 text-[12px] text-[#a43d35]">
-                            Não foi possível abrir o navegador. Tente novamente.
-                          </p>
-                        )}
                       </div>
                     </section>
                   </div>

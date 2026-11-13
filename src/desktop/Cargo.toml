@@ -13,7 +13,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["image-png"] }
 tauri-plugin-opener = "2"
 serde_json = "1"
 rusqlite = { version = "0.32", features = ["bundled", "backup"] }
@@ -21,4 +21,5 @@ tauri-plugin-dialog = "2"
 tauri-plugin-wdio-webdriver = { version = "=1.5.1", optional = true }
 
 tempfile = "3"
+trash = "5"
 tauri-plugin-clipboard-manager = "2"

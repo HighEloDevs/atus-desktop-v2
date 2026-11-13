@@ -45,7 +45,6 @@ async function render() {
       createElement(AnalysisPage, {
         onBack: vi.fn(),
         finderPath: null,
-        projectError: "",
         onOpenFinderProject: vi.fn(),
         onCancelFinderProject: vi.fn(),
       }),
@@ -81,13 +80,13 @@ it("removes a series and returns to the empty state", async () => {
   await render();
   await act(async () => button("Remover").click());
   expect(node.querySelector('[data-testid="chart"]')).toBeNull();
-  expect(node.textContent).toContain("Comece sua análise");
+  expect(node.textContent).toContain("Esperando seus dados");
 });
 
 it("opens the table showing imported points", async () => {
   await render();
   await act(async () => button("Ver tabela").click());
   const dialog = document.querySelector('[role="dialog"]');
-  expect(dialog.textContent).toContain("Dados: a.csv");
+  expect(dialog.textContent).toContain("Dados · a.csv");
   expect(dialog.querySelectorAll("tbody tr")).toHaveLength(2);
 });

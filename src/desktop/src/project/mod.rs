@@ -5,6 +5,7 @@ pub mod commands;
 pub mod e2e;
 #[cfg(target_os = "macos")]
 pub mod finder;
+pub mod manage;
 #[cfg(target_os = "macos")]
 pub mod menu;
 mod migrations;

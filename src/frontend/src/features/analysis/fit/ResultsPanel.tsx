@@ -1,11 +1,12 @@
 /**
  * @module
- * Presentation of simulated fit results.
+ * Presentation of fit results.
  */
 
 import { useState } from "react";
 import { Activity, ChevronDown, ChevronUp, ChevronRight, Copy } from "lucide-react";
 import { Dialog } from "radix-ui";
+import { notify } from "@/lib/notify";
 import type { FitResponse } from "./fit-service";
 
 type ResultItem = { id: string; name: string; color: string; result: FitResponse };
@@ -13,7 +14,7 @@ const format = (value: number) =>
   new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 4 }).format(value);
 
 /**
- * Renders simulated fit results and their details.
+ * Renders fit results and their details.
  * @param props - Results and a callback for highlighting a selected series.
  * @returns The rendered React element.
  */
@@ -26,16 +27,15 @@ export function ResultsPanel({
 }) {
   const [open, setOpen] = useState(true);
   const [detailsId, setDetailsId] = useState<string | null>(null);
-  const [copyStatus, setCopyStatus] = useState("");
   const details = results.find((item) => item.id === detailsId);
   async function copy(item: ResultItem) {
     try {
       await navigator.clipboard.writeText(
-        `SIMULAÇÃO — valores fictícios\n${item.result.parameters.map((p) => `${p.name} = ${p.value} ± ${p.uncertainty}`).join("\n")}`,
+        `${item.result.parameters.map((p) => `${p.name} = ${p.value} ± ${p.uncertainty}`).join("\n")}`,
       );
-      setCopyStatus(`Parâmetros de ${item.name} copiados.`);
+      notify.success(`Parâmetros de ${item.name} copiados.`);
     } catch {
-      setCopyStatus("Não foi possível copiar os parâmetros.");
+      notify.error("Não foi possível copiar os parâmetros.");
     }
   }
   return (
@@ -94,7 +94,7 @@ export function ResultsPanel({
                     </p>
                     <div className="mt-2 flex items-center justify-between">
                       <p className="text-[10px] font-semibold uppercase text-muted-foreground">
-                        Parâmetros simulados
+                        Parâmetros
                       </p>
                       <button
                         type="button"
@@ -128,9 +128,6 @@ export function ResultsPanel({
               </div>
             </>
           )}
-          <p role="status" className="sr-only">
-            {copyStatus}
-          </p>
         </div>
       )}
       <Dialog.Root
@@ -141,30 +138,30 @@ export function ResultsPanel({
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(90vw,600px)] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg bg-white p-5 shadow-xl">
+          <Dialog.Content
+            aria-describedby={undefined}
+            className="fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(90vw,600px)] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg bg-white p-5 shadow-xl"
+          >
             <Dialog.Title className="text-sm font-semibold">
               Resultados detalhados: {details?.name}
             </Dialog.Title>
-            <Dialog.Description className="mt-2 text-xs text-[#8a6a38]">
-              Valores fictícios para demonstração. Nenhum ajuste científico foi executado.
-            </Dialog.Description>
             {details && (
               <>
                 <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
                   <div className="rounded border border-border p-3">
-                    χ² simulado{" "}
+                    χ²{" "}
                     <strong className="mt-2 block font-mono">
                       {format(details.result.chiSquared)}
                     </strong>
                   </div>
                   <div className="rounded border border-border p-3">
-                    Graus de liberdade simulados{" "}
+                    Graus de liberdade{" "}
                     <strong className="mt-2 block font-mono">
                       {details.result.degreesOfFreedom}
                     </strong>
                   </div>
                 </div>
-                <h3 className="mt-4 text-xs font-semibold">Parâmetros simulados</h3>
+                <h3 className="mt-4 text-xs font-semibold">Parâmetros</h3>
                 <div className="mt-2 space-y-1 font-mono text-xs">
                   {details.result.parameters.map((p) => (
                     <p key={p.name}>

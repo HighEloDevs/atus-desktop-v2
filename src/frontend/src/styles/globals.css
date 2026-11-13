@@ -20,6 +20,10 @@
   --color-popover: #ffffff;
   --color-popover-foreground: #20272c;
   --color-ring: #364cff;
+  --color-success: #1e7b4f;
+  --color-warning: #8a5a00;
+  --color-destructive: #b3321a;
+  --color-info: #364cff;
   --radius-md: 6px;
 }
 
@@ -130,5 +134,75 @@ a:focus-visible {
   .chart-navigation {
     pointer-events: auto;
     opacity: 1;
+  }
+}
+
+/* Snackbar timer bar: shrinks over the toast lifetime and freezes while the pointer is over it. */
+@keyframes toast-timer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+.toast-timer {
+  transform-origin: left;
+  animation: toast-timer var(--toast-duration) linear forwards;
+}
+[data-sonner-toast]:hover .toast-timer {
+  animation-play-state: paused;
+  opacity: 0.2;
+}
+/* The bar is the only indicator of the remaining time, so reduced motion keeps it but in coarse steps. */
+/* Analysis empty state: soft dot grid and the waiting mascot. */
+.analysis-canvas:has(.analysis-empty) {
+  background-image: radial-gradient(#e3e6df 1.2px, transparent 1.3px);
+  background-size: 24px 24px;
+  background-position: center;
+}
+.atus-mascot {
+  animation: atus-bob 3.2s ease-in-out infinite;
+}
+.atus-mascot-shadow {
+  animation: atus-shadow 3.2s ease-in-out infinite;
+}
+.atus-mascot-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: atus-blink 5s infinite;
+}
+@keyframes atus-bob {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes atus-shadow {
+  50% {
+    transform: scaleX(0.82);
+    opacity: 0.6;
+  }
+}
+@keyframes atus-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .atus-mascot,
+  .atus-mascot-shadow,
+  .atus-mascot-eye {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-timer {
+    animation-timing-function: steps(10, end);
   }
 }

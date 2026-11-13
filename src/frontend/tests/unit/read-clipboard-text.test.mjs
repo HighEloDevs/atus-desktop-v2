@@ -4,7 +4,6 @@ vi.mock("@tauri-apps/api/core", () => ({ isTauri: tauri.isTauri }));
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ readText: tauri.readText }));
 import {
   ClipboardReadError,
-  MAX_IMPORT_BYTES,
   readClipboardText,
 } from "../../src/features/analysis/clipboard/read-clipboard-text.ts";
 
@@ -38,13 +37,10 @@ describe("readClipboardText", () => {
     await expect(readClipboardText()).rejects.toBeInstanceOf(ClipboardReadError);
   });
 
-  test("limits the text to 1 MB in bytes, not characters", async () => {
-    mockClipboard(async () => "1".repeat(MAX_IMPORT_BYTES));
-    expect(await readClipboardText()).toHaveLength(MAX_IMPORT_BYTES);
-    mockClipboard(async () => "1".repeat(MAX_IMPORT_BYTES + 1));
-    await expect(readClipboardText()).rejects.toMatchObject({ code: "too-large" });
-    mockClipboard(async () => "é".repeat(MAX_IMPORT_BYTES / 2 + 1));
-    await expect(readClipboardText()).rejects.toMatchObject({ code: "too-large" });
+  test("accepts text above 1 MB because the desktop app has no size limit", async () => {
+    const big = "1".repeat(2 * 1024 * 1024);
+    mockClipboard(async () => big);
+    expect(await readClipboardText()).toHaveLength(big.length);
   });
 
   test("uses Portuguese messages", async () => {
