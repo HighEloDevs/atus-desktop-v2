@@ -166,7 +166,7 @@ it("keeps separate imported series and collapses only the selected card", async 
   expect(node.querySelector('input[aria-label="Função de ajuste de b.csv"]')).not.toBeNull();
 });
 
-it("edits a table from a simulated snapshot and rejects invalid changes", async () => {
+it("shows a saved dataset in a read-only table, even when the snapshot has legacy edit state", async () => {
   const project = {
     path: "/saved.atus",
     snapshot: {
@@ -178,9 +178,18 @@ it("edits a table from a simulated snapshot and rejects invalid changes", async 
         {
           id: "analysis",
           kind: "analysis",
-          state: { tableId: "d", selectedId: "d" },
+          // `editingText` was saved by versions that allowed editing; it must be ignored.
+          state: { tableId: "d", selectedId: "d", editingText: "1; 2; 0; 0" },
           datasets: [
-            { id: "d", name: "Salvos", state: {}, points: [{ x: 1, y: 2, sy: 0.2, sx: 0.1 }] },
+            {
+              id: "d",
+              name: "Salvos",
+              state: {},
+              points: [
+                { x: 1, y: 2, sy: 0.2, sx: 0.1 },
+                { x: 0.30000000000000004, y: 6.62607015e-34 },
+              ],
+            },
           ],
         },
       ],
@@ -188,33 +197,26 @@ it("edits a table from a simulated snapshot and rejects invalid changes", async 
   };
   await render(project);
   const dialog = document.querySelector('[role="dialog"]');
-  expect(dialog.textContent).toContain("Dados: Salvos");
+  expect(dialog.textContent).toContain("Dados · Salvos");
+  expect(dialog.textContent).toContain("2 pontos");
+  expect(dialog.textContent).toContain("Somente leitura");
   expect(dialog.textContent).toContain("0,2");
-  await act(async () =>
-    [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Editar dados").click(),
+  expect(dialog.textContent).toContain("0,30000000000000004");
+  expect(dialog.textContent).toContain("6,62607015e−34");
+  expect(dialog.querySelectorAll("tbody tr")).toHaveLength(2);
+  const lastRow = [...dialog.querySelectorAll("tbody tr:nth-child(2) td")].map(
+    (c) => c.textContent,
   );
-  const input = dialog.querySelector('textarea[aria-label="Editar pontos"]');
-  expect(input.value).toContain("1; 2; 0.2; 0.1");
-  const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
-  await act(async () => {
-    set.call(input, "1; 2; -1; 0");
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await act(async () =>
-    [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Salvar dados").click(),
-  );
-  expect(dialog.querySelector('[role="alert"]').textContent).toContain(
-    "incertezas não podem ser negativas",
-  );
-  await act(async () => {
-    set.call(input, "3; 4; 0.3; 0.1\n5; 6; 0; 0");
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await act(async () =>
-    [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Salvar dados").click(),
-  );
+  expect(lastRow.slice(-2)).toEqual(["—", "—"]);
   expect(dialog.querySelector("textarea")).toBeNull();
-  expect(dialog.textContent).toContain("0,3");
+  expect(dialog.querySelector("input")).toBeNull();
+  const labels = [...dialog.querySelectorAll("button")].map((b) => b.textContent);
+  expect(labels).not.toContain("Editar dados");
+  expect(labels).not.toContain("Salvar dados");
+  await act(async () =>
+    [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Fechar").click(),
+  );
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(node.querySelector('[data-testid="chart"]').textContent).toBe("Salvos:2:0");
 });
 
