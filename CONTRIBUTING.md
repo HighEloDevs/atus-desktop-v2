@@ -8,6 +8,7 @@ Consulte o [README](README.md) para preparar o ambiente e o [AGENTS.md](AGENTS.m
 - Escreva código e identificadores em inglês e textos da interface em português.
 - Inclua ou atualize um teste de regressão que cubra cada melhoria e execute as verificações relevantes.
 - Registre decisões arquiteturais em `docs/decisions/` e atualize o contexto do projeto no `AGENTS.md` quando necessário.
+- Todo PR para a `main` sobe a versão (`node .github/scripts/shared/check-version.mjs bump M.m.p`) e traz as notas dela em `docs/releases/vM.m.p.md`, escritas para quem usa o app. O formato está em [docs/releases/README.md](docs/releases/README.md); confira com `node .github/scripts/shared/release/check-release-notes.mjs`.
 - Para persistência, verifique ida e volta, versões anteriores e preservação do trabalho em falhas. Para cálculo científico, use fixtures e tolerâncias justificadas.
 
 ## Descrição dos pull requests

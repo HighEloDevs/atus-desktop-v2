@@ -12,7 +12,7 @@ function fixture(t) {
   const dir = mkdtempSync(join(tmpdir(), 'atus-release-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(join(dir, 'app.zip'), 'contents');
-  return { dir, manifest: { sha, version: '0.2.0-rc.1', artifacts: [{ name: 'app.zip', sha256: digest('contents') }] }, expected: { sha, version: '0.2.0-rc.1', names: ['app.zip'] } };
+  return { dir, manifest: { sha, version: '0.2.0', artifacts: [{ name: 'app.zip', sha256: digest('contents') }] }, expected: { sha, version: '0.2.0', names: ['app.zip'] } };
 }
 
 test('accepts artifacts matching the independently supplied release identity', (t) => {
@@ -23,7 +23,7 @@ test('rejects wrong commit, version, digest, missing and unexpected artifacts', 
   const { dir, manifest, expected } = fixture(t);
   for (const altered of [
     { ...manifest, sha: 'b'.repeat(40) },
-    { ...manifest, version: '0.2.0' },
+    { ...manifest, version: '0.1.9' },
     { ...manifest, artifacts: [{ name: 'app.zip', sha256: 'f'.repeat(64) }] },
     { ...manifest, artifacts: [] },
     { ...manifest, artifacts: [...manifest.artifacts, manifest.artifacts[0]] },

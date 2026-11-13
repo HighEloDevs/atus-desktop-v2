@@ -24,6 +24,8 @@ Como alternativa, o plugin Rust opcional `tauri-plugin-wdio-webdriver` 1.5.1 exp
 
 ## Versões RC
 
+> Superado: desde a 0.2.4 versões RC não são publicadas (`0013-auto-update.md`).
+
 Ainda não foram construídos instaladores com `0.2.0-rc.1`, `0.2.0-rc.2` e `0.2.0`. Em particular, não há evidência local para escolher um mapeamento numérico nativo, nem para declarar sua ordem, limites e ausência de colisões entre RC e estável. O fluxo deve rejeitar versões não demonstradas em vez de publicar um pacote com versão incorreta; validar os formatos nativos e upgrades antes de ativar publicação automática de RC.
 
 ## Proteção

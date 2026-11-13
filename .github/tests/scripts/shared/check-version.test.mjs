@@ -27,18 +27,18 @@ function fixture(t) {
 }
 test('bump synchronizes all manifests and checks precedence', (t) => {
   const { dir, run } = fixture(t);
-  assert.equal(run('bump', '0.2.0-rc.1').status, 0);
-  for (const path of ['src/desktop/tauri.conf.json', 'src/desktop/Cargo.toml', 'src/desktop/Cargo.lock', 'src/frontend/package.json', 'src/frontend/package-lock.json']) assert.match(readFileSync(join(dir, path), 'utf8'), /0\.2\.0-rc\.1/);
-  assert.equal(run('check', '--base', 'base').status, 0);
-  assert.equal(run('bump', '0.2.0-rc.2').status, 0);
-  assert.equal(run('check', '--base', 'base').status, 0);
   assert.equal(run('bump', '0.2.0').status, 0);
+  for (const path of ['src/desktop/tauri.conf.json', 'src/desktop/Cargo.toml', 'src/desktop/Cargo.lock', 'src/frontend/package.json', 'src/frontend/package-lock.json']) assert.match(readFileSync(join(dir, path), 'utf8'), /0\.2\.0/);
+  assert.equal(run('check', '--base', 'base').status, 0);
+  assert.equal(run('bump', '0.1.1').status, 0);
+  assert.equal(run('check', '--base', 'base').status, 0);
+  assert.equal(run('bump', '1.0.0').status, 0);
   assert.equal(run('check', '--base', 'base').status, 0);
 });
 test('rejects divergence, stale versions, existing tags and invalid versions', (t) => {
   const { dir, git, run } = fixture(t);
   assert.notEqual(run('check', '--base', 'base').status, 0);
-  for (const value of ['v1.0.0', '1.0.0-rc.01', '1.0.0+build']) assert.notEqual(run('bump', value).status, 0);
+  for (const value of ['v1.0.0', '1.0', '01.0.0', '1.0.0+build']) assert.notEqual(run('bump', value).status, 0);
   assert.equal(run('bump', '0.2.0').status, 0);
   writeFileSync(join(dir, 'src/frontend/package.json'), '{"version":"0.1.0"}\n');
   assert.notEqual(run('check', '--base', 'base').status, 0);
@@ -48,16 +48,13 @@ test('rejects divergence, stale versions, existing tags and invalid versions', (
   git('tag', '-d', 'v0.2.0'); git('add', '.'); git('commit', '-m', 'other merge'); git('branch', '-f', 'base');
   assert.notEqual(run('check', '--base', 'base').status, 0);
 });
-test('uses semver ordering for release candidates', (t) => {
-  const { git, run } = fixture(t);
-  assert.equal(run('bump', '0.2.0-rc.2').status, 0);
-  git('add', '.'); git('commit', '-m', 'rc2'); git('branch', '-f', 'base');
-  assert.equal(run('bump', '0.2.0-rc.1').status, 0);
-  assert.notEqual(run('check', '--base', 'base').status, 0);
-  assert.equal(run('bump', '0.2.0-rc.10').status, 0);
-  assert.equal(run('check', '--base', 'base').status, 0);
-  assert.equal(run('bump', '0.2.0').status, 0);
-  assert.equal(run('check', '--base', 'base').status, 0);
+test('rejects pre-release versions, which are no longer published', (t) => {
+  const { dir, run } = fixture(t);
+  const bump = run('bump', '0.2.0-rc.1');
+  assert.notEqual(bump.status, 0);
+  assert.match(bump.stderr, /Pre-release versions are not published/);
+  writeFileSync(join(dir, 'src/desktop/tauri.conf.json'), '{"version":"0.2.0-rc.1"}\n');
+  assert.match(run('check', '--base', 'base').stderr, /Pre-release/);
 });
 
 test('accepts any valid version when the base has no application manifest', (t) => {

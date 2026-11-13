@@ -3,13 +3,11 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { missingAssets, pickRelease, prerelease, selectArtifacts } from '../../../../scripts/shared/release/publish-release.mjs';
+import { assertStableVersion, missingAssets, pickRelease, releaseText, selectArtifacts } from '../../../../scripts/shared/release/publish-release.mjs';
 
-test('recognizes stable and RC versions and rejects ambiguous versions', () => {
-  assert.equal(prerelease('0.2.0'), false);
-  assert.equal(prerelease('0.2.0-rc.1'), true);
-  assert.throws(() => prerelease('0.2.0-rc.01'));
-  assert.throws(() => prerelease('v0.2.0'));
+test('publishes only stable M.m.p versions', () => {
+  assert.doesNotThrow(() => assertStableVersion('0.2.0'));
+  for (const version of ['0.2.0-rc.1', 'v0.2.0', '0.2', '0.02.0']) assert.throws(() => assertStableVersion(version), /only M\.m\.p/, version);
 });
 /** Build an artifact tree with the given files per job folder. */
 function tree(files) {
@@ -26,19 +24,21 @@ const COMMON = {
   'macos-intel-app': ['a.zip', 'a.dmg'],
 };
 
-test('a stable release needs the exe, the msi and both macOS formats', () => {
+test('every release needs the exe, the msi and both macOS formats', () => {
   const root = tree({ ...COMMON, 'windows-installer': ['a.exe', 'a.msi'] });
   const names = selectArtifacts(root, '0.2.1').map(({ name }) => name).sort();
   assert.deepEqual(names, ['atus-linux.AppImage', 'atus-linux.deb', 'atus-linux.rpm', 'atus-macos-arm64.dmg', 'atus-macos-arm64.zip', 'atus-macos-intel.dmg', 'atus-macos-intel.zip', 'atus-windows.exe', 'atus-windows.msi']);
   assert.throws(() => selectArtifacts(tree({ ...COMMON, 'windows-installer': ['a.exe'] }), '0.2.1'), /windows-installer \.msi/);
   assert.throws(() => selectArtifacts(tree({ ...COMMON, 'macos-intel-app': ['a.zip'], 'windows-installer': ['a.exe', 'a.msi'] }), '0.2.1'), /macos-intel-app \.dmg/);
+  assert.throws(() => selectArtifacts(root, '0.2.1-rc.1'), /only M\.m\.p/);
 });
 
-test('a pre-release ships no msi and rejects one left in the artifacts', () => {
-  const names = selectArtifacts(tree({ ...COMMON, 'windows-installer': ['a.exe'] }), '0.2.1-rc.1').map(({ name }) => name);
-  assert.equal(names.length, 8);
-  assert.ok(!names.includes('atus-windows.msi'));
-  assert.throws(() => selectArtifacts(tree({ ...COMMON, 'windows-installer': ['a.exe', 'a.msi'] }), '0.2.1-rc.1'), /MSI/);
+test('titles the release and renders its body from the notes', () => {
+  const notes = '---\ntitle: Instaladores\ndate: 2026-11-13\nsummary: Novos formatos.\n---\n\n## Correções\n\n- MSI na pasta certa.\n';
+  const { title, body } = releaseText(notes, { version: '0.2.3', repository: 'o/r', sha: 'a'.repeat(40) });
+  assert.equal(title, 'ATUS 0.2.3 · Instaladores');
+  assert.equal(body, 'Novos formatos.\n\n## Correções\n\n- MSI na pasta certa.\n');
+  assert.throws(() => releaseText('## Correções\n- x\n', { version: '0.2.3', repository: 'o/r', sha: 'a'.repeat(40) }), /Invalid release notes:\nv0\.2\.3\.md:1:/);
 });
 
 test('rejects an ambiguous artifact', () => {
@@ -56,11 +56,11 @@ test('resumes matching draft assets without overwriting conflicting uploads', ()
 });
 
 test('finds a draft release by tag in the release list', () => {
-  const draft = { id: 1, tag_name: 'v0.2.0-rc.5', draft: true };
-  assert.equal(pickRelease([{ id: 2, tag_name: 'v0.2.0-rc.4' }, draft], 'v0.2.0-rc.5'), draft);
-  assert.equal(pickRelease([{ id: 2, tag_name: 'v0.2.0-rc.4' }], 'v0.2.0-rc.5'), null);
-  assert.equal(pickRelease([], 'v0.2.0-rc.5'), null);
-  assert.throws(() => pickRelease([draft, { ...draft, id: 3 }], 'v0.2.0-rc.5'), /Several releases/);
+  const draft = { id: 1, tag_name: 'v0.2.5', draft: true };
+  assert.equal(pickRelease([{ id: 2, tag_name: 'v0.2.4' }, draft], 'v0.2.5'), draft);
+  assert.equal(pickRelease([{ id: 2, tag_name: 'v0.2.4' }], 'v0.2.5'), null);
+  assert.equal(pickRelease([], 'v0.2.5'), null);
+  assert.throws(() => pickRelease([draft, { ...draft, id: 3 }], 'v0.2.5'), /Several releases/);
 });
 
 test('publish never looks releases up through the tag endpoint, which hides drafts', async () => {

@@ -1,7 +1,8 @@
 /**
  * Synchronize application versions and validate a proposed release against a Git base.
  * Run from the repository root; `check` requires complete local tags and a fetched base.
- * Build metadata is deliberately rejected because it does not change SemVer precedence.
+ * Only stable `M.m.p` versions are accepted: every merge to main is published to every user,
+ * and pre-releases are no longer made. Build metadata is rejected because it does not change precedence.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -16,23 +17,14 @@ const paths = {
 
 function parseVersion(value) {
   if (typeof value !== 'string') throw new Error('Version must be a string');
-  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(value);
-  if (!match || (match[4] && match[4].split('.').some((id) => /^\d+$/.test(id) && id.length > 1 && id.startsWith('0')))) throw new Error(`Invalid supported SemVer: ${value}`);
-  return { core: match.slice(1, 4).map(BigInt), pre: match[4]?.split('.') };
+  if (/^\d+\.\d+\.\d+-/.test(value)) throw new Error(`Pre-release versions are not published; use M.m.p instead of ${value}`);
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value);
+  if (!match) throw new Error(`Invalid version: ${value} (use M.m.p)`);
+  return match.slice(1, 4).map(BigInt);
 }
 function compare(left, right) {
   const a = parseVersion(left); const b = parseVersion(right);
-  for (let i = 0; i < 3; i++) if (a.core[i] !== b.core[i]) return a.core[i] > b.core[i] ? 1 : -1;
-  if (!a.pre || !b.pre) return a.pre ? -1 : b.pre ? 1 : 0;
-  for (let i = 0; i < Math.max(a.pre.length, b.pre.length); i++) {
-    if (a.pre[i] === undefined) return -1;
-    if (b.pre[i] === undefined) return 1;
-    if (a.pre[i] === b.pre[i]) continue;
-    const an = /^\d+$/.test(a.pre[i]); const bn = /^\d+$/.test(b.pre[i]);
-    if (an && bn) return BigInt(a.pre[i]) > BigInt(b.pre[i]) ? 1 : -1;
-    if (an !== bn) return an ? -1 : 1;
-    return a.pre[i] > b.pre[i] ? 1 : -1;
-  }
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i] ? 1 : -1;
   return 0;
 }
 function packageVersion(text, path) {

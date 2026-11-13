@@ -32,6 +32,8 @@ jobs:
         run: |
           git merge-base --is-ancestor origin/main HEAD
           node .github/scripts/shared/check-version.mjs check --base origin/main
+      - name: Require valid release notes for the new version
+        run: node .github/scripts/shared/release/check-release-notes.mjs
 
   release-version:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -45,6 +47,8 @@ jobs:
           node-version: 22
       - name: Validate version against previous main commit
         run: node .github/scripts/shared/check-version.mjs check --base HEAD^
+      - name: Require valid release notes for the released version
+        run: node .github/scripts/shared/release/check-release-notes.mjs
 
   integration-macos-intel:
     needs: [check-version, release-version]
@@ -333,20 +337,8 @@ jobs:
         working-directory: src/frontend
         run: npm ci
       - name: Build desktop bundles
-        id: bundles
-        shell: bash
         working-directory: src/frontend
-        run: |
-          version="$(node -p "require('../desktop/tauri.conf.json').version")"
-          if [[ "$version" == *-* ]]; then
-            # WiX only accepts numeric versions. A pre-release gets an MSI built for testing only; it is not shipped.
-            npm run tauri -- build --bundles nsis
-            npm run tauri -- build --bundles msi --config "{\"bundle\":{\"windows\":{\"wix\":{\"version\":\"${version%%-*}\"}}}}"
-            echo 'stable=false' >> "$GITHUB_OUTPUT"
-          else
-            npm run tauri -- build --bundles nsis,msi
-            echo 'stable=true' >> "$GITHUB_OUTPUT"
-          fi
+        run: npm run tauri -- build --bundles nsis,msi
       - name: Install and open Windows package
         shell: pwsh
         run: |
@@ -359,10 +351,6 @@ jobs:
           $installers = @(Get-ChildItem src/desktop/target/release/bundle/msi/*.msi)
           if ($installers.Count -ne 1) { throw 'Expected exactly one MSI package.' }
           .github/scripts/windows/smoke-msi.ps1 -Installer $installers[0].FullName
-      - name: Keep the MSI out of pre-releases
-        if: steps.bundles.outputs.stable != 'true'
-        shell: pwsh
-        run: Remove-Item src/desktop/target/release/bundle/msi/*.msi
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
@@ -473,16 +461,7 @@ jobs:
         run: npm ci
       - name: Build Linux bundles
         working-directory: src/frontend
-        run: |
-          npm run tauri -- build --bundles deb,appimage
-          # RPM versions cannot contain '-': ship pre-releases as Version 1.2.3 with Release 0.rc.1.
-          version="$(node -p "require('../desktop/tauri.conf.json').version")"
-          if [[ "$version" == *-* ]]; then
-            printf '{"version":"%s","bundle":{"linux":{"rpm":{"release":"0.%s"}}}}\n' "${version%%-*}" "${version#*-}" > "$RUNNER_TEMP/rpm.conf.json"
-            npm run tauri -- build --bundles rpm --config "$RUNNER_TEMP/rpm.conf.json"
-          else
-            npm run tauri -- build --bundles rpm
-          fi
+        run: npm run tauri -- build --bundles deb,rpm,appimage
       - name: Check Linux bundles
         run: |
           dpkg-deb --info src/desktop/target/release/bundle/deb/*.deb
