@@ -72,7 +72,7 @@ export function ProjectTitle({
             autoFocus
             aria-label="Nome do projeto"
             aria-invalid={error ? true : undefined}
-            className="w-full rounded border border-ring bg-white px-1 text-sm font-semibold outline-none"
+            className="w-full rounded border border-input bg-white px-1 text-sm font-semibold outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
             value={value}
             onChange={(event) => setValue(event.target.value)}
             onFocus={(event) => event.target.select()}

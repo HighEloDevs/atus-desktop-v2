@@ -173,7 +173,7 @@ function NameCell({ project }: { project: ProjectDetails }) {
     <TableCell className={`${cellClass} max-w-[280px]`}>
       <div className="flex min-w-0 items-center gap-3">
         <span
-          className={`flex size-8 shrink-0 items-center justify-center rounded ${project.available ? "bg-ring/10 text-ring" : "bg-brand-coral/15 text-destructive"}`}
+          className={`flex size-8 shrink-0 items-center justify-center rounded ${project.available ? "bg-muted text-foreground" : "bg-brand-coral/15 text-destructive"}`}
         >
           {project.available ? (
             <FileChartColumn aria-hidden="true" size={16} />
@@ -234,7 +234,7 @@ function ProjectsTable({
         </TableHeader>
         <TableBody>
           {projects.map((project) => (
-            <TableRow key={project.path} className="border-border hover:bg-ring/5">
+            <TableRow key={project.path} className="border-border hover:bg-muted/50">
               <NameCell project={project} />
               <TableCell className={`${cellClass} text-muted-foreground`}>
                 {formatModified(project.modified)}
@@ -259,7 +259,6 @@ function ProjectsTable({
                     size="icon-sm"
                     title={project.available ? "Abrir projeto" : "Localizar arquivo"}
                     aria-label={`${project.available ? "Abrir" : "Localizar"} ${project.name}`}
-                    className="text-ring hover:text-ring"
                     onClick={() => onOpen(project)}
                   >
                     {project.available ? (
