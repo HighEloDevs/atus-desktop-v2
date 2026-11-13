@@ -5,18 +5,7 @@
 
 import { Dialog } from "radix-ui";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { formatFullPrecision } from "@/lib/format-number";
-
-/** One row of the table; uncertainties are optional. */
-export type DataTablePoint = { x: number; y: number; sy?: number; sx?: number };
+import { DataPointsTable, type DataTablePoint } from "./DataPointsTable";
 
 type DataTableDialogProps = {
   /** Dataset to show, or `null` to keep the dialog closed. */
@@ -24,24 +13,6 @@ type DataTableDialogProps = {
   /** Called when the dialog asks to close (Esc, overlay click or the close button). */
   onClose: () => void;
 };
-
-const numberCell = "text-right font-mono text-[12.5px] tabular-nums";
-
-/**
- * Renders a numeric cell with every digit that preserves the value, or an em dash when absent.
- * The full text is also the tooltip so it can be read and copied from any column width.
- */
-function ValueCell({ value }: { value: number | undefined }) {
-  if (value === undefined) {
-    return <TableCell className={`${numberCell} text-[#a3ada6]`}>—</TableCell>;
-  }
-  const text = formatFullPrecision(value);
-  return (
-    <TableCell className={numberCell} title={text}>
-      {text}
-    </TableCell>
-  );
-}
 
 /**
  * Read-only table of a dataset's points with a sticky header and the maximum number of digits.
@@ -76,36 +47,7 @@ export function DataTableDialog({ dataset, onClose }: DataTableDialogProps) {
             </Dialog.Description>
           </header>
           {dataset && (
-            <Table containerClassName="min-h-0 flex-1 overflow-auto" className="min-w-max">
-              <TableHeader className="sticky top-0 z-10 bg-[#fafbf8] shadow-[0_1px_0_var(--color-border)] [&_tr]:border-b-0">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="sticky left-0 z-20 w-14 bg-[#fafbf8] pl-5 text-[11px] uppercase tracking-[.04em] text-muted-foreground">
-                    #
-                  </TableHead>
-                  {(["x", "y", "σy", "σx"] as const).map((label) => (
-                    <TableHead
-                      key={label}
-                      className="px-4 text-right text-[11px] uppercase tracking-[.04em] text-muted-foreground"
-                    >
-                      {label}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {dataset.points.map((point, index) => (
-                  <TableRow key={index} className="group border-[#eef1ec] even:bg-[#fbfbf9]">
-                    <TableCell className="sticky left-0 bg-white pl-5 text-xs text-muted-foreground group-even:bg-[#fbfbf9] group-hover:bg-[#eff2ed]">
-                      {index + 1}
-                    </TableCell>
-                    <ValueCell value={point.x} />
-                    <ValueCell value={point.y} />
-                    <ValueCell value={point.sy} />
-                    <ValueCell value={point.sx} />
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <DataPointsTable points={dataset.points} containerClassName="min-h-0 flex-1" />
           )}
           <footer className="flex items-center gap-3 border-t border-border px-5 py-3">
             <p className="min-w-0 flex-1 text-xs text-muted-foreground">

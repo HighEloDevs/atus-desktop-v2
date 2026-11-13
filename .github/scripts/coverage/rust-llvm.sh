@@ -36,7 +36,7 @@ process.stdout.write([...bins][0] + '\n');
 NODE
 binary="$(cat "$tmp/binaries")"
 "$profdata" merge -sparse "$tmp"/*.profraw -o "$tmp/merged.profdata"
-"$cov" export -format=lcov -ignore-filename-regex='/(project/e2e|project/test_support)\.rs$' -instr-profile="$tmp/merged.profdata" "$binary" "$root/src/desktop/src" > "$output"
+"$cov" export -format=lcov -ignore-filename-regex='/(project/e2e|project/test_support|quick_e2e)\.rs$' -instr-profile="$tmp/merged.profdata" "$binary" "$root/src/desktop/src" > "$output"
 node .github/scripts/coverage/rust-strip-tests.mjs "$output"
 if ! grep -q '^SF:' "$output"; then
   echo 'Rust coverage report is empty' >&2

@@ -4,6 +4,7 @@
  */
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { BrandMark } from "@/components/brand/BrandMark";
 import { ProjectQuickActions } from "@/features/projects/ProjectQuickActions";
 import { ProjectTables } from "@/features/projects/ProjectTables";
 import {
@@ -17,6 +18,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { notify } from "@/lib/notify";
 import { AnalysisPage } from "@/features/analysis/AnalysisPage";
+import {
+  QUICK_REQUESTED_EVENT,
+  quickAnalysisClient,
+  quickAnalysisSnapshot,
+  type QuickAnalysis,
+} from "@/features/quick-analysis/quick-analysis-client";
+import { useQuitRequest } from "@/hooks/use-quit-request";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ChevronRight, CircleHelp, FileClock, House, Info } from "lucide-react";
 
@@ -27,20 +35,6 @@ const navigation = [
   { label: "Changelog", icon: FileClock },
   { label: "Ajuda", icon: CircleHelp },
 ];
-
-function BrandMark() {
-  return (
-    <svg width="26" height="26" viewBox="0 0 100 100" aria-hidden="true" className="shrink-0">
-      <g fill="currentColor">
-        <path d="M9 9H42V23H23V42H9Z" />
-        <path d="M58 9H91V42H77V23H58Z" />
-        <path d="M9 58H23V77H42V91H9Z" />
-        <path d="M77 58H91V91H58V77H77Z" />
-      </g>
-      <circle cx="50" cy="50" r="11" fill="#F25A3C" />
-    </svg>
-  );
-}
 
 function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (page: Page) => void }) {
   return (
@@ -133,10 +127,13 @@ function App() {
   const [project, setProject] = useState<OpenProject | null>(null);
   const opening = useRef(false);
   const [finderPath, setFinderPath] = useState<string | null>(null);
+  const [quickRequest, setQuickRequest] = useState<QuickAnalysis | null>(null);
+  const [autoFitPath, setAutoFitPath] = useState<string | null>(null);
   const runProjectAction = useCallback(
     async (action: () => Promise<OpenProject | null>, replaces?: string) => {
       if (opening.current) return;
       opening.current = true;
+      setAutoFitPath(null);
       try {
         const opened = await action();
         if (!opened) return;
@@ -215,6 +212,50 @@ function App() {
     [runProjectAction],
   );
 
+  // With no project open there is nothing to save, so a quit request quits at once.
+  useQuitRequest(page !== "analysis", async () => true);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let active = true;
+    async function receive() {
+      if (!active) return;
+      try {
+        const request = await quickAnalysisClient.take();
+        if (active && request) setQuickRequest(request);
+      } catch (error) {
+        if (active) reportProjectError(error);
+      }
+    }
+    const listener = getCurrentWindow().listen(QUICK_REQUESTED_EVENT, () => void receive());
+    void listener.then(receive).catch((error) => {
+      if (active) reportProjectError(error);
+    });
+    return () => {
+      active = false;
+      void listener.then((unlisten) => unlisten()).catch(console.error);
+    };
+  }, []);
+
+  /** Creates a project from a quick analysis and opens it with its fit already run. */
+  const startQuickAnalysis = useCallback(
+    async (request: QuickAnalysis) => {
+      await runProjectAction(async () => {
+        const opened = await projectClient.create(quickAnalysisSnapshot(request));
+        if (request.equation.trim()) setAutoFitPath(opened.path);
+        return opened;
+      });
+      setQuickRequest((pending) => (pending === request ? null : pending));
+    },
+    [runProjectAction],
+  );
+
+  useEffect(() => {
+    if (page === "analysis" || !quickRequest) return;
+    const timer = window.setTimeout(() => void startQuickAnalysis(quickRequest), 0);
+    return () => clearTimeout(timer);
+  }, [page, quickRequest, startQuickAnalysis]);
+
   useEffect(() => {
     if (page === "analysis" || !finderPath) return;
     const timer = window.setTimeout(() => void openFinderProject(finderPath), 0);
@@ -229,7 +270,12 @@ function App() {
         finderPath={finderPath}
         onOpenFinderProject={openFinderProject}
         onCancelFinderProject={() => setFinderPath(null)}
+        quickRequest={quickRequest}
+        onStartQuick={startQuickAnalysis}
+        onCancelQuick={() => setQuickRequest(null)}
+        runFitsOnOpen={Boolean(project && project.path === autoFitPath)}
         onBack={() => {
+          setAutoFitPath(null);
           setProject(null);
           setPage("home");
         }}

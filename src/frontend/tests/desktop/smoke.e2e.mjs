@@ -5,29 +5,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-const address = process.env.ATUS_DESKTOP_E2E_URL;
-if (!address || !/^http:\/\/127\.0\.0\.1:\d+$/.test(address)) {
-  throw new Error("Set ATUS_DESKTOP_E2E_URL to the loopback URL of the test-only driver");
-}
-
-async function request(method, path, body) {
-  const response = await fetch(`${address}${path}`, {
-    method,
-    headers: { "content-type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(path === "/session" && method === "POST" ? 30000 : 5000),
-  });
-  const data = await response.json();
-  assert.ok(
-    response.ok && !data.value?.error,
-    `WebDriver ${method} ${path}: ${JSON.stringify(data)}`,
-  );
-  return data.value;
-}
+import { request, openSession } from "./driver.mjs";
 
 test("the native application shows the new analysis action", { timeout: 60000 }, async () => {
-  const { sessionId } = await request("POST", "/session", { capabilities: { alwaysMatch: {} } });
-  assert.ok(sessionId);
+  const { sessionId } = await openSession();
   try {
     const deadline = Date.now() + 20000;
     let element;
@@ -62,8 +43,7 @@ test(
     );
     assert.deepEqual(await readdir(dir), [], "Project directory must start empty");
 
-    const { sessionId } = await request("POST", "/session", { capabilities: { alwaysMatch: {} } });
-    const base = `/session/${sessionId}`;
+    const { base } = await openSession();
     const execute = (script, args = []) =>
       request("POST", `${base}/execute/sync`, { script, args });
     try {
@@ -120,8 +100,7 @@ test(
     const files = (await readdir(dir)).filter((name) => name.endsWith(".atus"));
     assert.equal(files.length, 1);
     const filename = path.join(dir, files[0]);
-    const { sessionId } = await request("POST", "/session", { capabilities: { alwaysMatch: {} } });
-    const base = `/session/${sessionId}`;
+    const { base } = await openSession();
     try {
       await request("POST", `${base}/execute/sync`, {
         script:

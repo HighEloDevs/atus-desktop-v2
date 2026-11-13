@@ -29,7 +29,7 @@ foreach ($port in @(1420, 4455)) {
 }
 $testDir = Join-Path $env:RUNNER_TEMP ('atus-desktop-e2e-' + [guid]::NewGuid().ToString('N'))
 $vite = $null; $app = $null
-$vars = @('TEMP', 'TMP', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'ATUS_DESKTOP_E2E_PROJECT_DIR', 'ATUS_DESKTOP_E2E_URL', 'TAURI_WEBDRIVER_PORT')
+$vars = @('TEMP', 'TMP', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'ATUS_DESKTOP_E2E_PROJECT_DIR', 'ATUS_DESKTOP_E2E_URL', 'TAURI_WEBDRIVER_PORT', 'ATUS_E2E_KEY_COMMAND')
 $saved = @{}
 foreach ($name in $vars) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
 function Stop-TestProcess([Diagnostics.Process]$Process) {
@@ -78,6 +78,12 @@ try {
     try {
         & $node --test 'tests/desktop/smoke.e2e.mjs'
         if ($LASTEXITCODE -ne 0) { throw "Desktop smoke test failed with exit code $LASTEXITCODE." }
+        # The quick analysis test runs second, presses the real shortcut with synthetic input and
+        # ends by quitting the application.
+        $pressScript = Join-Path $PSScriptRoot 'press-shortcut.ps1'
+        $env:ATUS_E2E_KEY_COMMAND = "pwsh -NoProfile -File `"$pressScript`""
+        & $node --test 'tests/desktop/smoke.quick-analysis.e2e.mjs'
+        if ($LASTEXITCODE -ne 0) { throw "Quick analysis test failed with exit code $LASTEXITCODE." }
     } finally { Pop-Location }
 } catch {
     foreach ($name in @('vite.log', 'vite.err.log', 'app.log', 'app.err.log')) {
@@ -85,6 +91,9 @@ try {
         if (Test-Path -LiteralPath $path -PathType Leaf) { Write-Error "${name}:`n$(Get-Content -LiteralPath $path -Raw)" -ErrorAction Continue }
     }
     throw
+    $app.Refresh()
+    if (-not $app.WaitForExit(30000)) { throw 'The application did not exit after quitting.' }
+    if ($app.ExitCode -ne 0) { throw "The application exited with code $($app.ExitCode)." }
 } finally {
     Stop-TestProcess $app
     Stop-TestProcess $vite

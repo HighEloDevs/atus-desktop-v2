@@ -239,6 +239,34 @@ a:focus-visible {
   }
 }
 
+/* Quick analysis window: entrance of the panel and of the previewed points. */
+@keyframes quick-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+.quick-enter {
+  animation: quick-enter 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes quick-point {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+}
+.quick-point {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: quick-point 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .quick-enter,
+  .quick-point {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .toast-timer {
     animation-timing-function: steps(10, end);

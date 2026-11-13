@@ -7,6 +7,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useQuitRequest } from "@/hooks/use-quit-request";
 import {
   chooseDestination,
   projectClient,
@@ -130,6 +131,9 @@ export function useProjectSave(initial: OpenProject | null, content: string) {
       void listener.then((unlisten) => unlisten()).catch(() => {});
     };
   }, [initial, canLeave]);
+
+  // ATUS stays in the background when the window closes; quitting saves through here.
+  useQuitRequest(Boolean(initial), canLeave);
 
   const saveAs = useCallback(async () => {
     if (!current.current || destinationOpen.current) return;
