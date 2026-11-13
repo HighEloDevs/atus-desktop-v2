@@ -58,6 +58,11 @@ async function readDataset(file) {
 
 /** Sets the clipboard, then shows the quick window the way the shortcut does. */
 async function showQuick(clipboard) {
+  if ((await nativeState()).quick_visible) {
+    // The shortcut toggles: pressing it with the window up and focused would hide it.
+    await native("quick_dismiss");
+    await until(quickIsHidden, "The quick window did not hide");
+  }
   if (clipboard !== undefined) await native("quick_test_set_clipboard", { text: clipboard });
   await native("quick_test_press_shortcut");
   await until(async () => (await nativeState()).quick_visible, "The quick window did not show");
