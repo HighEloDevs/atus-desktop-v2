@@ -40,8 +40,8 @@ export type FitResponse = {
   uncertaintyUsed: number | null;
   /** Covariance of the free parameters, in the same order as `parameters`. */
   covariance: number[][];
-  /** Residual (y − curve) of each fitted point. */
-  residuals: { x: number; residual: number }[];
+  /** Residual (y − curve) of each fitted point, with its Y uncertainty when it has one. */
+  residuals: { x: number; residual: number; sy?: number }[];
 };
 
 export interface FitService {
@@ -76,7 +76,7 @@ export const mockFitService: FitService = {
     if (!parameters.ok) throw new Error(parameters.error);
     const free = parameters.parameters.filter((p) => p.vary);
     const line = (x: number) => minY + ((x - minX) / (maxX - minX)) * (maxY - minY);
-    const residuals = points.map((p) => ({ x: p.x, residual: p.y - line(p.x) }));
+    const residuals = points.map((p) => ({ x: p.x, residual: p.y - line(p.x), sy: p.sy }));
     const hasUncertainty = request.useSy && points.every((p) => (p.sy ?? 0) > 0);
     const chiSquared = hasUncertainty
       ? points.reduce((sum, p, i) => sum + (residuals[i].residual / (p.sy as number)) ** 2, 0)

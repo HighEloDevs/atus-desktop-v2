@@ -32,6 +32,7 @@ import {
 import { ChartExportMenu } from "@/components/chart/ChartExportMenu";
 import { ChartSettingsPanel } from "@/components/chart/ChartSettingsPanel";
 import { useChartSettings, type ChartValues } from "@/components/chart/useChartSettings";
+import { hasResiduals } from "@/components/chart/residuals";
 import {
   Activity,
   ArrowLeft,
@@ -50,9 +51,10 @@ import {
   Eye,
   Pencil,
   RefreshCw,
+  TrendingUp,
 } from "lucide-react";
 
-type Dataset = ChartSeries & {
+type Dataset = Omit<ChartSeries, "residuals"> & {
   data: MockAnalysis | null;
   equation: string;
   parameters: string;
@@ -190,6 +192,12 @@ export function AnalysisPage({
   const [selectedId, setSelectedId] = useState<string | null>(initial?.selectedId ?? null);
   const selected = datasets.find((item) => item.id === selectedId) ?? datasets[0];
   const data = selected;
+  const chartSeries: ChartSeries[] = datasets.map((item) => ({
+    ...item,
+    residuals: item.result?.residuals,
+  }));
+  const residualsAvailable = hasResiduals(chartSeries);
+  const residualsOn = chartSettings.residuals && residualsAvailable;
   const saving = useProjectSave(
     project,
     JSON.stringify(
@@ -899,6 +907,38 @@ export function AnalysisPage({
           >
             <PanelLeft size={17} />
           </button>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={residualsOn}
+            aria-disabled={!residualsAvailable || undefined}
+            aria-describedby={residualsAvailable ? undefined : "residuals-unavailable"}
+            title={
+              residualsAvailable
+                ? "Exibir ou ocultar o gráfico de resíduos"
+                : "Resíduos desabilitados porque ainda não há resíduos"
+            }
+            onClick={() => {
+              if (residualsAvailable) chartSettings.setResiduals(!chartSettings.residuals);
+            }}
+            className={`flex h-8 items-center gap-2 rounded-md border px-3 text-xs font-medium focus-visible:outline-3 focus-visible:outline-[#364cff] ${residualsAvailable ? "border-[#d8ded7] bg-white text-foreground hover:bg-[#eff2ed]" : "cursor-not-allowed border-dashed border-[#d8ded7] text-[#66716e] opacity-70"}`}
+          >
+            <TrendingUp size={14} aria-hidden="true" />
+            Resíduos
+            <span
+              aria-hidden="true"
+              className={`flex h-[18px] w-[30px] shrink-0 items-center rounded-full p-0.5 transition-colors ${residualsOn ? "bg-brand-coral" : "bg-[#d8ded7]"}`}
+            >
+              <span
+                className={`size-3.5 rounded-full bg-white shadow-sm transition-transform ${residualsOn ? "translate-x-3" : ""}`}
+              />
+            </span>
+          </button>
+          {!residualsAvailable && (
+            <span id="residuals-unavailable" className="sr-only">
+              Resíduos desabilitados porque ainda não há resíduos.
+            </span>
+          )}
           <ChartExportMenu graphic={graphicRef} disabled={!data} />
         </div>
         <div
@@ -912,8 +952,9 @@ export function AnalysisPage({
                 graphicRef={graphicRef}
                 settings={chartSettings}
                 label="Gráfico dos conjuntos de dados"
-                series={datasets}
+                series={chartSeries}
                 highlightedSeriesId={highlightedSeriesId}
+                fitShortcut={`${modifier} ↵`}
               />
               <ResultsPanel
                 results={datasets.flatMap((item): ResultItem[] =>
