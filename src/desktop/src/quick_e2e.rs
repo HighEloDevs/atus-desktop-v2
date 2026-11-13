@@ -54,12 +54,12 @@ pub fn quick_test_press_shortcut(app: AppHandle) {
     quick::toggle(&app);
 }
 
-/// Runs what the tray **Abrir ATUS** item runs.
+/// Runs what the tray **Abrir ATUS** item runs. `async` for the same reason as `quick_submit`.
 ///
 /// # Errors
 /// Returns the failure to show or recreate the main window.
 #[tauri::command]
-pub fn quick_test_tray_open(app: AppHandle) -> Result<(), String> {
+pub async fn quick_test_tray_open(app: AppHandle) -> Result<(), String> {
     quick::show_main(&app)
         .map(|_| ())
         .map_err(|error| error.to_string())

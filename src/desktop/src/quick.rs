@@ -130,15 +130,16 @@ fn build_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow<R
 
 /// Shows and focuses the quick window, recreating it if it was destroyed.
 pub fn show<R: Runtime>(app: &AppHandle<R>) {
-    let window = match app.get_webview_window(QUICK_LABEL) {
-        Some(window) => window,
-        None => match build_window(app) {
-            Ok(window) => window,
-            Err(error) => {
-                eprintln!("Não foi possível abrir a análise rápida: {error}");
-                return;
+    let Some(window) = app.get_webview_window(QUICK_LABEL) else {
+        // Recreating a window on the main thread deadlocks on Windows; do it on the runtime.
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            match build_window(&app) {
+                Ok(_) => show(&app),
+                Err(error) => eprintln!("Não foi possível abrir a análise rápida: {error}"),
             }
-        },
+        });
+        return;
     };
     let _ = window.center();
     let _ = window.show();
@@ -165,7 +166,24 @@ pub fn toggle<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
+/// Shows the main window from a callback that runs on the main thread (tray menu, a second
+/// launch, the Dock), without blocking it.
+///
+/// Recreating a window from the main thread deadlocks on Windows, so the work runs on the async
+/// runtime. Failures are reported on stderr.
+pub fn spawn_show_main<R: Runtime>(app: &AppHandle<R>) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = show_main(&app) {
+            eprintln!("Não foi possível abrir a janela principal: {error}");
+        }
+    });
+}
+
 /// Shows and focuses the main window, recreating it from the configuration when it was closed.
+///
+/// Must not be called on the main thread when the window may need to be created; use
+/// [`spawn_show_main`] there.
 ///
 /// # Errors
 /// Fails when the main window is missing from the configuration or cannot be created.
@@ -192,11 +210,14 @@ pub fn show_main<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow<
 
 /// Receives the quick window form, hides it and hands the analysis to the main window.
 ///
+/// The command is `async` on purpose: it may have to create the main window, and creating a
+/// window from a synchronous command, which runs on the main thread, deadlocks on Windows.
+///
 /// # Errors
 /// Returns a Portuguese message when the analysis is invalid (see [`validate`]) or when the main
 /// window cannot be shown.
 #[tauri::command]
-pub fn quick_submit(
+pub async fn quick_submit(
     app: AppHandle,
     pending: State<'_, PendingQuickAnalysis>,
     analysis: QuickAnalysis,
@@ -204,9 +225,9 @@ pub fn quick_submit(
     validate(&analysis)?;
     pending.store(analysis);
     hide(&app);
-    let window =
-        show_main(&app).map_err(|error| format!("Não foi possível abrir o ATUS: {error}"))?;
-    let _ = window.emit(REQUESTED_EVENT, ());
+    show_main(&app).map_err(|error| format!("Não foi possível abrir o ATUS: {error}"))?;
+    // Broadcast, so the event also reaches a main window that was just created.
+    let _ = app.emit(REQUESTED_EVENT, ());
     Ok(())
 }
 

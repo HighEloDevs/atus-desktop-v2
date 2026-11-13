@@ -48,7 +48,8 @@ fn quick_accelerator() -> Option<&'static str> {
 /// Identifier of the tray icon.
 const TRAY_ID: &str = "atus";
 
-/// Whether the tray icon exists.
+/// Whether the tray icon exists. Used by the desktop integration tests.
+#[cfg(feature = "desktop-e2e")]
 pub fn has_tray<R: Runtime>(app: &AppHandle<R>) -> bool {
     app.tray_by_id(TRAY_ID).is_some()
 }
@@ -84,11 +85,7 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| match tray_action(event.id().as_ref()) {
             Some(TrayAction::Quick) => quick::show(app),
-            Some(TrayAction::Open) => {
-                if let Err(error) = quick::show_main(app) {
-                    eprintln!("Não foi possível abrir a janela principal: {error}");
-                }
-            }
+            Some(TrayAction::Open) => quick::spawn_show_main(app),
             Some(TrayAction::Quit) => request_quit(app),
             None => {}
         });

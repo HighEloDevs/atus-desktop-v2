@@ -62,9 +62,7 @@ fn main() {
     // Must be the first plugin: a second launch only shows the running instance.
     let builder =
         tauri::Builder::default().plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Err(error) = quick::show_main(app) {
-                eprintln!("Não foi possível abrir a janela principal: {error}");
-            }
+            quick::spawn_show_main(app)
         }));
     #[cfg(feature = "desktop-e2e")]
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
@@ -148,9 +146,10 @@ fn main() {
         .run(|app, event| match event {
             #[cfg(target_os = "macos")]
             tauri::RunEvent::Opened { urls } => {
-                // Opening a file while only the tray is left recreates the main window first.
+                // Opening a file while only the tray is left recreates the main window first; the
+                // pending request stays until the new window takes it.
                 if app.get_webview_window(quick::MAIN_LABEL).is_none() {
-                    let _ = quick::show_main(app);
+                    quick::spawn_show_main(app);
                 }
                 project::finder::receive(app, urls);
             }
@@ -158,11 +157,7 @@ fn main() {
             tauri::RunEvent::Reopen {
                 has_visible_windows: false,
                 ..
-            } => {
-                if let Err(error) = quick::show_main(app) {
-                    eprintln!("Não foi possível abrir a janela principal: {error}");
-                }
-            }
+            } => quick::spawn_show_main(app),
             tauri::RunEvent::ExitRequested { code, api, .. } => {
                 let has_main = app.get_webview_window(quick::MAIN_LABEL).is_some();
                 if background::exit_needs_save(code, has_main) {
