@@ -31,7 +31,7 @@ jobs:
       - name: Require up-to-date base and new version
         run: |
           git merge-base --is-ancestor origin/main HEAD
-          node .github/scripts/version.mjs check --base origin/main
+          node .github/scripts/shared/check-version.mjs check --base origin/main
 
   release-version:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -44,7 +44,7 @@ jobs:
         with:
           node-version: 22
       - name: Validate version against previous main commit
-        run: node .github/scripts/version.mjs check --base HEAD^
+        run: node .github/scripts/shared/check-version.mjs check --base HEAD^
 
   integration-macos-intel:
     needs: [check-version, release-version]
@@ -69,9 +69,7 @@ jobs:
         working-directory: src/frontend
         run: npm ci
       - name: Run desktop smoke on macOS Intel
-        run: bash .github/scripts/summary/record.sh smoke .github/scripts/coverage/rust-desktop-macos.sh --no-coverage
-      - uses: ./.github/actions/upload-test-logs
-        if: ${{ always() }}
+        run: .github/scripts/macos/collect-rust-coverage.sh --no-coverage
 
   integration-macos-arm64:
     needs: [check-version, release-version]
@@ -96,9 +94,7 @@ jobs:
         working-directory: src/frontend
         run: npm ci
       - name: Run desktop smoke on macOS Apple Silicon
-        run: bash .github/scripts/summary/record.sh smoke .github/scripts/coverage/rust-desktop-macos.sh --no-coverage
-      - uses: ./.github/actions/upload-test-logs
-        if: ${{ always() }}
+        run: .github/scripts/macos/collect-rust-coverage.sh --no-coverage
 
   test-macos-arm64:
     needs: [check-version, release-version]
@@ -126,17 +122,15 @@ jobs:
         run: npm ci
       - name: Test frontend
         working-directory: src/frontend
-        run: bash ../../.github/scripts/summary/record.sh frontend npm test -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/test-logs/frontend.vitest.json"
+        run: npm test
       - name: Verify Rust coverage collector
-        run: bash .github/scripts/summary/record.sh ci-scripts node --test .github/scripts/coverage/rust-inventory.test.mjs .github/scripts/coverage/rust-strip-tests.test.mjs .github/scripts/coverage/rust-desktop-macos.test.mjs .github/scripts/coverage/uncovered-lines.test.mjs
+        run: node --test '.github/tests/scripts/macos/*.test.mjs' '.github/tests/scripts/shared/coverage/*.test.mjs'
       - name: Test Rust and C++ bridge with coverage, including desktop smoke
         run: |
           llvm_bin="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin"
-          LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" bash .github/scripts/summary/record.sh rust-coverage .github/scripts/coverage/rust-desktop-macos.sh "$RUNNER_TEMP/rust.lcov"
-          node .github/scripts/coverage/uncovered-lines.mjs "$RUNNER_TEMP/rust.lcov"
-          node .github/scripts/coverage/check.mjs "$RUNNER_TEMP/rust.lcov"
-      - uses: ./.github/actions/upload-test-logs
-        if: ${{ always() }}
+          LLVM_COV="$llvm_bin/llvm-cov" LLVM_PROFDATA="$llvm_bin/llvm-profdata" .github/scripts/macos/collect-rust-coverage.sh "$RUNNER_TEMP/rust.lcov"
+          node .github/scripts/shared/coverage/report-uncovered-lines.mjs "$RUNNER_TEMP/rust.lcov"
+          node .github/scripts/shared/coverage/check-coverage.mjs "$RUNNER_TEMP/rust.lcov"
 
   build-macos-arm64:
     needs: [test-macos-arm64, integration-macos-arm64]
@@ -163,13 +157,11 @@ jobs:
       - name: Build desktop bundle
         working-directory: src/frontend
         run: npm run tauri -- build --bundles app
-      - name: Test macOS bundle smoke helper
-        run: node --test .github/scripts/tests/macos-bundle-smoke.test.mjs
       - name: Open packaged macOS application
-        run: .github/scripts/ci/smoke-macos-bundle.sh "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
+        run: .github/scripts/macos/smoke-app.sh "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
       - name: Check macOS project document icon
         if: runner.os == 'macOS'
-        run: python3 .github/scripts/tests/check_macos_document_icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
+        run: python3 .github/scripts/macos/check-document-icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
       - name: Archive macOS app
         if: runner.os == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent "src/desktop/target/release/bundle/macos/ATUS Desktop.app" "src/desktop/target/release/bundle/macos/atus-desktop-macos.zip"
@@ -204,11 +196,9 @@ jobs:
         run: npm ci
       - name: Test frontend
         working-directory: src/frontend
-        run: bash ../../.github/scripts/summary/record.sh frontend npm test -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/test-logs/frontend.vitest.json"
+        run: npm test
       - name: Test Rust and C++ bridge
-        run: bash .github/scripts/summary/record.sh rust cargo test --manifest-path src/desktop/Cargo.toml
-      - uses: ./.github/actions/upload-test-logs
-        if: ${{ always() }}
+        run: cargo test --manifest-path src/desktop/Cargo.toml
 
   build-macos-intel:
     needs: [test-macos-intel, integration-macos-intel]
@@ -235,13 +225,11 @@ jobs:
       - name: Build desktop bundle
         working-directory: src/frontend
         run: npm run tauri -- build --bundles app
-      - name: Test macOS bundle smoke helper
-        run: node --test .github/scripts/tests/macos-bundle-smoke.test.mjs
       - name: Open packaged macOS application
-        run: .github/scripts/ci/smoke-macos-bundle.sh "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
+        run: .github/scripts/macos/smoke-app.sh "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
       - name: Check macOS project document icon
         if: runner.os == 'macOS'
-        run: python3 .github/scripts/tests/check_macos_document_icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
+        run: python3 .github/scripts/macos/check-document-icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
       - name: Archive macOS app
         if: runner.os == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent "src/desktop/target/release/bundle/macos/ATUS Desktop.app" "src/desktop/target/release/bundle/macos/atus-desktop-macos.zip"
@@ -264,8 +252,6 @@ jobs:
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
-      - name: Test desktop runner safeguards
-        run: .github/scripts/tests/windows-desktop-runner.test.ps1
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
@@ -278,9 +264,7 @@ jobs:
       - name: Run desktop smoke on Windows
         timeout-minutes: 10
         shell: bash
-        run: bash .github/scripts/summary/record.sh smoke pwsh -File .github/scripts/desktop-e2e/run-windows.ps1
-      - uses: ./.github/actions/upload-test-logs
-        if: ${{ always() }}
+        run: pwsh -File .github/scripts/windows/run-e2e.ps1
 
   test-windows:
     needs: [check-version, release-version]
@@ -296,7 +280,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Test checkout line endings
         shell: bash
-        run: bash .github/scripts/summary/record.sh ci-scripts node --test .github/scripts/tests/git-attributes.test.mjs
+        run: node --test .github/tests/repo/gitattributes.test.mjs
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
@@ -307,15 +291,13 @@ jobs:
       - name: Test frontend
         shell: bash
         working-directory: src/frontend
-        run: bash ../../.github/scripts/summary/record.sh frontend npm test -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/test-logs/frontend.vitest.json"
+        run: npm test
       - name: Check frontend formatting
         working-directory: src/frontend
         run: npm run format:check
       - name: Test Rust and C++ bridge
         shell: bash
-        run: bash .github/scripts/summary/record.sh rust cargo test --manifest-path src/desktop/Cargo.toml
-      - uses: ./.github/actions/upload-test-logs
-        if: ${{ always() }}
+        run: cargo test --manifest-path src/desktop/Cargo.toml
 
   build-windows:
     needs: [test-windows, integration-windows]
@@ -341,18 +323,16 @@ jobs:
         run: npm run tauri -- build --bundles nsis
       - name: Check macOS project document icon
         if: runner.os == 'macOS'
-        run: python3 .github/scripts/tests/check_macos_document_icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
+        run: python3 .github/scripts/macos/check-document-icon.py "src/desktop/target/release/bundle/macos/ATUS Desktop.app"
       - name: Archive macOS app
         if: runner.os == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent "src/desktop/target/release/bundle/macos/ATUS Desktop.app" "src/desktop/target/release/bundle/macos/atus-desktop-macos.zip"
-      - name: Test Windows installer smoke helper
-        run: .github/scripts/tests/windows-installer-smoke.test.ps1
       - name: Install and open Windows package
         shell: pwsh
         run: |
           $installers = @(Get-ChildItem src/desktop/target/release/bundle/nsis/*.exe)
           if ($installers.Count -ne 1) { throw 'Expected exactly one Windows installer.' }
-          .github/scripts/ci/smoke-windows-installer.ps1 -Installer $installers[0].FullName
+          .github/scripts/windows/smoke-nsis.ps1 -Installer $installers[0].FullName
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
@@ -374,7 +354,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install desktop test dependencies
         timeout-minutes: 15
-        run: sudo .github/scripts/ci/install-ubuntu-deps.sh
+        run: sudo .github/scripts/linux/install-deps.sh
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
@@ -386,9 +366,7 @@ jobs:
         run: cargo build --manifest-path src/desktop/Cargo.toml --features desktop-e2e
       - name: Run desktop smoke on Linux
         timeout-minutes: 10
-        run: bash .github/scripts/summary/record.sh smoke xvfb-run -a .github/scripts/desktop-e2e/run-linux.sh
-      - uses: ./.github/actions/upload-test-logs
-        if: ${{ always() }}
+        run: xvfb-run -a .github/scripts/linux/run-e2e.sh
 
   test-linux:
     needs: [check-version, release-version]
@@ -402,12 +380,10 @@ jobs:
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
-      - name: Test Ubuntu dependency setup
-        run: bash .github/scripts/summary/record.sh ci-scripts node --test .github/scripts/tests/ubuntu-deps.test.mjs
       - name: Install Tauri system dependencies
         timeout-minutes: 15
         run: |
-          sudo .github/scripts/ci/install-ubuntu-deps.sh
+          sudo .github/scripts/linux/install-deps.sh
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
@@ -416,32 +392,27 @@ jobs:
         working-directory: src/frontend
         run: npm ci
       - name: Test CI helper scripts
-        run: bash .github/scripts/summary/record.sh ci-scripts node --test .github/scripts/tests/rulesets.test.mjs .github/scripts/tests/workflow-jobs.test.mjs .github/scripts/tests/version.test.mjs .github/scripts/tests/release.test.mjs .github/scripts/tests/git-attributes.test.mjs .github/scripts/tests/windows-node-path.test.mjs .github/scripts/coverage/check.test.mjs .github/scripts/tests/summary.test.mjs
+        run: node --test '.github/tests/*.test.mjs' '.github/tests/repo/*.test.mjs' '.github/tests/rulesets/*.test.mjs' '.github/tests/workflows/*.test.mjs' '.github/tests/scripts/shared/**/*.test.mjs' '.github/tests/scripts/windows/*.test.mjs'
       - name: Lint, test, and build frontend
         working-directory: src/frontend
         run: |
           npm run lint
-          bash ../../.github/scripts/summary/record.sh frontend npm run test:coverage -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/test-logs/frontend.vitest.json"
+          npm run test:coverage
           npm run format:check
           npm run build
       - name: Require frontend line coverage above 90 percent
-        run: node .github/scripts/coverage/check.mjs src/frontend/coverage/lcov.info
+        run: node .github/scripts/shared/coverage/check-coverage.mjs src/frontend/coverage/lcov.info
       - name: Test Rust and C++ bridge
-        run: bash .github/scripts/summary/record.sh rust cargo test --manifest-path src/desktop/Cargo.toml
+        run: cargo test --manifest-path src/desktop/Cargo.toml
       - name: Test C++ engine C ABI
         run: |
           cc -std=c11 -Isrc/scientific-engine/include -c src/scientific-engine/tests/mock_analysis_test.c -o /tmp/atus-mock-test.o
           c++ -std=c++17 -Isrc/scientific-engine/include src/scientific-engine/src/mock_analysis.cpp /tmp/atus-mock-test.o -o /tmp/atus-mock-test
-          mkdir -p "$RUNNER_TEMP/test-logs"
-          if /tmp/atus-mock-test; then result=ok; else result=FAILED; fi
-          echo "test mock_analysis_c_abi ... $result" | tee -a "$RUNNER_TEMP/test-logs/cpp.log"
-          [ "$result" = ok ]
+          /tmp/atus-mock-test
       - name: Require C++ line coverage above 90 percent
         run: |
-          .github/scripts/coverage/cpp-llvm.sh /tmp/atus-cpp.lcov
-          node .github/scripts/coverage/check.mjs /tmp/atus-cpp.lcov
-      - uses: ./.github/actions/upload-test-logs
-        if: ${{ always() }}
+          .github/scripts/linux/collect-cpp-coverage.sh /tmp/atus-cpp.lcov
+          node .github/scripts/shared/coverage/check-coverage.mjs /tmp/atus-cpp.lcov
 
   build-linux:
     needs: [test-linux, integration-linux]
@@ -456,11 +427,11 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - name: Test Ubuntu dependency setup
-        run: node --test .github/scripts/tests/ubuntu-deps.test.mjs
+        run: node --test .github/tests/scripts/linux/install-deps.test.mjs
       - name: Install Tauri system dependencies
         timeout-minutes: 15
         run: |
-          sudo .github/scripts/ci/install-ubuntu-deps.sh
+          sudo .github/scripts/linux/install-deps.sh
       - uses: Swatinem/rust-cache@v2.7.8
         with:
           workspaces: src/desktop
@@ -468,8 +439,6 @@ jobs:
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci
-      - name: Test Linux bundle verifier
-        run: python3 -m unittest discover -s .github/scripts/tests -p 'test_verify_linux_bundles.py'
       - name: Build Linux bundles
         working-directory: src/frontend
         run: |
@@ -484,19 +453,16 @@ jobs:
           fi
       - name: Check Linux bundles
         run: |
-          python3 .github/scripts/verify-linux-bundles.py src/desktop/target/release/bundle
           dpkg-deb --info src/desktop/target/release/bundle/deb/*.deb
           rpm -qpi src/desktop/target/release/bundle/rpm/*.rpm
-      - name: Test isolated package smoke script
-        run: node --test .github/scripts/tests/linux-smoke.test.mjs
       - name: Install and open Linux bundles in isolated systems
         run: |
           deb=(src/desktop/target/release/bundle/deb/*.deb)
           rpm=(src/desktop/target/release/bundle/rpm/*.rpm)
           appimage=(src/desktop/target/release/bundle/appimage/*.AppImage)
-          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" ubuntu:22.04 bash /workspace/.github/scripts/ci/smoke-linux-container.sh deb "/workspace/${deb[0]}"
-          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" fedora:44 bash /workspace/.github/scripts/ci/smoke-linux-container.sh rpm "/workspace/${rpm[0]}"
-          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" ubuntu:22.04 bash /workspace/.github/scripts/ci/smoke-linux-container.sh appimage "/workspace/${appimage[0]}"
+          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" ubuntu:22.04 bash /workspace/.github/scripts/linux/smoke-packages.sh deb "/workspace/${deb[0]}"
+          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" fedora:44 bash /workspace/.github/scripts/linux/smoke-packages.sh rpm "/workspace/${rpm[0]}"
+          docker run --rm --dns 1.1.1.1 -v "$PWD:/workspace:ro" ubuntu:22.04 bash /workspace/.github/scripts/linux/smoke-packages.sh appimage "/workspace/${appimage[0]}"
       - uses: actions/upload-artifact@v4
         with:
           name: linux-bundles
@@ -525,13 +491,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Test release scripts
-        run: node --test .github/scripts/tests/release-gates.test.mjs .github/scripts/tests/publish-release.test.mjs .github/scripts/tests/release.test.mjs
-      - name: Verify release gates
-        env:
-          NEEDS_JSON: ${{ toJSON(needs) }}
-          RELEASE_SHA: ${{ github.sha }}
-        run: node .github/scripts/release-gates.mjs
       - name: Download package artifacts
         uses: actions/download-artifact@v4
         with:
@@ -545,31 +504,4 @@ jobs:
           RELEASE_ARTIFACTS: ${{ runner.temp }}/artifacts
         run: |
           printf '{"head_sha":"%s"}\n' "$GITHUB_SHA" > "$RELEASE_RUN_JSON"
-          node .github/scripts/publish-release.mjs
-
-  summary:
-    needs: [publish-release]
-    if: ${{ always() }}
-    runs-on: ubuntu-22.04
-    continue-on-error: true
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: results-*
-          path: results
-      - name: Fetch job results
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" --jq '.jobs[]' | jq -s '.' > jobs.json
-      - name: Write the run summary
-        run: |
-          mkdir -p results
-          node .github/scripts/summary/summary.mjs jobs.json results >> "$GITHUB_STEP_SUMMARY"
+          node .github/scripts/shared/release/publish-release.mjs
