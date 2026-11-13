@@ -125,6 +125,32 @@ it("imports valid points and runs the fit without simulation labels", async () =
   });
 });
 
+it("keeps the residuals switch disabled until a fit produces residuals, then toggles it", async () => {
+  await render();
+  const residuals = () =>
+    [...node.querySelectorAll('button[role="switch"]')].find((item) =>
+      item.textContent.startsWith("Resíduos"),
+    );
+  await importFiles([{ name: "ensaio.csv", size: 20, text: async () => "x;y\n1;2\n2;4\n3;7" }]);
+  expect(residuals().textContent).toContain("Resíduos");
+  expect(residuals().getAttribute("aria-disabled")).toBe("true");
+  expect(residuals().getAttribute("aria-checked")).toBe("false");
+  expect(residuals().title).toBe("Resíduos desabilitados porque ainda não há resíduos");
+  expect(node.querySelector("#residuals-unavailable").textContent).toContain("não há resíduos");
+  await act(async () => residuals().click());
+  expect(residuals().getAttribute("aria-checked")).toBe("false");
+  await setInput("Função de ajuste de ensaio.csv", "a*x+b");
+  await act(async () => button("Executar ajustes").click());
+  expect(residuals().hasAttribute("aria-disabled")).toBe(false);
+  expect(node.querySelector("#residuals-unavailable")).toBeNull();
+  await act(async () => residuals().click());
+  expect(residuals().getAttribute("aria-checked")).toBe("true");
+  expect(residuals().innerHTML).toContain("bg-foreground");
+  expect(residuals().innerHTML).not.toMatch(/364cff|brand-coral/i);
+  await act(async () => residuals().click());
+  expect(residuals().getAttribute("aria-checked")).toBe("false");
+});
+
 it("imports files above 1 MB and rejects negative uncertainties without losing valid imports", async () => {
   await render();
   await importFiles([
