@@ -87,12 +87,12 @@ it("shows no notice and no panel while the panel is off, even with residuals", a
   expect(node.querySelector('[role="status"]')).toBeNull();
 });
 
-it("draws one stem and one point per residual by default, without the band or the histogram", async () => {
+it("draws stems, points and uncertainty bars by default, without the band or the histogram", async () => {
   await render({ initial: { residuals: true } });
   expect(count("residual-stem")).toBe(3);
   expect(count("residual-band")).toBe(0);
   expect(count("residual-histogram")).toBe(0);
-  expect(count("residual-error")).toBe(0);
+  expect(count("residual-error")).toBe(3);
   expect(panel().querySelectorAll('circle[fill="#123456"]')).toHaveLength(3);
 });
 
@@ -103,13 +103,13 @@ it("applies each display option from the settings", async () => {
       residualStems: false,
       residualBand: true,
       residualHistogram: true,
-      residualErrorBars: true,
+      residualErrorBars: false,
     },
   });
   expect(count("residual-stem")).toBe(0);
   expect(count("residual-band")).toBe(1);
   expect(count("residual-histogram")).toBe(1);
-  expect(count("residual-error")).toBe(3);
+  expect(count("residual-error")).toBe(0);
 });
 
 it("omits the band and uncertainty bars when the residuals carry no uncertainty", async () => {
@@ -186,8 +186,9 @@ it("sets the Y limits and switches elements from the options popover", async () 
   expect(count("residual-histogram")).toBe(1);
   await act(async () => toggle("Faixa ±σ").click());
   expect(count("residual-band")).toBe(1);
-  await act(async () => toggle("Barras de incerteza").click());
   expect(count("residual-error")).toBe(3);
+  await act(async () => toggle("Barras de incerteza").click());
+  expect(count("residual-error")).toBe(0);
   await act(async () =>
     [...document.querySelectorAll("button")]
       .find((b) => b.textContent === "Restaurar padrão")
@@ -195,7 +196,7 @@ it("sets the Y limits and switches elements from the options popover", async () 
   );
   expect(latest.residualYMin).toBe("");
   expect(latest.residualStems).toBe(true);
-  expect(latest.residualErrorBars).toBe(false);
+  expect(latest.residualErrorBars).toBe(true);
   expect(latest.residualHistogram).toBe(false);
   expect(latest.residualBand).toBe(false);
   expect(count("residual-stem")).toBe(3);

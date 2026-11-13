@@ -18,7 +18,7 @@ export const residualDefaults = {
   yLabel: "Resíduo",
   stems: true,
   band: false,
-  errorBars: false,
+  errorBars: true,
   histogram: false,
 };
 
