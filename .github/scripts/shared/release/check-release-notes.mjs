@@ -18,7 +18,7 @@ import { pathToFileURL } from 'node:url';
 /** Section headings, in the order they must appear, mapped to their key in the parsed notes. */
 export const SECTIONS = { Novidades: 'features', Melhorias: 'improvements', 'Correções': 'fixes' };
 /** Maximum file size, in bytes, per image extension. */
-export const IMAGE_LIMITS = { png: 2 * 1024 * 1024, jpg: 2 * 1024 * 1024, jpeg: 2 * 1024 * 1024, webp: 2 * 1024 * 1024, gif: 5 * 1024 * 1024 };
+export const IMAGE_LIMITS = { png: 2 * 1024 * 1024, jpg: 2 * 1024 * 1024, jpeg: 2 * 1024 * 1024, webp: 2 * 1024 * 1024, svg: 2 * 1024 * 1024, gif: 5 * 1024 * 1024 };
 
 const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const FRONT_MATTER_KEYS = ['title', 'date', 'summary', 'cover'];
@@ -170,7 +170,9 @@ export function checkImages(notes, root, file = 'notes') {
     const extension = path.split('.').pop().toLowerCase();
     const size = statSync(full).size;
     if (size > IMAGE_LIMITS[extension]) errors.push(`${file}: image "${path}" has ${(size / 1024 / 1024).toFixed(1)} MB; the limit for .${extension} is ${IMAGE_LIMITS[extension] / 1024 / 1024} MB`);
-    if (!matchesSignature(readFileSync(full).subarray(0, 12), extension)) errors.push(`${file}: image "${path}" is not a real .${extension} file`);
+    const data = readFileSync(full);
+    if (extension === 'svg') errors.push(...checkSvg(data.toString('utf8')).map((problem) => `${file}: image "${path}" ${problem}`));
+    else if (!matchesSignature(data.subarray(0, 12), extension)) errors.push(`${file}: image "${path}" is not a real .${extension} file`);
   }
   return errors;
 }
@@ -249,6 +251,39 @@ function checkInline(text, line, fail) {
     if (!/^https:\/\//.test(match[1])) fail(line, `links must use https, got "${match[1]}"`);
   }
   if (/!\[/.test(text)) fail(line, 'images must be on their own line inside a feature');
+}
+
+/**
+ * Check that an SVG is a self-contained static image. The app shows images with `<img>`, which
+ * already blocks scripts, but the notes are published widely, so unsafe or external content is
+ * refused at the source: scripts, event handlers, `foreignObject`, DTDs and any reference that
+ * is not an internal `#id` or an embedded raster `data:` image. Text depends on the viewer's
+ * fonts, so draw text as paths.
+ * @param {string} text SVG source.
+ * @returns {string[]} Problems found, empty when the SVG is acceptable.
+ */
+export function checkSvg(text) {
+  const problems = [];
+  const body = text.replace(/^\uFEFF/, '').replace(/^\s*<\?xml[^>]*\?>/, '').replace(/^(\s*<!--[\s\S]*?-->)*/, '').trimStart();
+  if (!/^<svg[\s>]/.test(body)) return ['is not a real .svg file'];
+  if (!/<svg[^>]*\sviewBox=/.test(body)) problems.push('needs a viewBox so it can scale');
+  const rules = [
+    [/<script/i, 'must not contain scripts'],
+    [/\son[a-z]+\s*=/i, 'must not contain event handlers'],
+    [/<foreignObject/i, 'must not contain foreignObject'],
+    [/<!(DOCTYPE|ENTITY)/i, 'must not declare a DTD or entities'],
+    [/javascript:/i, 'must not contain javascript: links'],
+    [/@import/i, 'must not import stylesheets'],
+    [/<text[\s>]/i, 'must draw text as paths (fonts vary between computers)'],
+  ];
+  for (const [pattern, message] of rules) if (pattern.test(body)) problems.push(message);
+  for (const match of body.matchAll(/(?:href|src)\s*=\s*["']([^"']*)["']/gi)) {
+    if (!/^#|^data:image\/(png|jpeg|webp|gif);base64,/i.test(match[1])) problems.push(`must not reference "${match[1].slice(0, 40)}"`);
+  }
+  for (const match of body.matchAll(/url\(\s*["']?([^"')]*)/gi)) {
+    if (!match[1].startsWith('#')) problems.push(`must not reference "${match[1].slice(0, 40)}"`);
+  }
+  return problems;
 }
 
 function matchesSignature(head, extension) {

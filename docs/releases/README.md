@@ -33,7 +33,7 @@ Fica sob o gráfico e acompanha o zoom.
 - O instalador .msi instala na pasta certa.
 ```
 
-- **Cabeçalho:** `title`, `date` (AAAA-MM-DD) e `summary` (uma frase) são obrigatórios. `cover` é opcional e aparece no banner e no topo da página.
+- **Cabeçalho:** `title`, `date` (AAAA-MM-DD) e `summary` (uma frase) são obrigatórios. `cover` é opcional (1280 × 720, 16:9) e aparece no banner e no topo da página.
 - **Seções:** `## Novidades`, `## Melhorias` e `## Correções`, nessa ordem. Inclua só as que tiverem conteúdo; pelo menos uma é obrigatória.
 - **Novidades:** cada uma começa com `### título` e precisa de um texto. Pode ter imagens e um vídeo.
 - **Melhorias e Correções:** só listas `- item`. Um item pode continuar na linha seguinte, com recuo de dois espaços.
@@ -41,7 +41,8 @@ Fica sob o gráfico e acompanha o zoom.
 ## Imagens e vídeos
 
 - **Imagem:** `![legenda](assets/vM.m.p/arquivo.png)` sozinha na linha. A legenda é obrigatória. Uma imagem vira figura ao lado do texto; várias seguidas viram galeria (no máximo 8 por novidade).
-- **Formatos e limites:** PNG, JPEG e WebP até 2 MB; GIF até 5 MB. O CI confere se o arquivo existe, o tamanho e se o conteúdo é mesmo do formato da extensão.
+- **Formatos e limites:** PNG, JPEG, WebP e SVG até 2 MB; GIF até 5 MB. O CI confere se o arquivo existe, o tamanho e se o conteúdo é mesmo do formato da extensão.
+- **SVG:** precisa de `viewBox` e deve ser autossuficiente: sem scripts, eventos (`onload`…), `foreignObject`, DTD, `@import` ou referências externas (só `#id` interno e imagens `data:` embutidas). Desenhe textos como caminhos, sem `<text>`, porque as fontes variam entre computadores. Capas em 1280 × 720.
 - **Onde guardar:** em `assets/vM.m.p/`. Caminhos são relativos a esta pasta.
 - **Vídeo:** um link do YouTube sozinho na linha, `[título](https://youtu.be/ID)` ou `https://www.youtube.com/watch?v=ID`, com `?t=`/`&t=` opcional. No máximo um por novidade. O app mostra uma miniatura e abre o vídeo no navegador.
 - **Pôster do vídeo:** `[![título](assets/vM.m.p/poster.png)](https://youtu.be/ID)`. Sem pôster, o app usa um padrão.

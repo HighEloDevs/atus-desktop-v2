@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Gráfico com ajuste, painel de resíduos e a janela de análise rápida">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#E3E7E1" stroke-width="1"/></pattern>
+  </defs>
+  <rect width="1280" height="720" fill="#F7F7F3"/>
+  <rect width="1280" height="720" fill="url(#grid)"/>
+
+  <!-- Recorte crop marks framing the scene -->
+  <g fill="#20272C">
+    <path d="M110 80H196V104H134V166H110Z"/>
+    <path d="M1170 80H1084V104H1146V166H1170Z"/>
+    <path d="M110 640H196V616H134V554H110Z"/>
+    <path d="M1170 640H1084V616H1146V554H1170Z"/>
+  </g>
+
+  <!-- Main chart -->
+  <rect x="214" y="150" width="580" height="300" rx="12" fill="#FFFFFF" stroke="#D8DED7" stroke-width="2"/>
+  <path d="M252 412H770M286 176V430" stroke="#20272C" stroke-width="2.5" stroke-linecap="round"/>
+  <g stroke="#20272C" stroke-width="2"><path d="M346 412v8M406 412v8M466 412v8M526 412v8M586 412v8M646 412v8M706 412v8M278 352h8M278 292h8M278 232h8"/></g>
+  <path d="M300 404 C 420 392, 520 340, 600 280 S 712 190, 758 168" fill="none" stroke="#20272C" stroke-width="4" stroke-linecap="round"/>
+  <g stroke="#8E9BFF" stroke-width="3" stroke-linecap="round">
+    <path d="M330 371v48M390 361v48M450 336v52M510 306v52M570 273v56M630 235v56M690 194v60M740 156v64"/>
+  </g>
+  <g fill="#364CFF" stroke="#FFFFFF" stroke-width="3">
+    <circle cx="330" cy="395" r="9"/><circle cx="390" cy="385" r="9"/><circle cx="450" cy="362" r="9"/><circle cx="510" cy="332" r="9"/>
+    <circle cx="570" cy="301" r="9"/><circle cx="630" cy="263" r="9"/><circle cx="690" cy="224" r="9"/>
+  </g>
+  <circle cx="740" cy="188" r="15" fill="#F25A3C" stroke="#FFFFFF" stroke-width="4"/>
+
+  <!-- Residual panel -->
+  <rect x="214" y="472" width="580" height="122" rx="12" fill="#FFFFFF" stroke="#D8DED7" stroke-width="2"/>
+  <rect x="252" y="508" width="518" height="50" fill="#364CFF" opacity=".08"/>
+  <path d="M252 533H770" stroke="#AEB8B2" stroke-width="2" stroke-dasharray="6 6"/>
+  <g stroke="#364CFF" stroke-width="3" stroke-linecap="round">
+    <path d="M330 533v-18M390 533v22M450 533v-26M510 533v12M570 533v-14M630 533v24M690 533v-8M740 533v16"/>
+  </g>
+  <g fill="#364CFF">
+    <circle cx="330" cy="515" r="7"/><circle cx="390" cy="555" r="7"/><circle cx="450" cy="507" r="7"/><circle cx="510" cy="545" r="7"/>
+    <circle cx="570" cy="519" r="7"/><circle cx="630" cy="557" r="7"/><circle cx="690" cy="525" r="7"/><circle cx="740" cy="549" r="7"/>
+  </g>
+
+  <!-- Quick analysis window -->
+  <rect x="852" y="216" width="276" height="300" rx="14" fill="#20272C" opacity=".1" transform="translate(8 12)"/>
+  <rect x="852" y="216" width="276" height="300" rx="14" fill="#FFFFFF" stroke="#D8DED7" stroke-width="2"/>
+  <path d="M866 216H1114A14 14 0 0 1 1128 230V256H852V230A14 14 0 0 1 866 216Z" fill="#EFF1ED"/>
+  <g fill="#C9CFC8"><circle cx="874" cy="236" r="6"/><circle cx="894" cy="236" r="6"/><circle cx="914" cy="236" r="6"/></g>
+  <g fill="#AEB8B2"><rect x="876" y="276" width="20" height="8" rx="2"/><rect x="956" y="276" width="20" height="8" rx="2"/><rect x="1036" y="276" width="28" height="8" rx="2"/></g>
+  <g fill="#E3E7E1">
+    <rect x="876" y="298" width="60" height="12" rx="3"/><rect x="956" y="298" width="60" height="12" rx="3"/><rect x="1036" y="298" width="40" height="12" rx="3"/>
+    <rect x="876" y="320" width="60" height="12" rx="3"/><rect x="956" y="320" width="60" height="12" rx="3"/><rect x="1036" y="320" width="40" height="12" rx="3"/>
+    <rect x="876" y="342" width="60" height="12" rx="3"/><rect x="956" y="342" width="60" height="12" rx="3"/><rect x="1036" y="342" width="40" height="12" rx="3"/>
+    <rect x="876" y="364" width="60" height="12" rx="3"/><rect x="956" y="364" width="60" height="12" rx="3"/><rect x="1036" y="364" width="40" height="12" rx="3"/>
+  </g>
+  <rect x="876" y="398" width="228" height="38" rx="7" fill="#FFFFFF" stroke="#364CFF" stroke-width="2.5"/>
+  <g fill="#20272C"><rect x="892" y="412" width="16" height="10" rx="2"/><rect x="916" y="414" width="10" height="6" rx="2"/><rect x="934" y="412" width="54" height="10" rx="2"/><rect x="996" y="412" width="22" height="10" rx="2"/></g>
+  <rect x="1022" y="408" width="3" height="18" fill="#20272C"/>
+  <rect x="1020" y="456" width="84" height="38" rx="7" fill="#20272C"/>
+  <rect x="1040" y="471" width="44" height="8" rx="2" fill="#FFFFFF"/>
+  <!-- keycaps -->
+  <g transform="translate(880 456)">
+    <rect width="40" height="38" rx="7" fill="#FFFFFF" stroke="#C9CFC8" stroke-width="2"/><rect y="32" width="40" height="6" rx="3" fill="#C9CFC8"/>
+    <rect x="48" width="40" height="38" rx="7" fill="#FFFFFF" stroke="#C9CFC8" stroke-width="2"/><rect x="48" y="32" width="40" height="6" rx="3" fill="#C9CFC8"/>
+    <path d="M12 21L20 13L28 21" fill="none" stroke="#20272C" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M63 13h10v10h-10z M63 13a4 4 0 1 1 -4 -4 M73 13a4 4 0 1 0 4 -4 M63 23a4 4 0 1 0 -4 4 M73 23a4 4 0 1 1 4 4" fill="none" stroke="#20272C" stroke-width="2.2"/>
+  </g>
+</svg>

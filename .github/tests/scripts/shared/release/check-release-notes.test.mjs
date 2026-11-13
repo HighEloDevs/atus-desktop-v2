@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -195,4 +195,33 @@ test('the command line reads the version from the app manifest', (t) => {
   assert.equal(run('--root', 'elsewhere').status, 1);
   writeFileSync(join(root, 'src/desktop/tauri.conf.json'), 'not json');
   assert.equal(run().status, 1);
+});
+
+test('accepts self-contained SVG images and refuses unsafe or external ones', async (t) => {
+  const { checkSvg } = await import('../../../../scripts/shared/release/check-release-notes.mjs');
+  const ok = '<?xml version="1.0"?>\n<!-- capa -->\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><defs><pattern id="g"/></defs><rect fill="url(#g)"/><use href="#g"/><image href="data:image/png;base64,AAAA"/></svg>';
+  assert.deepEqual(checkSvg(ok), []);
+  const cases = [
+    ['<html></html>', /not a real \.svg/],
+    ['<svg width="10"></svg>', /viewBox/],
+    ['<svg viewBox="0 0 1 1"><script>x()</script></svg>', /scripts/],
+    ['<svg viewBox="0 0 1 1" onload="x()"></svg>', /event handlers/],
+    ['<svg viewBox="0 0 1 1"><foreignObject/></svg>', /foreignObject/],
+    ['<!DOCTYPE svg [<!ENTITY a "b">]><svg viewBox="0 0 1 1"></svg>', /not a real|DTD/],
+    ['<svg viewBox="0 0 1 1"><a href="javascript:x()"/></svg>', /javascript|reference/],
+    ['<svg viewBox="0 0 1 1"><style>@import "x.css";</style></svg>', /import/],
+    ['<svg viewBox="0 0 1 1"><text>ATUS</text></svg>', /text as paths/],
+    ['<svg viewBox="0 0 1 1"><image xlink:href="https://e.com/a.png"/></svg>', /reference "https:\/\/e\.com/],
+    ['<svg viewBox="0 0 1 1"><rect fill="url(https://e.com/f)"/></svg>', /reference "https:\/\/e\.com/],
+    ['<svg viewBox="0 0 1 1"><image href="data:image/svg+xml;base64,AAAA"/></svg>', /reference "data:image\/svg/],
+  ];
+  for (const [svg, pattern] of cases) assert.ok(checkSvg(svg).some((problem) => pattern.test(problem)), svg);
+  const root = folder(t, { 'v0.3.0.md': FULL.replace('cover.png', 'cover.svg').replace('residuos.png', 'residuos.svg'), ...IMAGES, 'assets/v0.3.0/cover.svg': ok, 'assets/v0.3.0/residuos.svg': '<svg viewBox="0 0 1 1"><script/></svg>' });
+  assert.deepEqual(checkReleaseNotes({ root, version: '0.3.0' }).errors, ['v0.3.0.md: image "assets/v0.3.0/residuos.svg" must not contain scripts']);
+});
+
+test('the real release notes in the repository are valid', () => {
+  const { errors, notes } = checkReleaseNotes({ root: 'docs/releases', version: JSON.parse(readFileSync('src/desktop/tauri.conf.json', 'utf8')).version });
+  assert.deepEqual(errors, []);
+  for (const version of ['0.2.0', '0.2.3']) assert.ok(notes.has(version), version);
 });
