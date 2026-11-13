@@ -80,13 +80,150 @@ it("excludes non-positive values from logarithmic axes", async () => {
   }
 });
 
-it("shows point values and uncertainties in the tooltip", async () => {
+const tooltip = () => node.querySelector('[role="tooltip"]');
+const plot = () => node.querySelector('[role="group"][tabindex="0"]');
+const press = (key) =>
+  act(async () => plot().dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
+const hover = (element, type = "mouseover") =>
+  act(async () => element.dispatchEvent(new MouseEvent(type, { bubbles: true })));
+const stacked = (id, name, extra = {}) => ({
+  ...visible,
+  id,
+  name,
+  linePoints: [],
+  points: [{ x: 2, y: 3 }],
+  ...extra,
+});
+
+it("shows point values and uncertainties in a tooltip beside the point", async () => {
   await act(async () => root.render(createElement(Harness)));
-  const point = node.querySelector('circle[fill="#123456"]');
-  await act(async () => point.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
-  expect(node.textContent).toContain("Primeira · x: 2 · y: 3 · σx: 0,5 · σy: 0,25");
-  await act(async () => point.dispatchEvent(new MouseEvent("mouseout", { bubbles: true })));
-  expect(node.textContent).not.toContain("σx: 0,5");
+  expect(tooltip()).toBeNull();
+  await hover(node.querySelector('circle[fill="#123456"]'));
+  expect(tooltip().textContent).toBe("Primeiranº 1x2± 0,5y3± 0,25");
+  expect(tooltip().hasAttribute("data-html2canvas-ignore")).toBe(true);
+  expect(tooltip().style.left).toMatch(/px$/);
+  const svg = node.querySelector('svg[role="img"]');
+  expect(svg.querySelectorAll('circle[fill="none"][stroke="#123456"]')).toHaveLength(1);
+  expect(svg.querySelectorAll('path[stroke-dasharray="3 3"]')).toHaveLength(1);
+  await hover(node.querySelector('circle[fill="#123456"]'), "mouseout");
+  expect(tooltip()).toBeNull();
+  expect(svg.querySelectorAll('circle[fill="none"]')).toHaveLength(0);
+});
+
+it("gives every point a pointer target larger than its marker", async () => {
+  await act(async () => root.render(createElement(Harness)));
+  const targets = node.querySelectorAll('svg[role="img"] circle[fill="transparent"]');
+  expect(targets).toHaveLength(2);
+  expect(Number(targets[0].getAttribute("r"))).toBe(12);
+  await hover(targets[1]);
+  expect(tooltip().textContent).toBe("Primeiranº 2x−1y2");
+});
+
+it("labels tooltip rows with the axis titles, including LaTeX", async () => {
+  const initial = { xLabel: "Tempo $t$ (s)", yLabel: "" };
+  await act(async () => root.render(createElement(Harness, { initial })));
+  await hover(node.querySelector('circle[fill="#123456"]'));
+  expect(tooltip().querySelector(".katex")).not.toBeNull();
+  expect(tooltip().textContent).toContain("Tempo");
+  expect(tooltip().textContent).toContain("y3");
+});
+
+it("lists coincident points from several series in one tooltip", async () => {
+  const series = [
+    stacked("a", "Série A"),
+    stacked("b", "Série B", { symbol: "square" }),
+    stacked("c", "Série C", {
+      symbol: "diamond",
+      points: [
+        { x: 9, y: 9 },
+        { x: 2, y: 3, sy: 1 },
+      ],
+    }),
+  ];
+  await act(async () => root.render(createElement(Harness, { series })));
+  await hover(node.querySelector('rect[fill="#123456"]'));
+  const text = tooltip().textContent;
+  expect(text.startsWith("3 pontos próximosSérie Bnº 1")).toBe(true);
+  expect(text).toContain("Série Anº 1");
+  expect(text).toContain("Série Cnº 2x2y3± 1");
+  expect(text).not.toContain("outro");
+  expect(tooltip().querySelectorAll("svg rect")).toHaveLength(2);
+  expect(tooltip().querySelectorAll("svg rect[transform]")).toHaveLength(1);
+});
+
+it("counts coincident points beyond the first three", async () => {
+  const names = ["A", "B", "C", "D"];
+  const four = names.map((name) => stacked(name, `Série ${name}`));
+  await act(async () => root.render(createElement(Harness, { series: four })));
+  await hover(node.querySelector('circle[fill="#123456"]'));
+  expect(tooltip().textContent).toContain("4 pontos próximos");
+  expect(tooltip().textContent).toContain("+ 1 outro ponto");
+  expect(tooltip().textContent).not.toContain("Série D");
+  const five = [...four, stacked("E", "Série E")];
+  await act(async () => root.render(createElement(Harness, { series: five })));
+  await hover(node.querySelector('circle[fill="#123456"]'));
+  expect(tooltip().textContent).toContain("+ 2 outros pontos");
+});
+
+it("walks through the points with the keyboard and announces them", async () => {
+  await act(async () => root.render(createElement(Harness)));
+  const live = node.querySelector('[aria-live="polite"]');
+  await press("ArrowRight");
+  expect(tooltip().textContent).toContain("nº 2");
+  expect(live.textContent).toBe("Primeira, ponto 2: x −1; y 2");
+  await press("ArrowDown");
+  expect(tooltip().textContent).toContain("nº 1");
+  expect(live.textContent).toBe("Primeira, ponto 1: x 2 ± 0,5; y 3 ± 0,25");
+  await press("ArrowRight");
+  expect(tooltip().textContent).toContain("nº 2");
+  await press("ArrowLeft");
+  expect(tooltip().textContent).toContain("nº 1");
+  await press("Home");
+  expect(tooltip().textContent).toContain("nº 2");
+  await press("End");
+  expect(tooltip().textContent).toContain("nº 1");
+  await press("a");
+  expect(tooltip().textContent).toContain("nº 1");
+  await press("Escape");
+  expect(tooltip()).toBeNull();
+  expect(live.textContent).toBe("");
+  await press("ArrowUp");
+  expect(tooltip().textContent).toContain("nº 1");
+  await act(async () => plot().dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+  expect(tooltip()).toBeNull();
+});
+
+it("ignores keys pressed on controls inside the plot and plots without points", async () => {
+  await act(async () => root.render(createElement(Harness)));
+  const button = plot().querySelector("button");
+  await act(async () =>
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })),
+  );
+  expect(tooltip()).toBeNull();
+  await press("ArrowRight");
+  await act(async () => button.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+  expect(tooltip()).not.toBeNull();
+  await act(async () => root.render(createElement(Harness, { series: [hidden] })));
+  await press("ArrowRight");
+  expect(tooltip()).toBeNull();
+});
+
+it("dismisses the tooltip when a zoom or pan gesture starts", async () => {
+  await act(async () => root.render(createElement(Harness)));
+  await press("ArrowRight");
+  expect(tooltip()).not.toBeNull();
+  const svg = node.querySelector('svg[role="img"]');
+  // jsdom rejects `view` in the constructor here, and d3-zoom reads it from the event.
+  const gesture = (type) =>
+    Object.defineProperty(new MouseEvent(type, { bubbles: true, button: 0 }), "view", {
+      value: document.defaultView,
+    });
+  // jsdom has no SVG length API, which d3-zoom uses to size the gesture extent.
+  for (const side of ["width", "height"])
+    Object.defineProperty(svg, side, { value: { baseVal: { value: 480 } } });
+  await act(async () => svg.dispatchEvent(gesture("mousedown")));
+  expect(tooltip()).toBeNull();
+  await act(async () => document.defaultView.dispatchEvent(gesture("mouseup")));
 });
 
 it("renders diamond markers, hides grid and legend, and dims non-selected series", async () => {

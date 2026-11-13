@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 
 export type LabelAlignment = "left" | "center" | "right";
-import katex from "katex";
+import { renderLabelHtml } from "./labelMarkup";
 import { Input } from "@/components/ui/input";
 
 type Props = {
@@ -64,17 +64,7 @@ export function EditableChartLabel({
     return () => button.removeEventListener("wheel", handleWheel);
   }, [editing]);
 
-  const html = value
-    .split(/(\$[^$]+\$)/g)
-    .map((part) =>
-      part.startsWith("$") && part.endsWith("$")
-        ? katex.renderToString(part.slice(1, -1), { throwOnError: false })
-        : part.replace(
-            /[&<>"']/g,
-            (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
-          ),
-    )
-    .join("");
+  const html = renderLabelHtml(value);
 
   if (editing) {
     return (
