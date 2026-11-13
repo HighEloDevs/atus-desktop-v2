@@ -117,6 +117,9 @@ it("imports valid points and runs the fit without simulation labels", async () =
   expect(node.textContent).not.toContain("Simulação");
   expect(node.textContent).not.toContain("Exemplo demonstrativo");
   expect(node.textContent).not.toContain("Gráfico");
+  expect(node.querySelector('[aria-label="Resultados da análise"]')).not.toBeNull();
+  expect(node.textContent).not.toContain("simulado");
+  expect(node.textContent).not.toContain("fictício");
   expect(notify.success).toHaveBeenCalledWith("Ajuste executado com sucesso", {
     id: "fit-success",
   });
