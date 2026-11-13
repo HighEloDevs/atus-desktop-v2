@@ -45,7 +45,6 @@ async function render() {
       createElement(AnalysisPage, {
         onBack: vi.fn(),
         finderPath: null,
-        projectError: "",
         onOpenFinderProject: vi.fn(),
         onCancelFinderProject: vi.fn(),
       }),

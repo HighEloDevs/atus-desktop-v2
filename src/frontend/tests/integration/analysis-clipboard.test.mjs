@@ -61,7 +61,6 @@ async function render() {
         onBack: vi.fn(),
         project: null,
         finderPath: null,
-        projectError: "",
         onOpenFinderProject: vi.fn(),
         onCancelFinderProject: vi.fn(),
       }),
