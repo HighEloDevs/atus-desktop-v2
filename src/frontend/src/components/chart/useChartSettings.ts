@@ -13,6 +13,15 @@ export const chartLinePatterns = {
   dashdot: "8 4 2 4",
 };
 
+/** Defaults of the residuals panel; "Restaurar padrão" applies them. */
+export const residualDefaults = {
+  yLabel: "Resíduo",
+  stems: true,
+  band: false,
+  errorBars: true,
+  histogram: false,
+};
+
 /**
  * Creates local state and setters for chart presentation.
  * @param initial - Optional persisted chart values.
@@ -52,6 +61,22 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
   );
   const [lineWidth, setLineWidth] = useState(initial?.lineWidth ?? 2);
   const [visible, setVisible] = useState(initial?.visible ?? true);
+  const [residuals, setResiduals] = useState(initial?.residuals ?? false);
+  const [residualYLabel, setResidualYLabel] = useState(
+    initial?.residualYLabel ?? residualDefaults.yLabel,
+  );
+  const [residualYMin, setResidualYMin] = useState(initial?.residualYMin ?? "");
+  const [residualYMax, setResidualYMax] = useState(initial?.residualYMax ?? "");
+  const [residualStems, setResidualStems] = useState(
+    initial?.residualStems ?? residualDefaults.stems,
+  );
+  const [residualBand, setResidualBand] = useState(initial?.residualBand ?? residualDefaults.band);
+  const [residualErrorBars, setResidualErrorBars] = useState(
+    initial?.residualErrorBars ?? residualDefaults.errorBars,
+  );
+  const [residualHistogram, setResidualHistogram] = useState(
+    initial?.residualHistogram ?? residualDefaults.histogram,
+  );
   return {
     title,
     setTitle,
@@ -103,6 +128,22 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
     setLineWidth,
     visible,
     setVisible,
+    residuals,
+    setResiduals,
+    residualYLabel,
+    setResidualYLabel,
+    residualYMin,
+    setResidualYMin,
+    residualYMax,
+    setResidualYMax,
+    residualStems,
+    setResidualStems,
+    residualBand,
+    setResidualBand,
+    residualErrorBars,
+    setResidualErrorBars,
+    residualHistogram,
+    setResidualHistogram,
   };
 }
 
@@ -134,4 +175,13 @@ export type ChartValues = {
   lineStyle: keyof typeof chartLinePatterns;
   lineWidth: number;
   visible: boolean;
+  /** Whether the residuals panel is requested (it only shows when residuals exist). */
+  residuals: boolean;
+  residualYLabel: string;
+  residualYMin: string;
+  residualYMax: string;
+  residualStems: boolean;
+  residualBand: boolean;
+  residualErrorBars: boolean;
+  residualHistogram: boolean;
 };

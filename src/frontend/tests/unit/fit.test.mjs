@@ -126,6 +126,19 @@ describe("illustrative fit service", () => {
     expect(result.chiSquared).toBeCloseTo(sumSquares, 12);
     expect(result.uncertaintyUsed).toBeCloseTo(Math.sqrt(sumSquares / 2), 12);
   });
+  test("carries each point's sy into its residual", async () => {
+    const result = await mockFitService.fit({
+      ...request,
+      points: [
+        { x: 0, y: 0, sy: 0.5 },
+        { x: 1, y: 2 },
+        { x: 2, y: 2, sy: 0.25 },
+      ],
+      range: {},
+    });
+    expect(result.residuals.map((r) => r.sy)).toEqual([0.5, undefined, 0.25]);
+  });
+
   test("weights the residuals by sy when every point has an uncertainty", async () => {
     const points = request.points.map((p) => ({ ...p, sy: 0.5 }));
     const result = await mockFitService.fit({ ...request, points, range: {}, useSy: true });
