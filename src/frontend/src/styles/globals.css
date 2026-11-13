@@ -155,6 +155,52 @@ a:focus-visible {
   opacity: 0.2;
 }
 /* The bar is the only indicator of the remaining time, so reduced motion keeps it but in coarse steps. */
+/* Analysis empty state: soft dot grid and the waiting mascot. */
+.analysis-canvas:has(.analysis-empty) {
+  background-image: radial-gradient(#e3e6df 1.2px, transparent 1.3px);
+  background-size: 24px 24px;
+  background-position: center;
+}
+.atus-mascot {
+  animation: atus-bob 3.2s ease-in-out infinite;
+}
+.atus-mascot-shadow {
+  animation: atus-shadow 3.2s ease-in-out infinite;
+}
+.atus-mascot-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: atus-blink 5s infinite;
+}
+@keyframes atus-bob {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes atus-shadow {
+  50% {
+    transform: scaleX(0.82);
+    opacity: 0.6;
+  }
+}
+@keyframes atus-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .atus-mascot,
+  .atus-mascot-shadow,
+  .atus-mascot-eye {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .toast-timer {
     animation-timing-function: steps(10, end);

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** Analysis workspace imports, demonstration, and simulated-fit integration. */
+/** Analysis workspace imports, empty state and fit integration. */
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -92,17 +92,20 @@ async function setInput(label, value) {
 
 it("shows the empty state, toggles the panel, and returns to the home page", async () => {
   await render();
-  expect(node.textContent).toContain("Comece sua análise");
+  expect(node.querySelector('[data-testid="analysis-empty"]')).not.toBeNull();
+  expect(node.textContent).toContain("Esperando seus dados");
+  expect(node.textContent).not.toContain("Carregar exemplo");
+  expect(node.textContent).not.toContain("Abrir painel de dados");
   expect(button("Executar ajustes").disabled).toBe(true);
   await act(async () => node.querySelector('button[aria-label="Ocultar painel"]').click());
   expect(node.querySelector('button[aria-label="Mostrar painel"]')).not.toBeNull();
-  await act(async () => button("Abrir painel de dados").click());
+  await act(async () => node.querySelector('button[aria-label="Mostrar painel"]').click());
   expect(node.querySelector('button[aria-label="Ocultar painel"]')).not.toBeNull();
   await act(async () => node.querySelector('button[aria-label="Voltar ao início"]').click());
   expect(onBack).toHaveBeenCalledOnce();
 });
 
-it("imports valid points and runs only the clearly marked simulation", async () => {
+it("imports valid points and runs the fit without simulation labels", async () => {
   await render();
   await importFiles([{ name: "ensaio.csv", size: 20, text: async () => "x;y\n1;2\n2;4" }]);
   expect(node.textContent).toContain("ensaio.csv");
@@ -111,44 +114,34 @@ it("imports valid points and runs only the clearly marked simulation", async () 
   expect(button("Executar ajustes").disabled).toBe(false);
   await act(async () => button("Executar ajustes").click());
   expect(node.querySelector('[data-testid="chart"]').textContent).toBe("ensaio.csv:2:2");
-  expect(node.textContent).toContain("Simulação");
+  expect(node.textContent).not.toContain("Simulação");
+  expect(node.textContent).not.toContain("Exemplo demonstrativo");
+  expect(node.textContent).not.toContain("Gráfico");
+  expect(node.querySelector('[aria-label="Resultados da análise"]')).not.toBeNull();
+  expect(node.textContent).not.toContain("simulado");
+  expect(node.textContent).not.toContain("fictício");
+  expect(notify.success).toHaveBeenCalledWith("Ajuste executado com sucesso", {
+    id: "fit-success",
+  });
 });
 
-it("rejects oversized files and negative uncertainties without losing valid imports", async () => {
+it("imports files above 1 MB and rejects negative uncertainties without losing valid imports", async () => {
   await render();
   await importFiles([
     { name: "bom.csv", size: 10, text: async () => "1;2\n2;3" },
-    { name: "grande.csv", size: 1024 * 1024 + 1, text: async () => "" },
+    { name: "grande.csv", size: 5 * 1024 * 1024, text: async () => "1;2\n2;3\n3;4" },
     { name: "erro.csv", size: 10, text: async () => "1;2;-1" },
   ]);
-  expect(node.querySelector('[data-testid="chart"]').textContent).toBe("bom.csv:2:0");
+  expect(node.querySelector('[data-testid="chart"]').textContent).toBe(
+    "bom.csv:2:0;grande.csv:3:0",
+  );
   expect(notify.error).toHaveBeenCalledTimes(1);
   const [title, { description }] = notify.error.mock.calls[0];
   expect(title).toBe("Não foi possível importar");
-  expect(description).toContain("grande.csv");
+  expect(description).not.toContain("grande.csv");
   expect(description).toContain("erro.csv");
   expect(description).toContain("incertezas não podem ser negativas");
   expect(node.querySelector('[role="alert"]')).toBeNull();
-});
-
-it("reports failure when the desktop example is unavailable", async () => {
-  await render();
-  await act(async () => button("Carregar exemplo").click());
-  expect(notify.error).toHaveBeenCalledWith("Não foi possível carregar o exemplo", {
-    description: "Abra o aplicativo desktop e tente novamente.",
-    id: "example-error",
-  });
-  expect(native.invoke).not.toHaveBeenCalled();
-});
-
-it("loads the fixed C++ example when the desktop bridge succeeds", async () => {
-  native.isTauri.mockReturnValue(true);
-  native.invoke.mockResolvedValue({ slope: 2, intercept: 1, r_squared: 1, x: [1, 2], y: [3, 5] });
-  await render();
-  await act(async () => button("Carregar exemplo").click());
-  expect(native.invoke).toHaveBeenCalledWith("get_mock_analysis");
-  expect(node.querySelector('[data-testid="chart"]').textContent).toBe("Exemplo 1:2:2");
-  expect(node.textContent).toContain("Exemplo demonstrativo: nenhum ajuste foi executado.");
 });
 
 it("clears previous simulated output after changing the equation and reports invalid models", async () => {
@@ -273,29 +266,17 @@ it("replaces imported data and reports invalid replacement files", async () => {
   expect(node.querySelector('[data-testid="chart"]').textContent).toBe("a.csv:3:0");
 });
 
-it("reports a native bridge failure without adding a demonstration series", async () => {
-  native.isTauri.mockReturnValue(true);
-  native.invoke.mockRejectedValue(new Error("bridge unavailable"));
-  await render();
-  await act(async () => button("Carregar exemplo").click());
-  expect(notify.error).toHaveBeenCalledWith("Não foi possível carregar o exemplo", {
-    description: "Abra o aplicativo desktop e tente novamente.",
-    id: "example-error",
-  });
-  expect(node.querySelector('[data-testid="chart"]')).toBeNull();
-});
-
-it("keeps the previous series when a replacement is oversized", async () => {
+it("replaces a series with a file above 1 MB", async () => {
   await render();
   await importFiles([{ name: "a.csv", size: 10, text: async () => "1;2\n2;3" }]);
   const input = node.querySelector('input[type="file"]:not([multiple])');
   Object.defineProperty(input, "files", {
-    value: [{ name: "large.csv", size: 1024 * 1024 + 1 }],
+    value: [{ name: "large.csv", size: 5 * 1024 * 1024, text: async () => "1;2\n2;3\n3;4" }],
     configurable: true,
   });
   await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
-  expect(notify.error.mock.lastCall[0]).toContain("excede 1 MB");
-  expect(node.querySelector('[data-testid="chart"]').textContent).toBe("a.csv:2:0");
+  expect(notify.error).not.toHaveBeenCalled();
+  expect(node.querySelector('[data-testid="chart"]').textContent).toBe("a.csv:3:0");
 });
 
 it("reports a failed save as a snackbar once per distinct error", async () => {
