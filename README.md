@@ -38,8 +38,8 @@ O ATUS Desktop é uma ferramenta científica gratuita e de código aberto para a
 ## Como rodar localmente
 
 ```sh
-git clone <url-do-repositório> atus-desktop
-cd atus-desktop/src/frontend
+git clone https://github.com/HighEloDevs/atus-desktop-v2.git
+cd atus-desktop-v2/src/frontend
 npm ci
 npm run tauri -- dev
 ```
