@@ -17,7 +17,7 @@ export const chartLinePatterns = {
 export const residualDefaults = {
   yLabel: "Resíduo",
   stems: true,
-  band: true,
+  band: false,
   errorBars: false,
   histogram: false,
 };
