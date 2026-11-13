@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-capability",
-  "description": "Allow project dialogs, clipboard text reading, window closing and team profile links.",
+  "description": "Allow project dialogs, clipboard text reading, revealing project files, window closing and team profile links.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -10,6 +10,7 @@
     "dialog:allow-save",
     "dialog:allow-confirm",
     "clipboard-manager:allow-read-text",
+    "opener:allow-reveal-item-in-dir",
     {
       "identifier": "opener:allow-open-url",
       "allow": [

@@ -6,6 +6,7 @@
 import { FinderProjectDialog } from "@/features/projects/FinderProjectDialog";
 import { Button } from "@/components/ui/button";
 import { useProjectSave } from "@/features/projects/useProjectSave";
+import { ProjectTitle } from "@/features/projects/ProjectTitle";
 import type { OpenProject } from "@/features/projects/project-client";
 import { useEffect, useLayoutEffect, useRef, useState, type SetStateAction } from "react";
 import { notify } from "@/lib/notify";
@@ -771,9 +772,14 @@ export function AnalysisPage({
                 <ArrowLeft aria-hidden="true" />
               </Button>
               <div className="min-w-0 flex-1">
-                <h1 className="truncate text-sm leading-5 font-semibold">
-                  {saving.project?.snapshot.name ?? "Projeto sem título"}
-                </h1>
+                <ProjectTitle
+                  name={saving.project?.snapshot.name ?? "Projeto sem título"}
+                  editable={Boolean(saving.project)}
+                  onRename={async (name) => {
+                    await saving.rename(name);
+                    notify.success("Projeto renomeado", { description: name.trim() });
+                  }}
+                />
                 <p
                   role="status"
                   className={`flex items-center gap-1.5 text-[11px] ${saving.error ? "text-red-800" : "text-muted-foreground"}`}

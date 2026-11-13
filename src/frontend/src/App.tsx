@@ -5,7 +5,7 @@
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ProjectQuickActions } from "@/features/projects/ProjectQuickActions";
-import { RecentProjects } from "@/features/projects/RecentProjects";
+import { ProjectTables } from "@/features/projects/ProjectTables";
 import {
   chooseProject,
   newSnapshot,
@@ -272,7 +272,7 @@ function App() {
                       : undefined
                   }
                 />
-                {isTauri() && <RecentProjects onOpen={openProject} />}
+                {isTauri() && <ProjectTables onOpen={openProject} />}
               </>
             ) : (
               <section className="max-w-[980px]" aria-labelledby="about-title">

@@ -85,6 +85,17 @@ pub fn write_checked(
     Ok(())
 }
 
+/// Updates only the stored project name, keeping every other field untouched.
+/// Returns an error for incompatible files or failed transactions.
+pub fn write_name(path: &Path, name: &str) -> Result<(), ProjectError> {
+    let mut conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
+    let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    validate(&tx)?;
+    tx.execute("UPDATE project SET name=?1", params![name])?;
+    tx.commit()?;
+    Ok(())
+}
+
 fn save(conn: &mut Connection, snapshot: &ProjectSnapshot) -> Result<(), ProjectError> {
     let tx = conn.transaction()?;
     replace(&tx, snapshot)?;

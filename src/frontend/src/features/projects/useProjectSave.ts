@@ -11,6 +11,7 @@ import {
   chooseDestination,
   projectClient,
   rememberProject,
+  replaceRecentPath,
   type OpenProject,
   type ProjectSnapshot,
 } from "./project-client";
@@ -145,6 +146,33 @@ export function useProjectSave(initial: OpenProject | null, content: string) {
     }
   }, [persist]);
 
+  /**
+   * Renames the open project (stored name and file). Pending edits are saved first, and the
+   * hook then follows the new path and snapshot so later saves keep working.
+   * @param name - New project name.
+   * @returns Resolves when renamed; rejects with the readable failure otherwise.
+   */
+  const rename = useCallback(
+    async (name: string) => {
+      if (!current.current) return;
+      if (destinationOpen.current || !(await flush())) {
+        throw new Error("Aguarde o salvamento terminar e tente novamente.");
+      }
+      const job = queue.current.then(async () => {
+        const active = current.current;
+        if (!active) return;
+        const nextPath = await projectClient.rename(active.path, name);
+        const next = { path: nextPath, snapshot: { ...active.snapshot, name: name.trim() } };
+        current.current = next;
+        setProject(next);
+        replaceRecentPath(active.path, nextPath);
+      });
+      queue.current = job.catch(() => undefined);
+      await job;
+    },
+    [flush],
+  );
+
   const usesNativeMenu = isTauri() && /^Mac/.test(navigator.platform);
   useEffect(() => {
     if (!initial || !usesNativeMenu) return;
@@ -177,5 +205,6 @@ export function useProjectSave(initial: OpenProject | null, content: string) {
     flush,
     canLeave,
     saveAs,
+    rename,
   };
 }
