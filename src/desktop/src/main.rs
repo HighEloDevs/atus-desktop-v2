@@ -8,6 +8,9 @@ mod project;
 mod quick;
 #[cfg(feature = "desktop-e2e")]
 mod quick_e2e;
+mod update;
+#[cfg(feature = "desktop-e2e")]
+mod update_e2e;
 
 #[cfg(all(feature = "desktop-e2e", not(debug_assertions)))]
 compile_error!("The desktop-e2e feature is only permitted in debug builds");
@@ -74,6 +77,7 @@ fn main() {
             #[cfg(target_os = "macos")]
             project::menu::install(app)?;
             quick::install(app.handle())?;
+            update::install(app.handle());
             // Without a tray (for example Linux without an appindicator library) the app still
             // works; only the background entry points are missing.
             if let Err(error) = background::install_tray(app.handle()) {
@@ -86,6 +90,9 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        // Registered without a capability for the web content: only the commands of `update` are
+        // reachable, and nothing asks for updates until the interface does.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             get_mock_analysis,
             export::export_image_write,
@@ -93,6 +100,11 @@ fn main() {
             quick::quick_submit,
             quick::quick_dismiss,
             quick::take_quick_analysis,
+            update::update_status,
+            update::update_check,
+            update::update_download,
+            update::update_cancel_download,
+            update::update_install,
             project_create,
             project_open,
             project_save,
@@ -123,6 +135,10 @@ fn main() {
             quick_e2e::quick_test_set_clipboard,
             #[cfg(feature = "desktop-e2e")]
             quick_e2e::quick_test_close_main,
+            #[cfg(feature = "desktop-e2e")]
+            update_e2e::update_test_configure,
+            #[cfg(feature = "desktop-e2e")]
+            update_e2e::update_test_installed,
             #[cfg(all(feature = "desktop-e2e", target_os = "macos"))]
             project_test_finder,
             #[cfg(target_os = "macos")]

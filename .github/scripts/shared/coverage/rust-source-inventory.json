@@ -1,5 +1,5 @@
 {
-  "testOnly": ["project/e2e.rs", "project/test_support.rs", "quick_e2e.rs"],
+  "testOnly": ["project/e2e.rs", "project/test_support.rs", "quick_e2e.rs", "update_e2e.rs"],
   "noExecutableLines": {
     "project/mod.rs": "d3988dfa0107c07a518211b08b1fe7317d60fa9dbc78f3224b322acd6e155f80",
     "project/model.rs": "708a34cea6b6d309bb31b91a5763a6fc3b976054ae1a1ba2751b8ac5b958803e"

@@ -16,6 +16,12 @@ As portas 1420 e 4455 devem estar livres. Encerre os dois processos e remova o d
 
 No Linux, o experimento `xvfb-run -a .github/scripts/linux/run-e2e.sh` inicia e encerra os processos, usa um diretório temporário e isola o diretório pessoal do aplicativo. Antes, instale as dependências do Tauri, Xvfb e `xauth`, execute `npm ci` em `src/frontend` e compile a feature de teste conforme acima. Este runner ainda não foi validado em Linux ou CI e não é gate de PR.
 
+## Atualizações
+
+`src/frontend/tests/desktop/smoke.updater.e2e.mjs` testa o updater (`src/desktop/src/update.rs`) no aplicativo real. Ele sobe um servidor local (`updater-fixture.mjs`) que faz o papel das releases, gera uma chave minisign descartável e diz ao aplicativo, pelo comando `update_test_configure` (só com `desktop-e2e`, `update_e2e.rs`), para consultar esse servidor e confiar nessa chave. Cobre: procurar sem atualização, servidor fora do ar e manifesto ausente, anunciar uma versão nova, baixar em segundo plano com eventos de andamento, cancelar e baixar de novo, pacote adulterado, assinatura de outra chave, assinatura de outra versão ou sem versão (`requireSignedVersion`), a recusa de instalar antes de baixar e o fato de o conteúdo web não alcançar os comandos do plugin. O pacote nunca é instalado: o build de teste só registra os bytes recebidos (`update_test_installed`), porque o teste não pode substituir o binário que executa. Os runners dos quatro sistemas o executam depois de `smoke.e2e.mjs` e antes do teste de análise rápida, que encerra o aplicativo.
+
+Localmente no macOS, o plugin de instância única faz o aplicativo de teste sair se outra cópia do ATUS estiver aberta. Compile um binário com outro identificador (`TAURI_CONFIG='{"identifier":"org.atus.desktop.e2etest"}' cargo build --features desktop-e2e`, de preferência com `CARGO_TARGET_DIR` próprio) e execute-o de um caminho sem links simbólicos: o Tauri recusa `current_exe` dentro de `/var`.
+
 ## Análise rápida
 
 `src/frontend/tests/desktop/smoke.quick-analysis.e2e.mjs` percorre a análise rápida no aplicativo real, numa única instância, e termina encerrando o aplicativo. Os runners dos quatro sistemas (macOS Apple Silicon e Intel, Windows e Linux) o executam depois de `smoke.e2e.mjs`, que precisa começar com o diretório de projetos vazio, e conferem que o processo saiu com código 0. Os dois arquivos usam os auxiliares de `tests/desktop/driver.mjs`.

@@ -78,15 +78,16 @@ export function selectArtifacts(root, version) {
  * Verify every updater signature against the public key the released app trusts.
  * @param {Array<{path: string, name: string, signature: string|null}>} selected Result of {@link selectArtifacts}.
  * @param {string} publicKey `plugins.updater.pubkey` at the released commit.
+ * @param {string} version Release version, which every signature must name.
  * @returns {Record<string, string>} Signature text by asset name.
  * @throws {Error} When a signature is invalid, listing every failing asset.
  */
-export function verifySignatures(selected, publicKey) {
+export function verifySignatures(selected, publicKey, version) {
   const signatures = {};
   const problems = [];
   for (const { path, name, signature } of selected.filter((entry) => entry.signature)) {
     const text = readFileSync(signature, 'utf8');
-    const problem = checkSignature(readFileSync(path), text, publicKey);
+    const problem = checkSignature(readFileSync(path), text, publicKey, version);
     if (problem) problems.push(`${name}: ${problem}`);
     signatures[name] = text.trim();
   }
@@ -223,7 +224,7 @@ export function publish({ run, artifacts, repository }) {
   const selected = selectArtifacts(artifacts, version);
   // The release-version job already validated the notes and their images at this commit.
   const { title, body } = releaseText(execFileSync('git', ['show', `${sha}:docs/releases/${tag}.md`], { encoding: 'utf8' }), { version, repository, sha });
-  const signatures = verifySignatures(selected, config.plugins?.updater?.pubkey);
+  const signatures = verifySignatures(selected, config.plugins?.updater?.pubkey, version);
   const history = notesAt(sha);
   const current = history.find((entry) => entry.version === version);
   const directory = mkdtempSync(join(tmpdir(), 'atus-release-'));

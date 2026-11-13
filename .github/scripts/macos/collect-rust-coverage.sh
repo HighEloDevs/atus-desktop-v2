@@ -109,6 +109,7 @@ if [[ -n "${CI:-}" ]]; then
   key_command="osascript -e 'tell application \"System Events\" to key code 11 using {control down, command down}'"
 fi
 (cd src/frontend && ATUS_DESKTOP_E2E_PROJECT_DIR="$tmp/projects" ATUS_DESKTOP_E2E_URL=http://127.0.0.1:4455 node --test tests/desktop/smoke.e2e.mjs)
+(cd src/frontend && ATUS_DESKTOP_E2E_PROJECT_DIR="$tmp/projects" ATUS_DESKTOP_E2E_URL=http://127.0.0.1:4455 node --test tests/desktop/smoke.updater.e2e.mjs)
 (cd src/frontend && ATUS_E2E_KEY_COMMAND="$key_command" ATUS_DESKTOP_E2E_PROJECT_DIR="$tmp/projects" ATUS_DESKTOP_E2E_URL=http://127.0.0.1:4455 node --test tests/desktop/smoke.quick-analysis.e2e.mjs)
 # The desktop tests quit the application through its own quit path, which lets LLVM flush the
 # profile. A hidden quick analysis window keeps the process alive after the main window closes, so
@@ -138,7 +139,7 @@ if kill -0 "$app_pid" 2>/dev/null; then echo 'Test application did not exit; no 
 wait "$app_pid" || { echo 'Test application did not exit cleanly.' >&2; exit 1; }; app_pid=''
 if (( coverage )); then
 "$profdata" merge -sparse "$tmp"/profiles/*.profraw -o "$tmp/merged.profdata"
-"$cov" export -format=lcov -ignore-filename-regex='/(project/e2e|project/test_support|quick_e2e)\.rs$' -instr-profile="$tmp/merged.profdata" src/desktop/target/debug/atus-desktop -object "$(cat "$tmp/binary")" "$root/src/desktop/src" > "$output"
+"$cov" export -format=lcov -ignore-filename-regex='/(project/e2e|project/test_support|quick_e2e|update_e2e)\.rs$' -instr-profile="$tmp/merged.profdata" src/desktop/target/debug/atus-desktop -object "$(cat "$tmp/binary")" "$root/src/desktop/src" > "$output"
 node .github/scripts/shared/coverage/strip-rust-tests.mjs "$output"
 grep -q '^SF:' "$output" || { echo 'Rust coverage report is empty.' >&2; exit 1; }
 node .github/scripts/shared/coverage/check-rust-inventory.mjs "$root/src/desktop/src" "$output" .github/scripts/shared/coverage/rust-source-inventory.json

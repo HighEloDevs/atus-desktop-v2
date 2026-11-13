@@ -54,6 +54,12 @@ pub fn has_tray<R: Runtime>(app: &AppHandle<R>) -> bool {
     app.tray_by_id(TRAY_ID).is_some()
 }
 
+/// Removes the tray icon. Used right before the process ends abruptly (the Windows installer),
+/// so that the system does not keep a stale icon.
+pub fn remove_tray<R: Runtime>(app: &AppHandle<R>) {
+    let _ = app.remove_tray_by_id(TRAY_ID);
+}
+
 /// Installs the tray icon and its menu, treating every failure as "no tray".
 ///
 /// On Linux the tray library loads `libayatana-appindicator3` at run time and panics, instead of
@@ -152,5 +158,11 @@ mod tests {
         assert!(!exit_needs_save(None, false));
         assert!(!exit_needs_save(Some(0), true));
         assert!(!exit_needs_save(Some(0), false));
+    }
+
+    #[test]
+    fn a_restart_for_an_update_is_never_held_back_by_the_save_guard() {
+        // `AppHandle::restart` asks to exit with this code after the frontend already saved.
+        assert!(!exit_needs_save(Some(tauri::RESTART_EXIT_CODE), true));
     }
 }
