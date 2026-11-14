@@ -23,6 +23,33 @@ export const formatTick = (value: number) =>
   new Intl.NumberFormat("pt-BR", { maximumSignificantDigits: 5 }).format(value);
 
 /**
+ * Y range of the residuals panel: symmetric around zero unless limits are typed.
+ * @param series - Series that may carry residuals.
+ * @param errorBars - Whether the uncertainty bars are drawn (they widen the range).
+ * @param min - Typed lower limit; empty for automatic.
+ * @param max - Typed upper limit; empty for automatic.
+ * @returns The [low, high] range.
+ */
+export function residualYDomain(
+  series: ResidualSource[],
+  errorBars: boolean,
+  min: string,
+  max: string,
+): [number, number] {
+  const values = series
+    .filter((item) => item.visible)
+    .flatMap((item) =>
+      (item.residuals ?? [])
+        .filter((r) => Number.isFinite(r.x) && Number.isFinite(r.residual))
+        .flatMap((r) => [
+          r.residual,
+          ...(errorBars && r.sy ? [r.residual - r.sy, r.residual + r.sy] : []),
+        ]),
+    );
+  return residualDomain(values, min, max);
+}
+
+/**
  * Tells whether any visible series has at least one finite residual.
  * @param series - Series that may carry residuals.
  * @returns True when the residuals panel has something to draw.
