@@ -15,6 +15,8 @@ export interface UpdateApi {
   state: UpdateState;
   /** The notes of every version known: the ones embedded in the build and the ones announced. */
   changelog: ChangelogVersion[];
+  /** The version this launch has just been updated to, or null. The news of it should open. */
+  justUpdated: string | null;
   /** Whether the once-a-day banner is showing. */
   bannerVisible: boolean;
   /** Whether the install confirmation is open. It only opens for a downloaded update. */
@@ -47,6 +49,7 @@ const nothing = async () => {};
 export const INERT_UPDATE: UpdateApi = {
   state: { kind: "idle" },
   changelog: [],
+  justUpdated: null,
   bannerVisible: false,
   dialogOpen: false,
   check: nothing,

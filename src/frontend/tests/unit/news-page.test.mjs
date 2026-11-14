@@ -238,9 +238,20 @@ it("renders the formatting and links of the notes", async () => {
 
 const footer = () => node.querySelector("aside > div:last-child");
 
-it("says the installed version is the newest when no update is waiting", async () => {
-  await show({ installed: "0.3.0" }, { state: { kind: "upToDate" } });
+it("says the installed version is the newest when no update is waiting, and can look again", async () => {
+  const check = vi.fn();
+  await show({ installed: "0.3.0" }, { state: { kind: "upToDate" }, check });
   expect(footer().textContent).toContain("Você está na versão 0.3.0");
+  await click(named("Procurar atualizações"));
+  expect(check).toHaveBeenCalledTimes(1);
+});
+
+it("shows that it is looking for updates", async () => {
+  await show({}, { state: { kind: "checking" } });
+  const looking = named("Procurando…");
+  expect(looking.disabled).toBe(true);
+  expect(looking.querySelector(".animate-spin")).not.toBeNull();
+  expect(named("Procurar atualizações")).toBeUndefined();
 });
 
 it("installs a downloaded update from the foot of the list", async () => {

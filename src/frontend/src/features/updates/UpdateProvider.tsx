@@ -54,6 +54,7 @@ export function UpdateProvider({
   const [bannerVersion, setBannerVersion] = useState<string | null>(null);
   const [dialogRequested, setDialogRequested] = useState(false);
   const [announced, setAnnounced] = useState<ChangelogVersion[]>([]);
+  const [justUpdated, setJustUpdated] = useState<string | null>(null);
   const stateRef = useRef(state);
   const guard = useRef<(() => Promise<boolean>) | null>(null);
   const installing = useRef(false);
@@ -128,6 +129,13 @@ export function UpdateProvider({
         // The core keeps a downloaded update while this window is closed, so start from it.
         const current = await client.status();
         if (active && current) apply(current);
+      } catch (error) {
+        console.error(error);
+      }
+      try {
+        // The core noticed that the app was just updated to this version, which opens its news.
+        const installed = await client.takeInstalled();
+        if (active && installed) setJustUpdated(installed);
       } catch (error) {
         console.error(error);
       }
@@ -235,6 +243,7 @@ export function UpdateProvider({
     () => ({
       state,
       changelog,
+      justUpdated,
       bannerVisible: offered && bannerVersion === state.version,
       dialogOpen: dialogRequested && state.kind === "ready",
       check,
@@ -251,6 +260,7 @@ export function UpdateProvider({
     [
       state,
       changelog,
+      justUpdated,
       offered,
       bannerVersion,
       dialogRequested,

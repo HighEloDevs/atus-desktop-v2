@@ -112,6 +112,8 @@ test("never reaches GitHub from the test build until a test server is configured
     kind: "unavailable",
     reason: "developmentBuild",
   });
+  // The test build never records an installation, so no launch of it counts as just updated.
+  assert.equal(await main.invoke("update_take_installed"), null);
 });
 
 test("starts idle, and nothing is checked until asked", async () => {

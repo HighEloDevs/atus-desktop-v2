@@ -83,11 +83,28 @@ export function NewsUpdateFooter({ installed }: { installed: string }) {
           </Button>
         </>
       );
+    case "checking":
+      return (
+        <Button type="button" variant="outline" className="w-full" disabled>
+          <LoaderCircle aria-hidden className="animate-spin" /> Procurando…
+        </Button>
+      );
     default:
       return (
-        <p className="flex items-center gap-2 text-xs font-semibold text-success">
-          <Check aria-hidden size={14} /> Você está na versão {installed}
-        </p>
+        <>
+          <p className="flex items-center gap-2 text-xs font-semibold text-success">
+            <Check aria-hidden size={14} /> Você está na versão {installed}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => void update.check()}
+          >
+            Procurar atualizações
+          </Button>
+        </>
       );
   }
 }

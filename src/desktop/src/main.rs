@@ -103,6 +103,7 @@ fn main() {
             update::update_status,
             update::update_check,
             update::update_changelog,
+            update::update_take_installed,
             update::update_download,
             update::update_cancel_download,
             update::update_install,

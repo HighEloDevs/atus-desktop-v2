@@ -107,6 +107,29 @@ it("opens the news of the running version on the first launch after an update, o
   expect(node.querySelector("header").textContent).toContain("Início");
 });
 
+it("opens the news of the version just installed even when the app never recorded one", async () => {
+  // The first update from 0.2.8 reaches here with nothing in localStorage: only the core knows.
+  expect(localStorage.getItem(NEWS_SEEN_KEY)).toBeNull();
+  await render({ justUpdated: "0.3.0" });
+  expect(node.querySelector("header").textContent).toContain("Novidades");
+  expect(articleTitle()).toBe("Resíduos à vista");
+  expect(sidebarItem("Novidades").getAttribute("aria-current")).toBe("page");
+  // It opens once: going home keeps the person there.
+  await click(sidebarItem("Início"));
+  expect(node.querySelector("header").textContent).toContain("Início");
+  await render({ justUpdated: "0.3.0" });
+  expect(node.querySelector("header").textContent).toContain("Início");
+});
+
+it("opens the news once when both the core and the app say it was just updated", async () => {
+  localStorage.setItem(NEWS_SEEN_KEY, "0.2.0");
+  await render({ justUpdated: "0.3.0" });
+  expect(node.querySelector("header").textContent).toContain("Novidades");
+  expect(articleTitle()).toBe("Resíduos à vista");
+  await click(sidebarItem("Início"));
+  expect(node.querySelector("header").textContent).toContain("Início");
+});
+
 it("starts on the home screen on the very first run, and remembers the version", async () => {
   await render();
   expect(node.querySelector("header").textContent).toContain("Início");

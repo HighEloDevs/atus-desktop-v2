@@ -49,6 +49,7 @@ function fakeClient(overrides = {}) {
     cancelDownload: vi.fn().mockResolvedValue(null),
     install: vi.fn().mockResolvedValue(null),
     changelog: vi.fn().mockResolvedValue(null),
+    takeInstalled: vi.fn().mockResolvedValue(null),
     unlisten: vi.fn(),
     send: (state) => client.callback?.(state),
     onState: vi.fn(async (callback) => {
@@ -454,4 +455,34 @@ it("ignores announced notes that cannot be trusted, and a request that fails", a
   await send(failing, available("0.3.0"));
   expect(api.changelog.map((item) => item.version)).toEqual(["0.2.4", "0.2.3"]);
   expect(notify.error).not.toHaveBeenCalled();
+});
+
+it("tells that this launch was just updated, when the core says so", async () => {
+  const client = fakeClient({ takeInstalled: vi.fn().mockResolvedValue("0.2.9") });
+  await mount(client);
+  expect(api.justUpdated).toBe("0.2.9");
+  expect(client.takeInstalled).toHaveBeenCalledTimes(1);
+  const ordinary = fakeClient();
+  await act(async () => root.unmount());
+  root = createRoot(node);
+  await mount(ordinary);
+  expect(api.justUpdated).toBeNull();
+});
+
+it("keeps working when the core cannot say whether it was just updated", async () => {
+  const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+  await mount(fakeClient({ takeInstalled: vi.fn().mockRejectedValue("falhou") }));
+  expect(api.justUpdated).toBeNull();
+  expect(errors).toHaveBeenCalledTimes(1);
+});
+
+it("ignores the answer when the window went away before it came", async () => {
+  let answer;
+  const client = fakeClient({ takeInstalled: vi.fn(() => new Promise((done) => (answer = done))) });
+  await mount(client);
+  await act(async () => root.unmount());
+  await act(async () => answer("0.2.9"));
+  root = createRoot(node);
+  await mount(fakeClient());
+  expect(api.justUpdated).toBeNull();
 });

@@ -171,6 +171,17 @@ function App() {
       ? update.state.version
       : null;
   const { unseen: unseenNews, markSeen } = useUpdateSeen(offeredVersion);
+  // The core says when this launch is the first after an update; then the news of that version
+  // open once, if the person is still on the home screen. (Adjusting state while rendering, as
+  // React recommends, keeps this out of an effect.)
+  const [handledUpdate, setHandledUpdate] = useState<string | null>(null);
+  if (update.justUpdated && update.justUpdated !== handledUpdate) {
+    setHandledUpdate(update.justUpdated);
+    if (page === "home") {
+      setNewsVersion(update.justUpdated);
+      setPage("news");
+    }
+  }
   useEffect(() => {
     writeSeen(NEWS_SEEN_KEY, APP_VERSION);
   }, []);
