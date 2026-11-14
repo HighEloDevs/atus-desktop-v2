@@ -13,6 +13,12 @@ import {
   type AxisKey,
   type AxisSettings,
 } from "./axisSettings";
+import {
+  LEGEND_DEFAULT_POSITION,
+  LEGEND_DEFAULTS,
+  restoreLegendStyle,
+  type LegendStyle,
+} from "./legendSettings";
 
 export const chartLinePatterns = {
   solid: "",
@@ -58,7 +64,18 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
   const [legendOrientation, setLegendOrientation] = useState<"horizontal" | "vertical">(
     initial?.legendOrientation ?? "vertical",
   );
-  const [legendPosition, setLegendPosition] = useState(initial?.legendPosition ?? { x: 1, y: 0.5 });
+  const [legendPosition, setLegendPosition] = useState(
+    initial?.legendPosition ?? LEGEND_DEFAULT_POSITION,
+  );
+  const [legendStyle, setLegendStyle] = useState(() => restoreLegendStyle(initial?.legendStyle));
+  const updateLegendStyle = (patch: Partial<LegendStyle>) =>
+    setLegendStyle((current) => ({ ...current, ...patch }));
+  /** Restores the legend layout and look; its title is user content and stays. */
+  const resetLegend = () => {
+    setLegendStyle((current) => ({ ...LEGEND_DEFAULTS, title: current.title }));
+    setLegendOrientation("vertical");
+    setLegendPosition(LEGEND_DEFAULT_POSITION);
+  };
   const [color, setColor] = useState(initial?.color ?? "#f25a3c");
   const [radius, setRadius] = useState(initial?.radius ?? 5);
   const [symbol, setSymbol] = useState(initial?.symbol ?? "circle");
@@ -139,6 +156,9 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
     setLegendOrientation,
     legendPosition,
     setLegendPosition,
+    legendStyle,
+    updateLegendStyle,
+    resetLegend,
     xLog: axes.x.log,
     setXLog: (log: boolean) => updateAxis("x", { log }),
     yLog: axes.y.log,
@@ -206,6 +226,8 @@ export type ChartValues = {
   legend: boolean;
   legendOrientation: "horizontal" | "vertical";
   legendPosition: { x: number; y: number };
+  /** Legend content, box and sizes; older projects take the defaults. */
+  legendStyle: LegendStyle;
   /** Legacy fields below are derived from the axes and still saved for older versions. */
   xLog: boolean;
   yLog: boolean;

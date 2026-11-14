@@ -283,10 +283,7 @@ it("renders diamond markers, hides grid and legend, and dims non-selected series
 
 it("moves the legend within the chart bounds when dragged", async () => {
   await act(async () => root.render(createElement(Harness)));
-  const legend = [...node.querySelectorAll("div")].find(
-    (element) =>
-      element.className.includes?.("cursor-grab") && element.textContent.includes("Primeira"),
-  );
+  const legend = node.querySelector('button[aria-label="Legenda"]');
   expect(legend).toBeDefined();
   legend.setPointerCapture = () => {};
   legend.getBoundingClientRect = () => ({ left: 20, top: 20, width: 100, height: 40 });
@@ -301,4 +298,7 @@ it("moves the legend within the chart bounds when dragged", async () => {
   expect(legend.style.left).not.toBe("100%");
   expect(legend.style.top).not.toBe("50%");
   await act(async () => legend.dispatchEvent(event("pointerup", 300, 250)));
+  // The click that ends a drag does not open the legend popover.
+  await act(async () => legend.click());
+  expect(document.querySelector('[data-slot="popover-content"]')).toBeNull();
 });

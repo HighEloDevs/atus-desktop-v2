@@ -30,6 +30,7 @@ import { chartLinePatterns, type ChartSettings } from "./useChartSettings";
 import { HISTOGRAM_GUTTER, ResidualPanel } from "./ResidualPanel";
 import { hasResiduals, residualYDomain, type ChartResidual } from "./residuals";
 import { EditableChartLabel } from "./EditableChartLabel";
+import { ChartLegend } from "./ChartLegend";
 import { ChartTooltip } from "./ChartTooltip";
 import { axisPosition } from "./axisPosition";
 import { densifyCurve } from "./curvePath";
@@ -68,6 +69,8 @@ export type ChartSeries = {
   visible: boolean;
   /** Residuals of the latest fit, when there is one. */
   residuals?: ChartResidual[];
+  /** Fitted equation with its parameter values, in LaTeX, for the legend. */
+  legendEquation?: string;
 };
 type ChartProps = {
   series: ChartSeries[];
@@ -135,10 +138,6 @@ export function Chart({
     setXLabel,
     yLabel,
     setYLabel,
-    legend,
-    legendOrientation,
-    legendPosition,
-    setLegendPosition,
     xAxis,
     yAxis,
     updateAxis,
@@ -158,7 +157,6 @@ export function Chart({
     (on: boolean) => setHotAxis((current) => (on ? "y" : current === "y" ? null : current)),
     [],
   );
-  const legendDrag = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const [active, setActive] = useState<{ seriesId: string; row: number } | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const zoomRef = useRef<ReturnType<typeof zoom<SVGSVGElement, unknown>> | null>(null);
@@ -701,63 +699,12 @@ export function Chart({
                 onHighlightChange={highlightX}
               />
             )}
-            {legend && (
-              <div
-                className={`absolute z-[1] flex max-w-full touch-none cursor-grab select-none gap-x-4 gap-y-1 rounded bg-white/90 px-2 py-1 text-[11px] text-[#66716e] active:cursor-grabbing ${legendOrientation === "vertical" ? "flex-col" : "flex-row flex-wrap"}`}
-                style={{
-                  left: `${legendPosition.x * 100}%`,
-                  top: `${legendPosition.y * 100}%`,
-                  transform: `translate(${-legendPosition.x * 100}%, ${-legendPosition.y * 100}%)`,
-                }}
-                onPointerDown={(event) => {
-                  if (event.button !== 0) return;
-                  event.preventDefault();
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  legendDrag.current = {
-                    pointerId: event.pointerId,
-                    offsetX: event.clientX - rect.left,
-                    offsetY: event.clientY - rect.top,
-                  };
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                  event.stopPropagation();
-                }}
-                onPointerMove={(event) => {
-                  const drag = legendDrag.current;
-                  const parent = container.current;
-                  if (!drag || drag.pointerId !== event.pointerId || !parent) return;
-                  const bounds = parent.getBoundingClientRect();
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  const availableX = Math.max(0, bounds.width - rect.width);
-                  const availableY = Math.max(0, bounds.height - rect.height);
-                  setLegendPosition({
-                    x: availableX
-                      ? Math.max(
-                          0,
-                          Math.min(1, (event.clientX - bounds.left - drag.offsetX) / availableX),
-                        )
-                      : 0,
-                    y: availableY
-                      ? Math.max(
-                          0,
-                          Math.min(1, (event.clientY - bounds.top - drag.offsetY) / availableY),
-                        )
-                      : 0,
-                  });
-                }}
-                onPointerUp={() => {
-                  legendDrag.current = null;
-                }}
-                onPointerCancel={() => {
-                  legendDrag.current = null;
-                }}
-              >
-                {visibleSeries.map((item) => (
-                  <span key={item.id} className="whitespace-nowrap">
-                    <span style={{ color: item.color }}>●</span> {item.name}
-                  </span>
-                ))}
-              </div>
-            )}
+            <ChartLegend
+              settings={settings}
+              series={visibleSeries}
+              bounds={container}
+              plotLeft={margin.left}
+            />
             {tooltipPoints.length > 0 && (
               <ChartTooltip points={tooltipPoints} labels={tooltipLabels} bounds={size} />
             )}

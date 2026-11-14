@@ -4,19 +4,11 @@
  * settings: limits and scale, ticks and grid, and title and number text.
  */
 
-import { X } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverClose,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   AXIS_BOUNDS,
   axisLimitsError,
@@ -27,6 +19,16 @@ import {
   type TickRotation,
 } from "./axisSettings";
 import { OptionRow } from "./OptionRow";
+import {
+  Field,
+  FieldError,
+  headingClass,
+  PopoverHeader,
+  PopoverTabsList,
+  sectionClass,
+  Segmented,
+  Stepper,
+} from "./PopoverFields";
 import type { ChartSettings } from "./useChartSettings";
 
 /** Position and size, in pixels, of an axis click target inside the chart area. */
@@ -70,150 +72,6 @@ const TICK_GLYPHS = {
   in: "M5 6V1M9 6V1",
   cross: "M5 1V11M9 1V11",
 };
-
-const sectionClass = "grid gap-2 border-t border-border px-4 py-3";
-const headingClass =
-  "mb-0.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground";
-
-/**
- * One form row: label on the left, a fixed control column on the right.
- * @param props - Label text, the control, and the id the label points to.
- * @returns The rendered React element.
- */
-function Field({
-  label,
-  htmlFor,
-  children,
-}: {
-  label: string;
-  htmlFor?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="grid min-h-8 grid-cols-[minmax(0,1fr)_156px] items-center gap-2.5 text-xs">
-      {htmlFor ? (
-        <label htmlFor={htmlFor} className="font-medium">
-          {label}
-        </label>
-      ) : (
-        <span className="font-medium">{label}</span>
-      )}
-      {children}
-    </div>
-  );
-}
-
-/**
- * Segmented single choice that fills the control column.
- * @param props - Accessible name, options, current value, and change callback.
- * @returns The rendered React element.
- */
-function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: T;
-  options: { value: T; label: ReactNode; name?: string }[];
-  onChange: (value: T) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <ToggleGroup
-      type="single"
-      aria-label={label}
-      value={value}
-      onValueChange={(next) => next && onChange(next as T)}
-      disabled={disabled}
-      spacing={0.5}
-      className="w-full rounded-md bg-muted p-0.5"
-    >
-      {options.map((option) => (
-        <ToggleGroupItem
-          key={option.value}
-          value={option.value}
-          aria-label={option.name}
-          className="h-7 min-w-0 flex-1 rounded-[5px] px-1 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-brand-coral data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
-        >
-          {option.label}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
-  );
-}
-
-/**
- * Minus/value/plus control for a bounded integer setting.
- * @param props - Accessible name, value, bounds, shown text, change callback, and
- * disabled state.
- * @returns The rendered React element.
- */
-function Stepper({
-  label,
-  value,
-  bounds,
-  display,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: number;
-  bounds: readonly [number, number];
-  display?: string;
-  onChange: (value: number) => void;
-  disabled?: boolean;
-}) {
-  const button =
-    "grid h-full w-8 place-items-center text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-coral";
-  return (
-    <div
-      role="group"
-      aria-label={label}
-      className="flex h-8 w-full items-stretch overflow-hidden rounded-md border border-input"
-    >
-      <button
-        type="button"
-        aria-label={`Diminuir ${label}`}
-        className={button}
-        disabled={disabled || value <= bounds[0]}
-        onClick={() => onChange(value - 1)}
-      >
-        −
-      </button>
-      <output
-        aria-live="polite"
-        className={`grid flex-1 place-items-center border-x border-input font-mono text-xs ${disabled ? "text-muted-foreground" : ""}`}
-      >
-        {display ?? value}
-      </output>
-      <button
-        type="button"
-        aria-label={`Aumentar ${label}`}
-        className={button}
-        disabled={disabled || value >= bounds[1]}
-        onClick={() => onChange(value + 1)}
-      >
-        +
-      </button>
-    </div>
-  );
-}
-
-/**
- * Inline validation message.
- * @param props - Message text.
- * @returns The rendered React element.
- */
-function FieldError({ children }: { children: ReactNode }) {
-  return (
-    <p role="alert" className="text-[11.5px] text-destructive">
-      {children}
-    </p>
-  );
-}
 
 const tickGlyph = (path: string) => (
   <svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true">
@@ -264,26 +122,13 @@ function AxisSettingsForm({
   return (
     <>
       <Tabs value={tab} onValueChange={(next) => onTabChange(next as Tab)} className="gap-0">
-        <TabsList
-          variant="line"
-          className="relative z-10 h-auto w-full justify-start gap-4 px-4 pb-0"
-        >
-          {(
-            [
-              ["interval", "Intervalo"],
-              ["ticks", "Marcações"],
-              ["text", "Texto"],
-            ] as const
-          ).map(([value, label]) => (
-            <TabsTrigger
-              key={value}
-              value={value}
-              className="flex-none px-0 pb-2 pt-0.5 text-xs group-data-[orientation=horizontal]/tabs:after:-bottom-0.5 focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-brand-coral"
-            >
-              {label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <PopoverTabsList
+          tabs={[
+            ["interval", "Intervalo"],
+            ["ticks", "Marcações"],
+            ["text", "Texto"],
+          ]}
+        />
         <div className="min-h-[330px]">
           <TabsContent value="interval">
             <section className={sectionClass}>
@@ -649,15 +494,7 @@ export function AxisSettingsPopover({
         collisionPadding={12}
         className="max-h-[var(--radix-popover-content-available-height)] w-[316px] overflow-y-auto rounded-[14px] p-0"
       >
-        <header className="flex items-center justify-between py-3 pl-4 pr-3.5">
-          <h2 className="text-[13px] font-semibold">{name}</h2>
-          <PopoverClose
-            aria-label="Fechar"
-            className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-brand-coral"
-          >
-            <X size={15} />
-          </PopoverClose>
-        </header>
+        <PopoverHeader title={name} />
         <AxisSettingsForm
           axis={axis}
           settings={settings}
