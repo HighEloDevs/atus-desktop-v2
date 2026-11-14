@@ -28,22 +28,23 @@ import {
 } from "lucide-react";
 import { chartLinePatterns, type ChartSettings } from "./useChartSettings";
 import { HISTOGRAM_GUTTER, ResidualPanel } from "./ResidualPanel";
-import { hasResiduals, type ChartResidual } from "./residuals";
+import { hasResiduals, residualYDomain, type ChartResidual } from "./residuals";
 import { EditableChartLabel } from "./EditableChartLabel";
 import { ChartTooltip } from "./ChartTooltip";
 import { axisPosition } from "./axisPosition";
 import {
   AXIS_COLORS,
   formatAxisTick,
-  labelWidth,
+  formatResidualTick,
   majorTicks,
   minorTicks,
   xLabelSpace,
   yLabelGap,
+  yLabelWidth,
   type AxisKey,
   type AxisSettings,
 } from "./axisSettings";
-import { AxisGrid, TickMarks, XTickLabels } from "./AxisMarks";
+import { AxisGrid, TickMarks, XTickLabels, YTickLabels } from "./AxisMarks";
 import { AxisSettingsPopover } from "./AxisSettingsPopover";
 import {
   describeTooltip,
@@ -140,6 +141,8 @@ export function Chart({
     updateAxis,
     residuals,
     residualHistogram,
+    residualErrorBars,
+    residualAxis,
   } = settings;
   const xLog = xAxis.log;
   const yLog = yAxis.log;
@@ -220,14 +223,34 @@ export function Chart({
     xAxis,
   );
   const ySpace =
-    Math.max(0, ...draft.yt.map((t) => labelWidth(formatAxisTick(t, yAxis), yAxis.fontSize))) +
+    yLabelWidth(
+      draft.yt.map((t) => formatAxisTick(t, yAxis)),
+      yAxis,
+    ) +
     yLabelGap(yAxis) +
     4;
+  // The residuals panel shares the left margin, so its labels count too.
+  const residualTicks = panelOn
+    ? majorTicks(
+        scaleLinear().domain(
+          residualYDomain(series, residualErrorBars, residualAxis.min, residualAxis.max),
+        ),
+        residualAxis,
+      )
+    : [];
+  const residualSpace = panelOn
+    ? yLabelWidth(
+        residualTicks.map((t) => formatResidualTick(t, residualAxis)),
+        residualAxis,
+      ) +
+      yLabelGap(residualAxis) +
+      4
+    : 0;
   const margin = {
     top: 16,
     right,
     bottom: panelOn ? 8 : Math.max(38, xSpace),
-    left: Math.max(65, Math.ceil(ySpace)),
+    left: Math.max(65, Math.ceil(ySpace), Math.ceil(residualSpace)),
   };
   const { w, h, x, y, xt, yt } = layout(margin.left, margin.bottom);
   const xm = minorTicks(x, xAxis, xt);
@@ -345,6 +368,7 @@ export function Chart({
               value={yLabel}
               onChange={setYLabel}
               fontSize={yAxis.titleSize}
+              rotated={yAxis.titleRotation === 90}
               onFontSizeChange={(titleSize) => updateAxis("y", { titleSize })}
               label="Editar título do eixo Y"
               placeholder="Eixo Y"
@@ -499,21 +523,12 @@ export function Chart({
                       highlighted={hotAxis === "x"}
                     />
                   )}
-                  <g data-testid="y-tick-labels">
-                    {yt.map((t) => (
-                      <text
-                        key={t}
-                        x={-yLabelGap(yAxis)}
-                        y={y(t)}
-                        dy=".32em"
-                        textAnchor="end"
-                        fontSize={yAxis.fontSize}
-                        fill={hotAxis === "y" ? AXIS_COLORS.labelHighlight : AXIS_COLORS.label}
-                      >
-                        {formatAxisTick(t, yAxis)}
-                      </text>
-                    ))}
-                  </g>
+                  <YTickLabels
+                    ticks={yt}
+                    scale={y}
+                    settings={yAxis}
+                    highlighted={hotAxis === "y"}
+                  />
                   <line
                     x1={0}
                     x2={w}

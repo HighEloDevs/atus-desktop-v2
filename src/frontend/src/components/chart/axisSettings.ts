@@ -5,11 +5,11 @@
  */
 
 import { tickStep } from "d3";
-import { superscript } from "@/features/analysis/fit/result-format";
+import { formatSignificant, superscript } from "@/features/analysis/fit/result-format";
 import { formatTick } from "./residuals";
 
-/** Which chart axis a setting belongs to. */
-export type AxisKey = "x" | "y";
+/** Which chart axis a setting belongs to; `residual` is the Y axis of the residuals panel. */
+export type AxisKey = "x" | "y" | "residual";
 /** Where tick marks point relative to the plot. */
 export type TickDirection = "out" | "in" | "cross";
 /** How tick labels are written. */
@@ -51,8 +51,10 @@ export type AxisSettings = {
   fontSize: number;
   /** Axis title font size, in pixels. */
   titleSize: number;
-  /** Tick label rotation; only the X axis uses it. */
+  /** Tick label rotation, counterclockwise; 90° turns Y labels vertical. */
   rotation: TickRotation;
+  /** Axis title rotation; only the Y axes use it (90° reads bottom to top). */
+  titleRotation: 0 | 90;
 };
 
 /** Settings of a fresh axis; they reproduce the chart before per-axis settings existed. */
@@ -74,7 +76,18 @@ export const AXIS_DEFAULTS: AxisSettings = {
   fontSize: 10,
   titleSize: 11,
   rotation: 0,
+  titleRotation: 0,
 };
+
+/**
+ * Defaults of one axis. The residuals panel is short, so its axis starts with fewer
+ * divisions.
+ * @param axis - Axis.
+ * @returns A fresh settings object.
+ */
+export function axisDefaults(axis: AxisKey): AxisSettings {
+  return axis === "residual" ? { ...AXIS_DEFAULTS, ticks: 3 } : { ...AXIS_DEFAULTS };
+}
 
 /** Inclusive bounds of the numeric settings, shared by the popover and the sidebar. */
 export const AXIS_BOUNDS = {
@@ -110,6 +123,8 @@ export type LegacyAxisValues = {
   yLog?: boolean;
   ticks?: number;
   grid?: boolean;
+  residualYMin?: string;
+  residualYMax?: string;
 };
 
 /**
@@ -130,7 +145,8 @@ export function clampAxisValue(key: keyof typeof AXIS_BOUNDS, value: number): nu
  * Builds an axis from a persisted value, falling back to the legacy flat fields.
  *
  * A saved per-axis object wins. Without one, limits, log scale, tick count and grid
- * come from the legacy fields, and everything else takes its default.
+ * come from the legacy fields, and everything else takes its default. The residual
+ * axis only had limits and followed the shared grid switch.
  * @param axis - Axis to build.
  * @param saved - Persisted per-axis object, if any.
  * @param legacy - Legacy flat values of the chart.
@@ -141,8 +157,15 @@ export function restoreAxis(
   saved: Partial<AxisSettings> | undefined,
   legacy: LegacyAxisValues = {},
 ): AxisSettings {
-  if (saved) return { ...AXIS_DEFAULTS, ...saved };
+  if (saved) return { ...axisDefaults(axis), ...saved };
   const pick = <T>(value: T | undefined, fallback: T) => (value === undefined ? fallback : value);
+  if (axis === "residual")
+    return {
+      ...axisDefaults("residual"),
+      min: pick(legacy.residualYMin, ""),
+      max: pick(legacy.residualYMax, ""),
+      grid: pick(legacy.grid, true),
+    };
   return {
     ...AXIS_DEFAULTS,
     min: pick(axis === "x" ? legacy.xMin : legacy.yMin, ""),
@@ -284,6 +307,17 @@ export function formatAxisTick(value: number, settings: AxisSettings): string {
 }
 
 /**
+ * Writes a residual tick label: the automatic format shows the sign ("+0,1", "−0,2").
+ * @param value - Tick value.
+ * @param settings - Residual axis settings.
+ * @returns The label text.
+ */
+export function formatResidualTick(value: number, settings: AxisSettings): string {
+  if (settings.format !== "auto") return formatAxisTick(value, settings);
+  return value === 0 ? "0" : `${value > 0 ? "+" : "−"}${formatSignificant(Math.abs(value), 2)}`;
+}
+
+/**
  * Offsets of a tick mark from the axis line, measured outward from the plot.
  * @param direction - Tick direction.
  * @param length - Tick length in pixels.
@@ -303,6 +337,19 @@ export function tickSpan(direction: TickDirection, length: number): [number, num
  */
 export function labelWidth(text: string, fontSize: number): number {
   return text.length * fontSize * 0.6;
+}
+
+/**
+ * Horizontal room the Y tick labels need left of the axis, given their rotation.
+ * @param labels - Label texts.
+ * @param settings - Y axis settings (font size and rotation).
+ * @returns Width in pixels.
+ */
+export function yLabelWidth(labels: string[], settings: AxisSettings): number {
+  const widest = Math.max(0, ...labels.map((label) => labelWidth(label, settings.fontSize)));
+  if (settings.rotation === 90) return settings.fontSize;
+  if (settings.rotation === 45) return (widest + settings.fontSize) * Math.SQRT1_2;
+  return widest;
 }
 
 /**

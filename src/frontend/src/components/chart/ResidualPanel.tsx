@@ -5,18 +5,25 @@
 
 import { scaleLinear } from "d3";
 import { SlidersHorizontal, X } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { formatSignificant } from "@/features/analysis/fit/result-format";
 import type { ChartSeries } from "./Chart";
-import { AxisGrid, XTickLabels } from "./AxisMarks";
-import type { AxisBox } from "./AxisSettingsPopover";
+import { AxisGrid, TickMarks, XTickLabels, YTickLabels } from "./AxisMarks";
+import { AxisSettingsPopover, type AxisBox } from "./AxisSettingsPopover";
+import { AXIS_COLORS, formatResidualTick, majorTicks, minorTicks } from "./axisSettings";
 import { EditableChartLabel } from "./EditableChartLabel";
 import { OptionRow } from "./OptionRow";
 import {
   formatTick,
-  residualDomain,
+  residualYDomain,
   residualHistogram as binResiduals,
   residualSigma,
   type ChartResidual,
@@ -48,15 +55,13 @@ type Props = {
   highlightedSeriesId?: string | null;
 };
 
-const signed = (value: number) =>
-  value === 0 ? "0" : `${value > 0 ? "+" : "−"}${formatSignificant(Math.abs(value), 2)}`;
-
 /**
  * Draws the residuals of every visible series against X, aligned with the main plot.
  *
  * The Y axis is symmetric around zero unless the user sets limits. The stems, the ±σ
  * band, the uncertainty bars and the lateral histogram are toggled from the options
- * popover, which also holds the Y limits. The Y title is editable like the other labels.
+ * popover, which also holds the Y limits. The Y title is editable like the other labels,
+ * and the Y tick labels open the same axis popover as the main chart's axes.
  * @param props - Series, the shared X scale, margins, chart settings, and highlighted series.
  * @returns The rendered React element.
  */
@@ -86,7 +91,8 @@ export function ResidualPanel({
   }, []);
   const {
     xAxis,
-    yAxis,
+    residualAxis,
+    updateAxis,
     residualYLabel,
     setResidualYLabel,
     residualYMin,
@@ -104,16 +110,17 @@ export function ResidualPanel({
   const withSigma = visible.filter((item) => residualSigma([item]) !== null);
   /** The ±σ label is only unambiguous when a single band is drawn. */
   const labeledSigma = residualBand && withSigma.length === 1 ? residualSigma(withSigma) : null;
-  const domainValues = all.flatMap((r) => [
-    r.residual,
-    ...(residualErrorBars && r.sy ? [r.residual - r.sy, r.residual + r.sy] : []),
-  ]);
-  const [lo, hi] = residualDomain(domainValues, residualYMin, residualYMax);
+  const [lo, hi] = residualYDomain(series, residualErrorBars, residualYMin, residualYMax);
+  const [hot, setHot] = useState(false);
+  const highlight = useCallback((on: boolean) => setHot(on), []);
   const { width, height } = size;
   const w = Math.max(1, width - margin.left - margin.right);
   const h = Math.max(1, height - TOP - bottom);
-  const y = scaleLinear().domain([lo, hi]).range([h, 0]);
-  const yTicks = y.ticks(Math.max(2, Math.round(h / 40)));
+  const y = scaleLinear()
+    .domain([lo, hi])
+    .range(residualAxis.invert ? [0, h] : [h, 0]);
+  const yTicks = majorTicks(y, residualAxis);
+  const yMinor = minorTicks(y, residualAxis, yTicks);
   const bins = binResiduals(
     all.map((r) => r.residual),
     [lo, hi],
@@ -131,6 +138,9 @@ export function ResidualPanel({
           label="Editar título do eixo Y dos resíduos"
           placeholder="Resíduo"
           orientation="vertical"
+          fontSize={residualAxis.titleSize}
+          rotated={residualAxis.titleRotation === 90}
+          onFontSizeChange={(titleSize) => updateAxis("residual", { titleSize })}
         />
       </div>
       <div ref={container} className="relative min-h-0 min-w-0 flex-1">
@@ -166,15 +176,40 @@ export function ResidualPanel({
                 settings={xAxis}
                 highlighted={xHighlighted}
               />
-              {yTicks.map((t) => (
-                <g key={t} transform={`translate(0,${y(t)})`}>
-                  {yAxis.grid && <line x2={w} stroke="#e8ece7" />}
-                  <text x={-8} dy=".32em" textAnchor="end" fontSize="10" fill="#78857d">
-                    {signed(t)}
-                  </text>
-                </g>
-              ))}
-              <path d={`M0 0V${h}H${w}`} fill="none" stroke="#aebbb0" />
+              <AxisGrid
+                axis="y"
+                majors={yTicks}
+                minors={yMinor}
+                scale={y}
+                width={w}
+                height={h}
+                settings={residualAxis}
+              />
+              <YTickLabels
+                ticks={yTicks}
+                scale={y}
+                settings={residualAxis}
+                highlighted={hot}
+                format={formatResidualTick}
+                testId="residual-tick-labels"
+              />
+              <path d={`M${w} ${h}H0`} fill="none" stroke={AXIS_COLORS.line} />
+              <line
+                x1={0}
+                x2={0}
+                y1={0}
+                y2={h}
+                stroke={hot ? AXIS_COLORS.lineHighlight : AXIS_COLORS.line}
+                strokeWidth={hot ? 2 : 1}
+              />
+              <TickMarks
+                axis="y"
+                majors={yTicks}
+                minors={yMinor}
+                scale={y}
+                at={0}
+                settings={residualAxis}
+              />
               <g clipPath="url(#residual-clip)">
                 <line
                   x1={0}
@@ -289,6 +324,15 @@ export function ResidualPanel({
               )}
             </g>
           </svg>
+        )}
+        {width > 90 && height > 55 && (
+          <AxisSettingsPopover
+            axis="residual"
+            settings={settings}
+            box={{ left: 2, top: TOP - 6, width: margin.left - 6, height: h + 12 }}
+            domain={[lo, hi]}
+            onHighlightChange={highlight}
+          />
         )}
         {width > 90 &&
           height > 55 &&

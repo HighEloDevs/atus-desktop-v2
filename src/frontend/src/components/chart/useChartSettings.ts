@@ -6,7 +6,7 @@
 import { useState } from "react";
 import type { LabelAlignment } from "./EditableChartLabel";
 import {
-  AXIS_DEFAULTS,
+  axisDefaults,
   AXIS_STYLE_KEYS,
   clampAxisValue,
   restoreAxis,
@@ -71,8 +71,6 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
   const [residualYLabel, setResidualYLabel] = useState(
     initial?.residualYLabel ?? residualDefaults.yLabel,
   );
-  const [residualYMin, setResidualYMin] = useState(initial?.residualYMin ?? "");
-  const [residualYMax, setResidualYMax] = useState(initial?.residualYMax ?? "");
   const [residualStems, setResidualStems] = useState(
     initial?.residualStems ?? residualDefaults.stems,
   );
@@ -86,24 +84,33 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
   const [axes, setAxes] = useState(() => ({
     x: restoreAxis("x", initial?.xAxis, initial),
     y: restoreAxis("y", initial?.yAxis, initial),
+    residual: restoreAxis("residual", initial?.residualAxis, initial),
   }));
   const updateAxis = (axis: AxisKey, patch: Partial<AxisSettings>) =>
     setAxes((current) => ({ ...current, [axis]: { ...current[axis], ...patch } }));
   const updateBoth = (patch: Partial<AxisSettings>) =>
-    setAxes((current) => ({ x: { ...current.x, ...patch }, y: { ...current.y, ...patch } }));
+    setAxes((current) => ({
+      ...current,
+      x: { ...current.x, ...patch },
+      y: { ...current.y, ...patch },
+    }));
   /** Restores every setting of an axis; the title text is user content and stays. */
   const resetAxis = (axis: AxisKey) =>
-    setAxes((current) => ({ ...current, [axis]: { ...AXIS_DEFAULTS } }));
-  /** Copies tick, grid and text style to the other axis, leaving its range alone. */
+    setAxes((current) => ({ ...current, [axis]: axisDefaults(axis) }));
+  /**
+   * Copies tick, grid and text style to the other axis, leaving its range alone:
+   * X to Y, Y to X, and the residual axis to Y.
+   */
   const copyAxisStyle = (from: AxisKey) =>
     setAxes((current) => {
-      const to: AxisKey = from === "x" ? "y" : "x";
+      const to: AxisKey = from === "y" ? "x" : "y";
       const style = Object.fromEntries(AXIS_STYLE_KEYS.map((key) => [key, current[from][key]]));
       return { ...current, [to]: { ...current[to], ...style } };
     });
   return {
     xAxis: axes.x,
     yAxis: axes.y,
+    residualAxis: axes.residual,
     updateAxis,
     resetAxis,
     copyAxisStyle,
@@ -163,10 +170,10 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
     setResiduals,
     residualYLabel,
     setResidualYLabel,
-    residualYMin,
-    setResidualYMin,
-    residualYMax,
-    setResidualYMax,
+    residualYMin: axes.residual.min,
+    setResidualYMin: (min: string) => updateAxis("residual", { min }),
+    residualYMax: axes.residual.max,
+    setResidualYMax: (max: string) => updateAxis("residual", { max }),
     residualStems,
     setResidualStems,
     residualBand,
@@ -185,6 +192,8 @@ export type ChartValues = {
   xAxis: AxisSettings;
   /** Settings of the Y axis; projects saved without it migrate from the legacy fields. */
   yAxis: AxisSettings;
+  /** Settings of the residuals Y axis; older projects migrate from `residualYMin/Max`. */
+  residualAxis: AxisSettings;
   title: string;
   titleAlignment: LabelAlignment;
   subtitleAlignment: LabelAlignment;

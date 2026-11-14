@@ -64,6 +64,8 @@ const openTab = (name) =>
       new MouseEvent("mousedown", { bubbles: true, button: 0 }),
     ),
   );
+const option = (group, text) =>
+  byText("button", text, popover().querySelector(`[aria-label="${group}"]`));
 const main = () => node.querySelector('svg[aria-label="Experimento"]');
 const xLabels = () => [...main().querySelectorAll('[data-testid="x-tick-labels"] text')];
 const yLabels = () => [...main().querySelectorAll('[data-testid="y-tick-labels"] text')];
@@ -195,7 +197,8 @@ it("changes the title and the number text from the Texto tab", async () => {
   expect(latest.xAxis.decimals).toBe(1);
   await click(popover().querySelector('button[aria-label="Aumentar fonte dos números"]'));
   expect(xLabels()[0].getAttribute("font-size")).toBe("11");
-  await click(byText("button", "45°", popover()));
+  await click(option("Rotação", "45°"));
+  expect(popover().querySelector('[aria-label="Rotação do título"]')).toBeNull();
   expect(xLabels()[0].getAttribute("transform")).toMatch(/^rotate\(-45 /);
   await click(byText("button", "Copiar estilo para Y", popover()));
   expect(latest.yAxis).toMatchObject({ format: "decimal", decimals: 1, fontSize: 11 });
@@ -228,4 +231,60 @@ it("shares the axis title size between the wheel on the title and the popover", 
   await click(strip("Y"));
   await openTab("Texto");
   expect(byText("output", "13 px", popover())).toBeTruthy();
+});
+
+it("turns the Y numbers vertical from the Texto tab", async () => {
+  await render();
+  await click(strip("Y"));
+  await openTab("Texto");
+  await click(option("Rotação", "90°"));
+  expect(latest.yAxis.rotation).toBe(90);
+  expect(yLabels()[0].getAttribute("transform")).toMatch(/^rotate\(-90 /);
+  expect(yLabels()[0].getAttribute("text-anchor")).toBe("middle");
+  const title = () => node.querySelector('button[aria-label="Editar título do eixo Y"]');
+  expect(title().style.transform).toBe("");
+  await click(option("Rotação do título", "90°"));
+  expect(latest.yAxis.titleRotation).toBe(90);
+  expect(title().style.transform).toBe("rotate(-90deg)");
+});
+
+it("configures the residual axis like the others, in sync with the residual options", async () => {
+  await render({ initial: { residuals: true, residualYMin: "-0.5" } });
+  const residualLabels = () => [
+    ...node.querySelectorAll('[data-testid="residual-tick-labels"] text'),
+  ];
+  expect(latest.residualAxis.min).toBe("-0.5");
+  expect(residualLabels().some((label) => label.textContent.startsWith("−"))).toBe(true);
+  await click(strip("dos resíduos"));
+  expect(popover().querySelector("#axis-residual-min").value).toBe("-0.5");
+  expect(popover().querySelector("h2").textContent).toBe("Eixo dos resíduos");
+  expect(byText('[role="switch"]', "Escala logarítmica", popover())).toBeUndefined();
+  expect(byText('[role="switch"]', "Eixo na borda", popover())).toBeUndefined();
+  await type(popover().querySelector("#axis-residual-max"), "0.5");
+  expect(latest.residualYMax).toBe("0.5");
+  await click(byText('[role="switch"]', "Inverter sentido", popover()));
+  expect(latest.residualAxis.invert).toBe(true);
+  await openTab("Texto");
+  await click(option("Rotação", "90°"));
+  await click(option("Rotação do título", "90°"));
+  expect(
+    node.querySelector('button[aria-label="Editar título do eixo Y dos resíduos"]').style.transform,
+  ).toBe("rotate(-90deg)");
+  expect(residualLabels()[0].getAttribute("transform")).toMatch(/^rotate\(-90 /);
+  await type(popover().querySelector("#axis-residual-title"), "Desvio");
+  expect(latest.residualYLabel).toBe("Desvio");
+  await click(byText("button", "Copiar estilo para Y", popover()));
+  expect(latest.yAxis.rotation).toBe(0);
+  await click(popover().querySelector('button[aria-label="Aumentar fonte dos números"]'));
+  await click(byText("button", "Copiar estilo para Y", popover()));
+  expect(latest.yAxis.fontSize).toBe(11);
+});
+
+it("shares the residual limits with the residual options popover", async () => {
+  await render({ initial: { residuals: true } });
+  await click(node.querySelector('button[aria-label="Opções do painel de resíduos"]'));
+  await type(document.querySelector("#residual-ymax"), "0.4");
+  expect(latest.residualAxis.max).toBe("0.4");
+  await act(async () => latest.updateAxis("residual", { min: "-0.4" }));
+  expect(document.querySelector("#residual-ymin").value).toBe("-0.4");
 });

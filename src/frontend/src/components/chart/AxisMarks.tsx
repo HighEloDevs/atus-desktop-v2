@@ -1,7 +1,7 @@
 /**
  * @module
  * SVG pieces of a chart axis shared by the main chart and the residuals panel:
- * grid lines, tick marks and X tick labels.
+ * grid lines, tick marks and tick labels.
  */
 
 import {
@@ -9,6 +9,7 @@ import {
   formatAxisTick,
   TICK_LENGTH,
   tickSpan,
+  yLabelGap,
   type AxisSettings,
 } from "./axisSettings";
 
@@ -134,6 +135,68 @@ export function XTickLabels({
             transform={`rotate(${-rotation} ${p} ${pivot})`}
           >
             {formatAxisTick(value, settings)}
+          </text>
+        );
+      })}
+    </g>
+  );
+}
+
+/**
+ * Y tick labels on the left border, horizontal or rotated (90° reads bottom to top).
+ * @param props - Tick values, scale, axis settings, whether the axis is highlighted, an
+ * optional formatter (the residual axis shows signs), and the test id of the group.
+ * @returns The rendered SVG group.
+ */
+export function YTickLabels({
+  ticks,
+  scale,
+  settings,
+  highlighted,
+  format = formatAxisTick,
+  testId = "y-tick-labels",
+}: {
+  ticks: number[];
+  scale: (value: number) => number;
+  settings: AxisSettings;
+  highlighted?: boolean;
+  format?: (value: number, settings: AxisSettings) => string;
+  testId?: string;
+}) {
+  const fill = highlighted ? AXIS_COLORS.labelHighlight : AXIS_COLORS.label;
+  const { fontSize, rotation } = settings;
+  const x = -yLabelGap(settings);
+  return (
+    <g data-testid={testId}>
+      {ticks.map((value) => {
+        const p = scale(value);
+        const text = format(value, settings);
+        if (rotation === 90)
+          return (
+            <text
+              key={value}
+              x={x}
+              y={p}
+              textAnchor="middle"
+              fontSize={fontSize}
+              fill={fill}
+              transform={`rotate(-90 ${x} ${p})`}
+            >
+              {text}
+            </text>
+          );
+        return (
+          <text
+            key={value}
+            x={x}
+            y={p}
+            dy=".32em"
+            textAnchor="end"
+            fontSize={fontSize}
+            fill={fill}
+            transform={rotation === 45 ? `rotate(-45 ${x} ${p})` : undefined}
+          >
+            {text}
           </text>
         );
       })}

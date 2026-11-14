@@ -22,6 +22,8 @@ type Props = {
   fontSize?: number;
   /** Receives the font size picked with the wheel, clamped to 8–48 px. */
   onFontSizeChange?: (fontSize: number) => void;
+  /** Turns the text 90° counterclockwise so it reads bottom to top (Y titles). */
+  rotated?: boolean;
 };
 
 /**
@@ -43,6 +45,7 @@ export function EditableChartLabel({
   initialFontSize = 11,
   fontSize: controlledFontSize,
   onFontSizeChange,
+  rotated = false,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -113,11 +116,20 @@ export function EditableChartLabel({
       type="button"
       ref={buttonRef}
       aria-label={label}
-      className={`min-h-6 max-w-full rounded px-1 hover:bg-[#eff2ed] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#364cff] ${onAlignmentChange ? "cursor-grab touch-none active:cursor-grabbing" : "cursor-text"}`}
+      className={`min-h-6 rounded px-1 hover:bg-[#eff2ed] ${rotated ? "whitespace-nowrap" : "max-w-full"} focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#364cff] ${onAlignmentChange ? "cursor-grab touch-none active:cursor-grabbing" : "cursor-text"}`}
       style={{
         fontSize,
-        ...(dragOffset
-          ? { transform: `translate${orientation === "vertical" ? "Y" : "X"}(${dragOffset}px)` }
+        ...(dragOffset || rotated
+          ? {
+              transform: [
+                dragOffset
+                  ? `translate${orientation === "vertical" ? "Y" : "X"}(${dragOffset}px)`
+                  : "",
+                rotated ? "rotate(-90deg)" : "",
+              ]
+                .join(" ")
+                .trim(),
+            }
           : {}),
       }}
       onPointerDown={(event) => {

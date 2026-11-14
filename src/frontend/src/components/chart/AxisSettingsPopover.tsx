@@ -34,6 +34,16 @@ export type AxisBox = { left: number; top: number; width: number; height: number
 
 type Tab = "interval" | "ticks" | "text";
 
+/** Popover title of each axis; the strip label and hint derive from it. */
+const AXIS_NAMES: Record<AxisKey, string> = {
+  x: "Eixo X",
+  y: "Eixo Y",
+  residual: "Eixo dos resíduos",
+};
+
+/** Axis that receives "Copiar estilo" (the residual axis copies to the main Y). */
+const COPY_TARGET: Record<AxisKey, string> = { x: "Y", y: "X", residual: "Y" };
+
 const ICONS = {
   log: <path d="M4 19C9 19 11 5 20 5" />,
   invert: <path d="M8 20V4M5 7l3-3 3 3M16 4v16M13 17l3 3 3-3" />,
@@ -216,11 +226,20 @@ function AxisSettingsForm({
   tab: Tab;
   onTabChange: (tab: Tab) => void;
 }) {
-  const values: AxisSettings = axis === "x" ? settings.xAxis : settings.yAxis;
+  const values: AxisSettings =
+    axis === "x" ? settings.xAxis : axis === "y" ? settings.yAxis : settings.residualAxis;
   const update = (patch: Partial<AxisSettings>) => settings.updateAxis(axis, patch);
-  const title = axis === "x" ? settings.xLabel : settings.yLabel;
-  const setTitle = axis === "x" ? settings.setXLabel : settings.setYLabel;
-  const other = axis === "x" ? "Y" : "X";
+  const title =
+    axis === "x" ? settings.xLabel : axis === "y" ? settings.yLabel : settings.residualYLabel;
+  const setTitle =
+    axis === "x"
+      ? settings.setXLabel
+      : axis === "y"
+        ? settings.setYLabel
+        : settings.setResidualYLabel;
+  const other = COPY_TARGET[axis];
+  // The residual axis is linear, symmetric around zero and always drawn on the border.
+  const residual = axis === "residual";
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
@@ -293,24 +312,28 @@ function AxisSettingsForm({
             <section className={sectionClass}>
               <h3 className={headingClass}>Escala</h3>
               <div className="-mx-2 grid gap-0.5">
-                <OptionRow
-                  icon={ICONS.log}
-                  title="Escala logarítmica"
-                  value={values.log}
-                  onChange={(log) => update(log ? { log, min: "", max: "" } : { log })}
-                />
+                {!residual && (
+                  <OptionRow
+                    icon={ICONS.log}
+                    title="Escala logarítmica"
+                    value={values.log}
+                    onChange={(log) => update(log ? { log, min: "", max: "" } : { log })}
+                  />
+                )}
                 <OptionRow
                   icon={ICONS.invert}
                   title="Inverter sentido"
                   value={values.invert}
                   onChange={(invert) => update({ invert })}
                 />
-                <OptionRow
-                  icon={ICONS.edge}
-                  title="Eixo na borda"
-                  value={values.edge}
-                  onChange={(edge) => update({ edge })}
-                />
+                {!residual && (
+                  <OptionRow
+                    icon={ICONS.edge}
+                    title="Eixo na borda"
+                    value={values.edge}
+                    onChange={(edge) => update({ edge })}
+                  />
+                )}
               </div>
             </section>
           </TabsContent>
@@ -425,6 +448,19 @@ function AxisSettingsForm({
                   }
                 />
               </Field>
+              {axis !== "x" && (
+                <Field label="Rotação">
+                  <Segmented
+                    label="Rotação do título"
+                    value={String(values.titleRotation) as "0" | "90"}
+                    options={[
+                      { value: "0", label: "0°" },
+                      { value: "90", label: "90°" },
+                    ]}
+                    onChange={(rotation) => update({ titleRotation: rotation === "90" ? 90 : 0 })}
+                  />
+                </Field>
+              )}
             </section>
             <section className={sectionClass}>
               <h3 className={headingClass}>Números</h3>
@@ -465,20 +501,18 @@ function AxisSettingsForm({
                   }
                 />
               </Field>
-              {axis === "x" && (
-                <Field label="Rotação">
-                  <Segmented
-                    label="Rotação"
-                    value={String(values.rotation) as "0" | "45" | "90"}
-                    options={[
-                      { value: "0", label: "0°" },
-                      { value: "45", label: "45°" },
-                      { value: "90", label: "90°" },
-                    ]}
-                    onChange={(rotation) => update({ rotation: Number(rotation) as TickRotation })}
-                  />
-                </Field>
-              )}
+              <Field label="Rotação">
+                <Segmented
+                  label="Rotação"
+                  value={String(values.rotation) as "0" | "45" | "90"}
+                  options={[
+                    { value: "0", label: "0°" },
+                    { value: "45", label: "45°" },
+                    { value: "90", label: "90°" },
+                  ]}
+                  onChange={(rotation) => update({ rotation: Number(rotation) as TickRotation })}
+                />
+              </Field>
             </section>
           </TabsContent>
         </div>
@@ -538,11 +572,11 @@ export function AxisSettingsPopover({
   const [tab, setTab] = useState<Tab>("interval");
   const highlighted = open || hover !== null;
   useEffect(() => onHighlightChange(highlighted), [highlighted, onHighlightChange]);
-  const name = axis.toUpperCase();
+  const name = AXIS_NAMES[axis];
   const center = { x: box.width / 2, y: box.height / 2 };
   // The popover opens beside the strip, level with the click: right of Y, above X.
   const at =
-    axis === "y" ? { x: box.width, y: (anchor ?? center).y } : { x: (anchor ?? center).x, y: 0 };
+    axis === "x" ? { x: (anchor ?? center).x, y: 0 } : { x: box.width, y: (anchor ?? center).y };
   return (
     <Popover
       open={open}
@@ -555,9 +589,9 @@ export function AxisSettingsPopover({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={`Configurar eixo ${name}`}
+          aria-label={`Configurar ${name.charAt(0).toLowerCase()}${name.slice(1)}`}
           data-html2canvas-ignore="true"
-          className="absolute z-[2] cursor-pointer rounded-md outline-none transition-colors hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-brand-coral data-[state=open]:bg-foreground/[0.06] data-[state=open]:ring-1 data-[state=open]:ring-foreground/25"
+          className="absolute z-[2] cursor-pointer rounded-md outline-none transition-colors hover:bg-foreground/[0.06] focus-visible:outline-2 focus-visible:outline-brand-coral data-[state=open]:bg-foreground/[0.06] data-[state=open]:ring-1 data-[state=open]:ring-foreground/25"
           style={box}
           onPointerMove={(event) => {
             if (open) return;
@@ -579,7 +613,7 @@ export function AxisSettingsPopover({
                 top: hover.y - 30,
               }}
             >
-              Eixo {name} · clique para ajustar
+              {name} · clique para ajustar
             </span>
           )}
           <PopoverAnchor asChild>
@@ -598,7 +632,7 @@ export function AxisSettingsPopover({
         className="max-h-[var(--radix-popover-content-available-height)] w-[316px] overflow-y-auto rounded-[14px] p-0"
       >
         <header className="flex items-center justify-between py-3 pl-4 pr-3.5">
-          <h2 className="text-[13px] font-semibold">Eixo {name}</h2>
+          <h2 className="text-[13px] font-semibold">{name}</h2>
           <PopoverClose
             aria-label="Fechar"
             className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-brand-coral"

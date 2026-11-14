@@ -16,6 +16,8 @@ import {
   xLabelHeight,
   xLabelSpace,
   yLabelGap,
+  yLabelWidth,
+  formatResidualTick,
 } from "../../src/components/chart/axisSettings";
 
 const axis = (patch = {}) => ({ ...AXIS_DEFAULTS, ...patch });
@@ -105,4 +107,18 @@ it("measures tick marks and the room labels need", () => {
   expect(xLabelSpace(labels, axis({ rotation: 90 }))).toBe(32);
   expect(yLabelGap(axis())).toBe(10);
   expect(yLabelGap(axis({ tickDirection: "in" }))).toBe(8);
+});
+
+it("migrates the residual limits and turns Y labels vertical in less room", () => {
+  expect(restoreAxis("residual", undefined, { residualYMin: "-1", ticks: 9, grid: false })).toEqual(
+    axis({ min: "-1", grid: false, ticks: 3 }),
+  );
+  const labels = ["-0,25", "0"];
+  expect(yLabelWidth(labels, axis())).toBe(30);
+  expect(yLabelWidth(labels, axis({ rotation: 90 }))).toBe(10);
+  expect(yLabelWidth(labels, axis({ rotation: 45 }))).toBeCloseTo(40 * Math.SQRT1_2);
+  expect(formatResidualTick(0.25, axis())).toBe("+0,25");
+  expect(formatResidualTick(-0.1, axis())).toBe("−0,1");
+  expect(formatResidualTick(0, axis())).toBe("0");
+  expect(formatResidualTick(0.25, axis({ format: "decimal", decimals: 1 }))).toBe("0,3");
 });
