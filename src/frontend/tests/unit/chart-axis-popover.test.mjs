@@ -149,7 +149,7 @@ it("sets ticks, subdivisions and grids from the Marcações tab", async () => {
   expect(latest.yAxis.minor).toBe(1);
   await click(byText('[role="switch"]', "Grade secundária", popover()));
   expect(latest.yAxis.minorGrid).toBe(true);
-  expect(main().querySelectorAll('line[stroke="#f2f4f1"]').length).toBeGreaterThan(0);
+  expect(main().querySelectorAll('line[stroke="#eef1ec"]').length).toBeGreaterThan(0);
   const marks = () => main().querySelectorAll('[data-testid="y-tick-marks"] line').length;
   const before = marks();
   await click(popover().querySelector('button[aria-label="Diminuir subdivisões"]'));

@@ -22,7 +22,6 @@ import {
   axisLimitsError,
   axisStepError,
   clampAxisValue,
-  formatAxisTick,
   type AxisKey,
   type AxisSettings,
   type TickRotation,
@@ -231,11 +230,13 @@ function AxisSettingsForm({
   const limitsError = axisLimitsError(values);
   const stepError = axisStepError(values, domain);
   const id = (name: string) => `axis-${axis}-${name}`;
-  const sample = domain[1] !== 0 ? domain[1] : domain[0];
   return (
     <>
       <Tabs value={tab} onValueChange={(next) => onTabChange(next as Tab)} className="gap-0">
-        <TabsList variant="line" className="h-auto w-full justify-start gap-4 px-4 pb-0">
+        <TabsList
+          variant="line"
+          className="relative z-10 h-auto w-full justify-start gap-4 px-4 pb-0"
+        >
           {(
             [
               ["interval", "Intervalo"],
@@ -246,7 +247,7 @@ function AxisSettingsForm({
             <TabsTrigger
               key={value}
               value={value}
-              className="flex-none px-0 pb-2 pt-0.5 text-xs after:bottom-0 focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-brand-coral"
+              className="flex-none px-0 pb-2 pt-0.5 text-xs group-data-[orientation=horizontal]/tabs:after:-bottom-0.5 focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-brand-coral"
             >
               {label}
             </TabsTrigger>
@@ -437,12 +438,8 @@ function AxisSettingsForm({
                   }
                 >
                   <NativeSelectOption value="auto">Automático</NativeSelectOption>
-                  <NativeSelectOption value="decimal">
-                    Decimal · {formatAxisTick(sample, { ...values, format: "decimal" })}
-                  </NativeSelectOption>
-                  <NativeSelectOption value="scientific">
-                    Científico · {formatAxisTick(sample, { ...values, format: "scientific" })}
-                  </NativeSelectOption>
+                  <NativeSelectOption value="decimal">Decimal · 1,50</NativeSelectOption>
+                  <NativeSelectOption value="scientific">Científico · 1,5×10⁰</NativeSelectOption>
                 </NativeSelect>
               </Field>
               <Field label="Casas decimais">
@@ -543,7 +540,9 @@ export function AxisSettingsPopover({
   useEffect(() => onHighlightChange(highlighted), [highlighted, onHighlightChange]);
   const name = axis.toUpperCase();
   const center = { x: box.width / 2, y: box.height / 2 };
-  const at = anchor ?? center;
+  // The popover opens beside the strip, level with the click: right of Y, above X.
+  const at =
+    axis === "y" ? { x: box.width, y: (anchor ?? center).y } : { x: (anchor ?? center).x, y: 0 };
   return (
     <Popover
       open={open}
@@ -575,7 +574,10 @@ export function AxisSettingsPopover({
             <span
               aria-hidden="true"
               className="pointer-events-none absolute z-20 whitespace-nowrap rounded-[5px] bg-foreground px-2 py-1 text-[11.5px] text-background"
-              style={{ left: hover.x + 14, top: hover.y - 30 }}
+              style={{
+                left: axis === "x" && hover.x > box.width - 190 ? hover.x - 184 : hover.x + 14,
+                top: hover.y - 30,
+              }}
             >
               Eixo {name} · clique para ajustar
             </span>
@@ -593,7 +595,7 @@ export function AxisSettingsPopover({
         side={axis === "x" ? "top" : "right"}
         align="center"
         collisionPadding={12}
-        className="w-[316px] rounded-[14px] p-0"
+        className="max-h-[var(--radix-popover-content-available-height)] w-[316px] overflow-y-auto rounded-[14px] p-0"
       >
         <header className="flex items-center justify-between py-3 pl-4 pr-3.5">
           <h2 className="text-[13px] font-semibold">Eixo {name}</h2>

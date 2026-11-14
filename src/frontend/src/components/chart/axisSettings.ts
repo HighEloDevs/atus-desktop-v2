@@ -323,7 +323,7 @@ export const AXIS_COLORS = {
   label: "#78857d",
   labelHighlight: "#20272c",
   grid: "#e8ece7",
-  minorGrid: "#f2f4f1",
+  minorGrid: "#eef1ec",
   line: "#aebbb0",
   lineHighlight: "#66716e",
   tick: "#aebbb0",
