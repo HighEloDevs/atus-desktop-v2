@@ -27,6 +27,9 @@ import {
 import { useQuitRequest } from "@/hooks/use-quit-request";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ChevronRight, CircleHelp, FileClock, House, Info } from "lucide-react";
+import { APP_VERSION } from "@/lib/app-version";
+import { UpdateBanner } from "@/features/updates/UpdateBanner";
+import { UpdateButton } from "@/features/updates/UpdateButton";
 
 type Page = "home" | "about" | "analysis";
 
@@ -98,7 +101,7 @@ function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (page: Page) =>
         </div>
       </nav>
       <div className="mt-auto border-t border-[#d8ded7] px-5 py-4 text-[10px] text-[#7a877e]">
-        v0.1.0
+        v{APP_VERSION}
       </div>
     </aside>
   );
@@ -294,7 +297,9 @@ function App() {
               {page === "home" ? "Início" : "Sobre"}
             </span>
           </div>
+          <UpdateButton />
         </header>
+        <UpdateBanner />
         <div className="min-h-0 flex-1 overflow-auto">
           <div className="mx-auto max-w-[1120px] p-6 sm:p-8">
             {page === "home" ? (
@@ -332,7 +337,7 @@ function App() {
                         Sobre o ATUS
                       </h1>
                       <span className="rounded border border-[#d8ded7] bg-[#eff2ed] px-2 py-0.5 text-[10px] font-medium text-[#6b796f]">
-                        Desktop · v0.1.0
+                        Desktop · v{APP_VERSION}
                       </span>
                     </div>
                     <p className="mt-1 text-[13px] leading-5 text-[#758078]">
@@ -457,7 +462,7 @@ function App() {
                         </div>
                         <div className="flex justify-between gap-3">
                           <dt className="text-[#849087]">Versão</dt>
-                          <dd className="font-medium">0.1.0</dd>
+                          <dd className="font-medium">{APP_VERSION}</dd>
                         </div>
                         <div className="flex justify-between gap-3">
                           <dt className="text-[#849087]">Licença</dt>

@@ -34,9 +34,23 @@ O conceito visual (botão no header, banner diário, página **Novidades**) foi 
 - O download não é guardado em disco: se o ATUS for fechado antes de instalar, baixa de novo na próxima vez.
 - Teste de integração (`smoke.updater.e2e.mjs`): servidor local com chave minisign descartável, 11 casos, sem instalar de verdade; ver `docs/testing/desktop-e2e.md`. Os comandos `update_test_*` só existem com `desktop-e2e`.
 
+**Aceito e implementado (0.2.8): interface do updater.** O PR 4 foi dividido em dois, e cada metade publica uma versão; esta é a primeira (a página Novidades é a 0.2.9).
+
+- `features/updates/`: `UpdateProvider` (estado da interface), `UpdateButton`, `UpdateBanner` e `UpdateDialog`. A interface só usa `invoke` e `getCurrentWindow().listen`, e vive apenas na janela principal (a janela de análise rápida não a monta).
+- **Parte do estado vem só do evento.** O provedor lê `update_status` uma vez ao montar (o núcleo guarda o `ready` ou o `downloading` enquanto a janela está fechada) e depois segue o evento `update-state`; o retorno dos comandos é ignorado, para um retorno atrasado não desfazer um evento mais novo.
+- **Automático só em produção** (`import.meta.env.PROD`): primeira verificação 5 s depois de abrir, depois a cada 6 h, e download em segundo plano de uma versão anunciada, uma vez por versão. `tauri dev` e o smoke desktop (que usa o servidor do Vite) esperam alguém pedir. Falhas desses passos ficam em silêncio; só o que a pessoa pediu (instalar, tentar de novo, cancelar) vira aviso. O build de teste de integração também responde `unavailable` enquanto nenhum servidor de teste foi configurado, para nunca falar com o GitHub.
+- **Botão no header**, nos estados `available` (**Baixar atualização**), `downloading` (anel com % e popover com cancelar), `ready` (**Atualizar**, ponto coral), `installing`, `error` (**Tentar de novo**) e `manual` (popover com o motivo e **Baixar X.Y.Z**). Na tela de análise ele fica na barra de ferramentas principal, que existe mesmo com o painel lateral fechado, em variante compacta (só o ícone, com o nome acessível).
+- **Banner uma vez por dia por versão**, com o registro em `localStorage` (`atus.update-banner`), tolerando armazenamento ausente, bloqueado ou corrompido. Fechar esconde até o dia seguinte; uma versão mais nova reabre na hora.
+- **Instalar** salva antes: a tela com o projeto aberto registra `saving.flush` (`useBeforeUpdateInstall`); se o salvamento falhar, nada é instalado e aparece um aviso. Sem projeto aberto, instala direto. O `ready` e o `manual` carregam o resumo da release (`notes`), para o banner mostrá-lo mesmo depois de reiniciar.
+- **Local somente leitura** (`manual`, `readOnlyLocation`): no macOS, um app rodando de uma imagem de disco (`/Volumes/...`) ou de uma cópia que o Gatekeeper moveu para um local temporário (`AppTranslocation`) não consegue se substituir; a interface orienta a mover o ATUS para Aplicativos.
+- O link permitido é só a página de releases (`opener:allow-open-url`). O teste de integração (`smoke.updater.e2e.mjs`) agora também dirige a interface real: banner, botão, confirmação e a instalação registrada.
+- **Configuração para desligar o download automático: adiada.** O app ainda não tem tela de Configurações; entra junto com ela.
+- Os números `0.1.0` fixos na barra lateral e na tela Sobre foram trocados pela versão real (`APP_VERSION`, injetada do `package.json` no build).
+
 **Aceito, a implementar em etapas:**
-3. **Interface.** Download em segundo plano; instalação só com clique, depois de salvar o projeto aberto. Botão **Atualizar** sempre no header enquanto houver versão nova; banner no máximo uma vez por dia; página **Novidades** com o histórico de versões, uma miniatura de vídeo por novidade (abre o YouTube no navegador), imagens em galeria com ampliação no app e GIF/WebP animados. O Markdown das notas é tratado como dado não confiável.
-4. **Testes.** Atualização real automatizada no Windows NSIS; demais formatos em checklist manual até a primeira versão com updater.
+
+- **Página Novidades (0.2.9).** Histórico de versões com as notas, uma miniatura de vídeo por novidade (abre o YouTube no navegador), imagens em galeria com ampliação no app e GIF/WebP animados, e aberta uma vez depois de atualizar. O Markdown das notas é tratado como dado não confiável. As notas de versões novas chegam pelo `latest.json` (o plugin guarda os campos extras em `Update.raw_json`); as até a versão instalada vão embutidas no build. O app não pode buscar `changelog.json` direto: a CSP só permite IPC e os downloads de release do GitHub não enviam CORS.
+- **Atualização real automatizada no Windows NSIS e o roteiro manual dos demais formatos** (`docs/testing/auto-update.md`), a partir da primeira atualização real (0.2.8 → 0.2.9).
 
 ## Alternativas descartadas
 
