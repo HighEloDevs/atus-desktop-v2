@@ -34,7 +34,7 @@ vi.mock("../../src/components/ui/dropdown-menu", () => ({
     createElement("button", { onClick: onSelect }, children),
 }));
 import { ChartExportMenu } from "../../src/components/chart/ChartExportMenu";
-import { errorMessage } from "../../src/components/chart/export-image";
+import { errorMessage, renderImage } from "../../src/components/chart/export-image";
 
 let root;
 let node;
@@ -89,7 +89,10 @@ it("disables both segments when there is no chart data", async () => {
 it("copies a PNG through the native clipboard plugin in one click", async () => {
   await render();
   await act(async () => button("Copiar imagem").click());
-  expect(api.render).toHaveBeenCalledWith(graphic, { scale: 2, backgroundColor: "#ffffff" });
+  expect(api.render).toHaveBeenCalledWith(
+    graphic,
+    expect.objectContaining({ scale: 2, backgroundColor: "#ffffff" }),
+  );
   expect(canvas.toBlob).toHaveBeenCalledWith(expect.any(Function), "image/png", undefined);
   expect(api.writeImage).toHaveBeenCalledWith(expect.any(Uint8Array));
   expect(notify.success).toHaveBeenLastCalledWith("Imagem copiada", { id: "chart-export" });
@@ -245,4 +248,35 @@ it("extracts readable messages from unknown failures", () => {
   expect(errorMessage("texto")).toBe("texto");
   expect(errorMessage(new Error("falha"))).toBe("falha");
   expect(errorMessage(undefined)).toBe("erro desconhecido.");
+});
+
+/**
+ * Regression: html2canvas skips every <svg> when its (synchronous) SVG feature test fails, as in
+ * WKWebView, so exports had no axes or points. The chart SVGs must reach it as PNG images.
+ */
+it("hands chart SVGs to html2canvas as pre-rasterized PNG images", async () => {
+  graphic.innerHTML = '<svg role="img" width="40" height="20"><circle r="3" /></svg>';
+  const svg = graphic.querySelector("svg");
+  svg.getBoundingClientRect = () => ({ width: 40, height: 20 });
+  const draw = vi.fn();
+  vi.stubGlobal(
+    "Image",
+    class {
+      decode = () => Promise.resolve();
+    },
+  );
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage: draw });
+  vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/png;base64,AAAA");
+
+  await renderImage(graphic, "png");
+
+  expect(draw).toHaveBeenCalledOnce();
+  const { onclone } = api.render.mock.lastCall[1];
+  const cloned = document.implementation.createHTMLDocument();
+  cloned.body.innerHTML = graphic.innerHTML;
+  onclone(cloned);
+  expect(cloned.querySelector("svg")).toBeNull();
+  const img = cloned.querySelector("img");
+  expect(img.getAttribute("src")).toBe("data:image/png;base64,AAAA");
+  expect([img.width, img.height]).toEqual([40, 20]);
 });

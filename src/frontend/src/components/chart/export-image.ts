@@ -21,6 +21,39 @@ export type SaveResult = string | null;
 
 const JPEG_QUALITY = 0.92;
 
+const SCALE = 2;
+const CHART_SVG = "svg[role='img']";
+
+/**
+ * Rasterizes an SVG element to a PNG data URL by drawing it through an `<img>` ourselves.
+ *
+ * html2canvas feature-tests SVG drawing synchronously, before the probe image has loaded, and
+ * WKWebView (the desktop webview on macOS) fails that test; it then silently skips every `<svg>`,
+ * so the exported chart came out without axes, grid or points. Raster images are always drawn.
+ * @param svg - A live, laid-out SVG element.
+ * @returns A `data:image/png` URL sized `scale` times the element's box.
+ * @throws {Error} When the SVG cannot be loaded or drawn.
+ */
+async function rasterizeSvg(svg: SVGSVGElement): Promise<string> {
+  const { width, height } = svg.getBoundingClientRect();
+  const copy = svg.cloneNode(true) as SVGSVGElement;
+  copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  copy.setAttribute("width", String(width));
+  copy.setAttribute("height", String(height));
+  // The isolated image does not inherit page CSS, so carry over the text font explicitly.
+  copy.style.fontFamily = getComputedStyle(svg).fontFamily;
+  const image = new Image();
+  image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(copy))}`;
+  await image.decode();
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(width * SCALE));
+  canvas.height = Math.max(1, Math.round(height * SCALE));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Não foi possível gerar a imagem do gráfico.");
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/png");
+}
+
 /**
  * Draws the element on a white background at twice its size.
  * @param element - The chart container.
@@ -29,7 +62,22 @@ const JPEG_QUALITY = 0.92;
  * @throws {Error} When rendering or encoding fails.
  */
 export async function renderImage(element: HTMLElement, format: ImageFormat): Promise<Blob> {
-  const canvas = await html2canvas(element, { scale: 2, backgroundColor: "#ffffff" });
+  const svgs = Array.from(element.querySelectorAll<SVGSVGElement>(CHART_SVG));
+  const rasters = await Promise.all(svgs.map(rasterizeSvg));
+  const canvas = await html2canvas(element, {
+    scale: SCALE,
+    backgroundColor: "#ffffff",
+    onclone: (cloned) => {
+      cloned.querySelectorAll(CHART_SVG).forEach((svg, index) => {
+        const img = cloned.createElement("img");
+        img.src = rasters[index];
+        img.width = Number(svg.getAttribute("width"));
+        img.height = Number(svg.getAttribute("height"));
+        img.style.display = "block";
+        svg.replaceWith(img);
+      });
+    },
+  });
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, `image/${format}`, format === "jpeg" ? JPEG_QUALITY : undefined),
   );
