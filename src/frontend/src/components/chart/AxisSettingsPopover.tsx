@@ -41,8 +41,21 @@ const AXIS_NAMES: Record<AxisKey, string> = {
   residual: "Eixo dos resíduos",
 };
 
-/** Axis that receives "Copiar estilo" (the residual axis copies to the main Y). */
-const COPY_TARGET: Record<AxisKey, string> = { x: "Y", y: "X", residual: "Y" };
+/** Axes each axis can copy its style to, with the short name shown in the footer. */
+const COPY_TARGETS: Record<AxisKey, { axis: AxisKey; label: string }[]> = {
+  x: [
+    { axis: "y", label: "Y" },
+    { axis: "residual", label: "resíduos" },
+  ],
+  y: [
+    { axis: "x", label: "X" },
+    { axis: "residual", label: "resíduos" },
+  ],
+  residual: [
+    { axis: "y", label: "Y" },
+    { axis: "x", label: "X" },
+  ],
+};
 
 const ICONS = {
   log: <path d="M4 19C9 19 11 5 20 5" />,
@@ -237,7 +250,6 @@ function AxisSettingsForm({
       : axis === "y"
         ? settings.setYLabel
         : settings.setResidualYLabel;
-  const other = COPY_TARGET[axis];
   // The residual axis is linear, symmetric around zero and always drawn on the border.
   const residual = axis === "residual";
   const [copied, setCopied] = useState(false);
@@ -518,19 +530,25 @@ function AxisSettingsForm({
         </div>
       </Tabs>
       <footer className="flex items-center justify-between gap-2 border-t border-border px-4 pb-3.5 pt-2.5 text-[11px] text-muted-foreground">
-        <span className="flex items-baseline gap-2">
-          <button
-            type="button"
-            title="Copia marcações e texto, sem os limites"
-            onClick={() => {
-              settings.copyAxisStyle(axis);
-              setCopied(true);
-            }}
-            className="text-foreground underline underline-offset-2"
-          >
-            Copiar estilo para {other}
-          </button>
-          <span aria-live="polite">{copied ? "Copiado" : ""}</span>
+        <span className="flex items-baseline gap-1.5">
+          <span aria-live="polite">{copied ? "Estilo copiado para" : "Copiar estilo para"}</span>
+          {COPY_TARGETS[axis].map((target, index) => (
+            <span key={target.axis} className="flex items-baseline gap-1.5">
+              {index > 0 && <span aria-hidden="true">·</span>}
+              <button
+                type="button"
+                aria-label={`Copiar estilo para ${target.label}`}
+                title="Copia marcações e texto, sem os limites"
+                onClick={() => {
+                  settings.copyAxisStyle(axis, target.axis);
+                  setCopied(true);
+                }}
+                className="text-foreground underline underline-offset-2"
+              >
+                {target.label}
+              </button>
+            </span>
+          ))}
         </span>
         <button
           type="button"

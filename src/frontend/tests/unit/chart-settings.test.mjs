@@ -177,6 +177,8 @@ it("copies the style to the other axis and restores an axis without touching its
     values.updateAxis("x", { min: "1", fontSize: 14, format: "decimal", grid: false });
   });
   await act(async () => values.copyAxisStyle("x"));
+  await act(async () => values.copyAxisStyle("y", "residual"));
+  expect(values.residualAxis).toMatchObject({ min: "", fontSize: 14, format: "decimal" });
   expect(values.yAxis).toMatchObject({ min: "", fontSize: 14, format: "decimal", grid: false });
   await act(async () => values.resetAxis("x"));
   expect(values.xAxis.fontSize).toBe(10);

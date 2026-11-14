@@ -98,12 +98,12 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
   const resetAxis = (axis: AxisKey) =>
     setAxes((current) => ({ ...current, [axis]: axisDefaults(axis) }));
   /**
-   * Copies tick, grid and text style to the other axis, leaving its range alone:
-   * X to Y, Y to X, and the residual axis to Y.
+   * Copies tick, grid and text style to another axis, leaving its range alone.
+   * Without a target: X to Y, Y to X, and the residual axis to Y.
    */
-  const copyAxisStyle = (from: AxisKey) =>
+  const copyAxisStyle = (from: AxisKey, target?: AxisKey) =>
     setAxes((current) => {
-      const to: AxisKey = from === "y" ? "x" : "y";
+      const to: AxisKey = target ?? (from === "y" ? "x" : "y");
       const style = Object.fromEntries(AXIS_STYLE_KEYS.map((key) => [key, current[from][key]]));
       return { ...current, [to]: { ...current[to], ...style } };
     });

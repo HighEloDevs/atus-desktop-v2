@@ -200,9 +200,11 @@ it("changes the title and the number text from the Texto tab", async () => {
   await click(option("Rotação", "45°"));
   expect(popover().querySelector('[aria-label="Rotação do título"]')).toBeNull();
   expect(xLabels()[0].getAttribute("transform")).toMatch(/^rotate\(-45 /);
-  await click(byText("button", "Copiar estilo para Y", popover()));
+  await click(popover().querySelector('button[aria-label="Copiar estilo para Y"]'));
   expect(latest.yAxis).toMatchObject({ format: "decimal", decimals: 1, fontSize: 11 });
-  expect(popover().textContent).toContain("Copiado");
+  expect(popover().textContent).toContain("Estilo copiado para");
+  await click(popover().querySelector('button[aria-label="Copiar estilo para resíduos"]'));
+  expect(latest.residualAxis).toMatchObject({ format: "decimal", decimals: 1, fontSize: 11 });
   await click(byText("button", "Restaurar padrão", popover()));
   expect(latest.xAxis.fontSize).toBe(10);
   expect(latest.xLabel).toBe("t (s)");
@@ -273,10 +275,10 @@ it("configures the residual axis like the others, in sync with the residual opti
   expect(residualLabels()[0].getAttribute("transform")).toMatch(/^rotate\(-90 /);
   await type(popover().querySelector("#axis-residual-title"), "Desvio");
   expect(latest.residualYLabel).toBe("Desvio");
-  await click(byText("button", "Copiar estilo para Y", popover()));
+  await click(popover().querySelector('button[aria-label="Copiar estilo para Y"]'));
   expect(latest.yAxis.rotation).toBe(0);
   await click(popover().querySelector('button[aria-label="Aumentar fonte dos números"]'));
-  await click(byText("button", "Copiar estilo para Y", popover()));
+  await click(popover().querySelector('button[aria-label="Copiar estilo para Y"]'));
   expect(latest.yAxis.fontSize).toBe(11);
 });
 
