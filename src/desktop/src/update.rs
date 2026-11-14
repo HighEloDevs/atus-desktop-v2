@@ -668,6 +668,16 @@ pub async fn update_check(
     Ok(set_state(&app, state))
 }
 
+/// The notes of every version, as announced by the update found. `None` when there is no update
+/// or its manifest carries no (or an oversized) `changelog`.
+#[tauri::command]
+pub fn update_changelog(store: State<'_, UpdateStore>) -> Option<serde_json::Value> {
+    let update = store.update.lock().unwrap();
+    update
+        .as_ref()
+        .and_then(|update| changelog_of(&update.raw_json))
+}
+
 /// Starts downloading the announced update in the background and returns at once; progress and
 /// the result arrive through [`STATE_EVENT`].
 ///
@@ -697,6 +707,21 @@ pub fn update_download(
     let task = tauri::async_runtime::spawn(run_download(app.clone(), update, version));
     *store.download.lock().unwrap() = Some(task);
     Ok(state)
+}
+
+/// The largest changelog the interface accepts, in bytes of JSON.
+const MAX_CHANGELOG_BYTES: usize = 2 * 1024 * 1024;
+
+/// The notes of every version, from the `changelog` field of the manifest the updater downloaded.
+///
+/// The updater keeps the fields it does not use, and the releases put the same object as
+/// `changelog.json` there. The manifest is not signed, so this only checks that the field is an
+/// object of a sane size; the interface validates what is inside.
+pub fn changelog_of(manifest: &serde_json::Value) -> Option<serde_json::Value> {
+    let changelog = manifest.get("changelog")?;
+    let small =
+        serde_json::to_string(changelog).is_ok_and(|text| text.len() <= MAX_CHANGELOG_BYTES);
+    (changelog.is_object() && small).then(|| changelog.clone())
 }
 
 /// The one-line summary the release announced, when it has one.
@@ -1042,6 +1067,33 @@ mod tests {
             state_after_check(found("0.3.1"), Support::Automatic, Some("0.3.0"), None),
             UpdateState::Available { .. }
         ));
+    }
+
+    #[test]
+    fn the_changelog_comes_from_the_manifest_when_it_is_a_reasonable_object() {
+        let manifest =
+            serde_json::json!({ "version": "0.3.0", "changelog": { "schema": 1, "versions": [] } });
+        assert_eq!(
+            changelog_of(&manifest),
+            Some(serde_json::json!({ "schema": 1, "versions": [] }))
+        );
+        assert_eq!(
+            changelog_of(&serde_json::json!({ "version": "0.3.0" })),
+            None
+        );
+        assert_eq!(
+            changelog_of(&serde_json::json!({ "changelog": [1, 2] })),
+            None
+        );
+        assert_eq!(
+            changelog_of(&serde_json::json!({ "changelog": "text" })),
+            None
+        );
+        let huge = "x".repeat(MAX_CHANGELOG_BYTES);
+        assert_eq!(
+            changelog_of(&serde_json::json!({ "changelog": { "text": huge } })),
+            None
+        );
     }
 
     #[test]

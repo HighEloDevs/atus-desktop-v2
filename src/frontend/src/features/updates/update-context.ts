@@ -6,12 +6,15 @@
  */
 
 import { createContext, useContext, useEffect, useRef } from "react";
+import type { ChangelogVersion } from "@/features/news/changelog";
 import type { UpdateState } from "./update-client";
 
 /** State and actions of the update interface. */
 export interface UpdateApi {
   /** Where the update is. Anything but an update to offer is hidden by the interface. */
   state: UpdateState;
+  /** The notes of every version known: the ones embedded in the build and the ones announced. */
+  changelog: ChangelogVersion[];
   /** Whether the once-a-day banner is showing. */
   bannerVisible: boolean;
   /** Whether the install confirmation is open. It only opens for a downloaded update. */
@@ -43,6 +46,7 @@ const nothing = async () => {};
 /** The context value outside a provider: no update is ever offered. */
 export const INERT_UPDATE: UpdateApi = {
   state: { kind: "idle" },
+  changelog: [],
   bannerVisible: false,
   dialogOpen: false,
   check: nothing,

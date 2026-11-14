@@ -5,7 +5,8 @@
  * `docs/releases/README.md`: a small front matter (`title`, `date`, `summary`, optional `cover`)
  * followed by up to three fixed sections. Features (`### title` under `## Novidades`) may carry
  * images and one YouTube video. The notes reach users inside the app, so the format is strict:
- * no raw HTML, only https links, and images must be local files within size limits.
+ * no raw HTML, links only to places the app can open (see {@link isAllowedLink}), and images
+ * must be local files within size limits.
  *
  * CLI: `node check-release-notes.mjs [--root docs/releases] [--version M.m.p]`. Without
  * `--version`, the version is read from `src/desktop/tauri.conf.json`. Exits non-zero and prints
@@ -246,9 +247,28 @@ function checkPath(path, line, fail, what) {
   }
 }
 
+/** Hosts, besides `github.com/HighEloDevs`, that notes may link to. */
+const LINK_HOSTS = ['youtu.be', 'www.youtube.com', 'atusweb.com.br', 'www.atusweb.com.br'];
+
+/**
+ * Whether a note may link to an address. The desktop app opens links in the browser only for a
+ * fixed set of places (its `opener` permission), so the notes are held to the same set and no
+ * link dies silently: the project on GitHub, YouTube and the ATUS site.
+ * @param {string} value Link target.
+ * @returns {boolean} True for an `https` link, without credentials or a port, to an allowed place.
+ */
+export function isAllowedLink(value) {
+  let url;
+  try { url = new URL(value); } catch { return false; }
+  if (url.protocol !== 'https:' || url.username || url.password || url.port) return false;
+  const host = url.hostname.toLowerCase();
+  if (host === 'github.com') return url.pathname === '/HighEloDevs' || url.pathname.startsWith('/HighEloDevs/');
+  return LINK_HOSTS.includes(host);
+}
+
 function checkInline(text, line, fail) {
   for (const match of text.matchAll(/\]\(([^)]*)\)/g)) {
-    if (!/^https:\/\//.test(match[1])) fail(line, `links must use https, got "${match[1]}"`);
+    if (!isAllowedLink(match[1])) fail(line, `links must be https to github.com/HighEloDevs, YouTube or atusweb.com.br, got "${match[1]}"`);
   }
   if (/!\[/.test(text)) fail(line, 'images must be on their own line inside a feature');
 }

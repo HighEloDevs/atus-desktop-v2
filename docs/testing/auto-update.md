@@ -13,6 +13,8 @@ O teste de integração (`desktop-e2e.md`) cobre o motor e a interface contra um
 1. Faça o merge da 0.2.9. Quando a release sair, o ATUS da 0.2.8 deve baixar em segundo plano e mostrar **Atualizar** no topo (e o banner, uma vez por dia).
 2. Abra um projeto, edite algo e **não** salve. Clique em **Atualizar** e confirme: o projeto deve ser salvo, o ATUS deve reiniciar já na 0.2.9, e o projeto deve reabrir com a edição.
 3. Confira a versão na barra lateral e em Sobre.
+4. Depois de reiniciar, a página **Novidades** deve abrir sozinha na 0.2.9, uma vez; a capa e as imagens da 0.2.9 devem carregar (precisam de internet). Reabra o ATUS: a página não abre de novo.
+5. Antes de atualizar, com a atualização já baixada: o item **Novidades** deve ter um ponto, a versão nova deve aparecer marcada como **nova**, e o botão **Ver novidades** do banner deve abrir a página nela.
 
 ## Por formato
 

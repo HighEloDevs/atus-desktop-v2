@@ -19,6 +19,13 @@ vi.mock("@/lib/notify", () => ({ notify }));
 const bridge = vi.hoisted(() => ({ isTauri: vi.fn(), openUrl: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: bridge.isTauri }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: bridge.openUrl }));
+vi.mock("../../src/features/news/embedded-changelog", async () => {
+  const { rawChangelog } = await import("../fixtures/changelog-fixture.mjs");
+  const { parseChangelog } = await import("../../src/features/news/changelog");
+  // The notes of the installed version and the older ones, as the build embeds them.
+  return { EMBEDDED_CHANGELOG: parseChangelog(rawChangelog()).slice(1) };
+});
+import { rawChangelog } from "../fixtures/changelog-fixture.mjs";
 import {
   CHECK_EVERY_MS,
   FIRST_CHECK_MS,
@@ -41,6 +48,7 @@ function fakeClient(overrides = {}) {
     download: vi.fn().mockResolvedValue(null),
     cancelDownload: vi.fn().mockResolvedValue(null),
     install: vi.fn().mockResolvedValue(null),
+    changelog: vi.fn().mockResolvedValue(null),
     unlisten: vi.fn(),
     send: (state) => client.callback?.(state),
     onState: vi.fn(async (callback) => {
@@ -403,4 +411,47 @@ it("opens the releases page in the browser, and reports when it cannot", async (
   const open = vi.spyOn(window, "open").mockReturnValue(null);
   await act(async () => api.openReleases());
   expect(open).toHaveBeenCalledWith(RELEASES_URL, "_blank", "noopener,noreferrer");
+});
+
+it("starts with the notes embedded in the build", async () => {
+  await mount(fakeClient());
+  expect(api.changelog.map((item) => item.version)).toEqual(["0.2.4", "0.2.3"]);
+});
+
+it("adds the notes announced with the update, once per version", async () => {
+  const client = fakeClient({ changelog: vi.fn().mockResolvedValue(rawChangelog()) });
+  await mount(client);
+  await send(client, available("0.3.0"));
+  expect(client.changelog).toHaveBeenCalledTimes(1);
+  expect(api.changelog.map((item) => item.version)).toEqual(["0.3.0", "0.2.4", "0.2.3"]);
+  // The same version going on (downloading, ready) does not ask again.
+  await send(client, ready("0.3.0"));
+  await send(client, { kind: "downloading", version: "0.3.0", downloaded: 1, total: 2 });
+  expect(client.changelog).toHaveBeenCalledTimes(1);
+  // A newer update asks again.
+  await send(client, ready("0.3.1"));
+  expect(client.changelog).toHaveBeenCalledTimes(2);
+  // An update to install by hand carries notes too.
+  await send(client, {
+    kind: "manual",
+    version: "0.3.2",
+    reason: "installFailed",
+    url: RELEASES_URL,
+    notes: null,
+  });
+  expect(client.changelog).toHaveBeenCalledTimes(3);
+});
+
+it("ignores announced notes that cannot be trusted, and a request that fails", async () => {
+  const client = fakeClient({ changelog: vi.fn().mockResolvedValue({ schema: 9, versions: "x" }) });
+  await mount(client);
+  await send(client, available("0.3.0"));
+  expect(api.changelog.map((item) => item.version)).toEqual(["0.2.4", "0.2.3"]);
+  const failing = fakeClient({ changelog: vi.fn().mockRejectedValue("falhou") });
+  await act(async () => root.unmount());
+  root = createRoot(node);
+  await mount(failing);
+  await send(failing, available("0.3.0"));
+  expect(api.changelog.map((item) => item.version)).toEqual(["0.2.4", "0.2.3"]);
+  expect(notify.error).not.toHaveBeenCalled();
 });

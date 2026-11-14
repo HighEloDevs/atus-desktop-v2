@@ -111,6 +111,11 @@ test('latest.json points each installed format to its own signed package', () =>
   const signatures = Object.fromEntries(ARTIFACTS.filter((item) => item.signed).map((item) => [item.name, `sig-${item.name}`]));
   const manifest = createUpdateManifest({ version: '0.2.5', notes: 'Resumo.', pubDate: '2026-11-13T20:00:00-03:00', repository: 'o/r', signatures });
   assert.deepEqual(Object.keys(manifest), ['version', 'notes', 'pub_date', 'platforms']);
+  // The notes of every version ride along, for the app's Novidades page.
+  const changelog = { schema: 1, versions: [{ version: '0.2.5', title: 'T' }] };
+  const withNotes = createUpdateManifest({ version: '0.2.5', notes: 'Resumo.', pubDate: '2026-11-13T20:00:00-03:00', repository: 'o/r', signatures, changelog });
+  assert.deepEqual(Object.keys(withNotes), ['version', 'notes', 'pub_date', 'platforms', 'changelog']);
+  assert.deepEqual(withNotes.changelog, changelog);
   assert.deepEqual(Object.keys(manifest.platforms).sort(), Object.keys(UPDATER_TARGETS).sort());
   assert.deepEqual(manifest.platforms['windows-x86_64-msi'], { signature: 'sig-atus-windows.msi', url: 'https://github.com/o/r/releases/download/v0.2.5/atus-windows.msi' });
   assert.equal(manifest.platforms['windows-x86_64'].url.endsWith('atus-windows.exe'), true);

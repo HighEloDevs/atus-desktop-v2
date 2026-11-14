@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { checkReleaseNotes, parseReleaseNotes, renderReleaseBody, versionFromFileName } from '../../../../scripts/shared/release/check-release-notes.mjs';
+import { checkReleaseNotes, isAllowedLink, parseReleaseNotes, renderReleaseBody, versionFromFileName } from '../../../../scripts/shared/release/check-release-notes.mjs';
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 const GIF = Buffer.from('GIF89a\0\0\0\0\0\0', 'latin1');
@@ -114,7 +114,8 @@ test('reports body problems with line numbers', () => {
     ['## Novidades\n### A\n<!-- onde: x -->\nTexto\n', /raw HTML/],
     ['## Novidades\n### A\nTexto\n![](a.png)\n', /need a caption/],
     ['## Novidades\n### A\nTexto com ![a](a.png) no meio\n', /own line/],
-    ['## Novidades\n### A\nTexto [link](http://example.com)\n', /https/],
+    ['## Novidades\n### A\nTexto [link](http://example.com)\n', /https to github\.com\/HighEloDevs/],
+    ['## Novidades\n### A\nTexto [link](https://example.com/a)\n', /atusweb\.com\.br/],
     ['## Novidades\n### A\nTexto\n[V](https://youtube.com/shorts/abc)\n', /youtu\.be\/ID/],
     ['## Novidades\n### A\nTexto\n[V](https://youtu.be/dQw4w9WgXcQ)\n[W](https://youtu.be/dQw4w9WgXcQ)\n', /already has a video/],
     ['## Novidades\n### A\nTexto\n[![](p.png)](https://youtu.be/dQw4w9WgXcQ)\n', /needs a title/],
@@ -224,4 +225,32 @@ test('the real release notes in the repository are valid', () => {
   const { errors, notes } = checkReleaseNotes({ root: 'docs/releases', version: JSON.parse(readFileSync('src/desktop/tauri.conf.json', 'utf8')).version });
   assert.deepEqual(errors, []);
   for (const version of ['0.2.0', '0.2.3']) assert.ok(notes.has(version), version);
+});
+
+/** The same table is in `src/frontend/tests/unit/changelog-links.test.mjs`: keep the two equal. */
+const LINK_CASES = [
+  ['https://github.com/HighEloDevs/atus-desktop-v2/releases/latest', true],
+  ['https://github.com/HighEloDevs', true],
+  ['https://github.com/HighEloDevs/atus-desktop-v2', true],
+  ['https://github.com/HighEloDevsX/atus', false],
+  ['https://github.com/OtherOrg/atus', false],
+  ['https://github.com/', false],
+  ['https://youtu.be/dQw4w9WgXcQ', true],
+  ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', true],
+  ['https://youtube.com/watch?v=dQw4w9WgXcQ', false],
+  ['https://atusweb.com.br/about', true],
+  ['https://www.atusweb.com.br/', true],
+  ['https://evil.atusweb.com.br/', false],
+  ['https://atusweb.com.br.evil.com/', false],
+  ['http://atusweb.com.br/', false],
+  ['https://user:pass@atusweb.com.br/', false],
+  ['https://atusweb.com.br:8443/', false],
+  ['javascript:alert(1)', false],
+  ['//atusweb.com.br/', false],
+  ['', false],
+  ['not a url', false],
+];
+
+test('allows links only to the places the app can open', () => {
+  for (const [link, allowed] of LINK_CASES) assert.equal(isAllowedLink(link), allowed, link);
 });
