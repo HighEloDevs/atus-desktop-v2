@@ -18,10 +18,17 @@ type Props = {
   onAlignmentChange?: (alignment: LabelAlignment) => void;
   orientation?: "horizontal" | "vertical";
   initialFontSize?: number;
+  /** Controlled font size; when set, the wheel reports changes through `onFontSizeChange`. */
+  fontSize?: number;
+  /** Receives the font size picked with the wheel, clamped to 8–48 px. */
+  onFontSizeChange?: (fontSize: number) => void;
 };
 
 /**
  * Renders an editable chart label with alignment controls.
+ *
+ * The wheel over the label changes its font size. Without `fontSize` the size is local
+ * state; with it the label is controlled, so another control can show the same value.
  * @param props - Label text, alignment, and update callbacks.
  * @returns The rendered React element.
  */
@@ -34,12 +41,22 @@ export function EditableChartLabel({
   onAlignmentChange,
   orientation = "horizontal",
   initialFontSize = 11,
+  fontSize: controlledFontSize,
+  onFontSizeChange,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const [fontSize, setFontSize] = useState(initialFontSize);
+  const [ownFontSize, setOwnFontSize] = useState(initialFontSize);
+  const fontSize = controlledFontSize ?? ownFontSize;
+  const fontSizeRef = useRef(fontSize);
+  const changeFontSizeRef = useRef<(size: number) => void>(setOwnFontSize);
+  useEffect(() => {
+    fontSizeRef.current = fontSize;
+    changeFontSizeRef.current =
+      controlledFontSize !== undefined && onFontSizeChange ? onFontSizeChange : setOwnFontSize;
+  }, [fontSize, controlledFontSize, onFontSizeChange]);
   const dragRef = useRef<{ start: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
   const [dragOffset, setDragOffset] = useState(0);
@@ -58,7 +75,9 @@ export function EditableChartLabel({
       if (event.ctrlKey || event.metaKey || event.deltaY === 0) return;
       event.preventDefault();
       event.stopPropagation();
-      setFontSize((size) => Math.max(8, Math.min(48, size + (event.deltaY < 0 ? 1 : -1))));
+      const size = Math.max(8, Math.min(48, fontSizeRef.current + (event.deltaY < 0 ? 1 : -1)));
+      fontSizeRef.current = size;
+      changeFontSizeRef.current(size);
     };
     button.addEventListener("wheel", handleWheel, { passive: false });
     return () => button.removeEventListener("wheel", handleWheel);

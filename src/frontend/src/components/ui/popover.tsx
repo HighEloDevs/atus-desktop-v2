@@ -61,4 +61,13 @@ function PopoverClose({ ...props }: React.ComponentProps<typeof PopoverPrimitive
   return <PopoverPrimitive.Close data-slot="popover-close" {...props} />;
 }
 
-export { Popover, PopoverClose, PopoverContent, PopoverTrigger };
+/**
+ * Positions the popover against an element other than its trigger.
+ * @param props - Component properties forwarded to the underlying control.
+ * @returns The rendered React element.
+ */
+function PopoverAnchor({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Anchor>) {
+  return <PopoverPrimitive.Anchor data-slot="popover-anchor" {...props} />;
+}
+
+export { Popover, PopoverAnchor, PopoverClose, PopoverContent, PopoverTrigger };

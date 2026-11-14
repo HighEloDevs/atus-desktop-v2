@@ -5,12 +5,15 @@
 
 import { scaleLinear } from "d3";
 import { SlidersHorizontal, X } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatSignificant } from "@/features/analysis/fit/result-format";
 import type { ChartSeries } from "./Chart";
+import { AxisGrid, XTickLabels } from "./AxisMarks";
+import type { AxisBox } from "./AxisSettingsPopover";
 import { EditableChartLabel } from "./EditableChartLabel";
+import { OptionRow } from "./OptionRow";
 import {
   formatTick,
   residualDomain,
@@ -23,7 +26,6 @@ import { residualDefaults, type ChartSettings } from "./useChartSettings";
 /** Width, in pixels, of the column that holds the lateral histogram. */
 export const HISTOGRAM_GUTTER = 56;
 const TOP = 10;
-const BOTTOM = 24;
 const BINS = 8;
 
 type Props = {
@@ -31,6 +33,14 @@ type Props = {
   /** X scale of the main chart, already zoomed; maps data to the plot area. */
   x: (value: number) => number;
   xTicks: number[];
+  /** Minor X ticks of the main chart, for the minor grid. */
+  xMinorTicks: number[];
+  /** Whether the X axis is hovered or being configured, to darken its labels. */
+  xHighlighted?: boolean;
+  /** Room below the plot for the X tick labels, which this panel draws. */
+  bottom: number;
+  /** Renders the X axis click target over the given box. */
+  xAxisControl?: (box: AxisBox) => ReactNode;
   xLog: boolean;
   /** Left and right margin shared with the main chart. */
   margin: { left: number; right: number };
@@ -54,6 +64,10 @@ export function ResidualPanel({
   series,
   x,
   xTicks,
+  xMinorTicks,
+  xHighlighted,
+  bottom,
+  xAxisControl,
   xLog,
   margin,
   settings,
@@ -71,7 +85,8 @@ export function ResidualPanel({
     return () => observer.disconnect();
   }, []);
   const {
-    grid,
+    xAxis,
+    yAxis,
     residualYLabel,
     setResidualYLabel,
     residualYMin,
@@ -96,7 +111,7 @@ export function ResidualPanel({
   const [lo, hi] = residualDomain(domainValues, residualYMin, residualYMax);
   const { width, height } = size;
   const w = Math.max(1, width - margin.left - margin.right);
-  const h = Math.max(1, height - TOP - BOTTOM);
+  const h = Math.max(1, height - TOP - bottom);
   const y = scaleLinear().domain([lo, hi]).range([h, 0]);
   const yTicks = y.ticks(Math.max(2, Math.round(h / 40)));
   const bins = binResiduals(
@@ -135,17 +150,25 @@ export function ResidualPanel({
               </clipPath>
             </defs>
             <g transform={`translate(${margin.left},${TOP})`}>
-              {xTicks.map((t) => (
-                <g key={t} transform={`translate(${x(t)},0)`}>
-                  {grid && <line y2={h} stroke="#e8ece7" />}
-                  <text y={h + 16} textAnchor="middle" fontSize="10" fill="#78857d">
-                    {formatTick(t)}
-                  </text>
-                </g>
-              ))}
+              <AxisGrid
+                axis="x"
+                majors={xTicks}
+                minors={xMinorTicks}
+                scale={x}
+                width={w}
+                height={h}
+                settings={xAxis}
+              />
+              <XTickLabels
+                ticks={xTicks}
+                scale={x}
+                bottom={h}
+                settings={xAxis}
+                highlighted={xHighlighted}
+              />
               {yTicks.map((t) => (
                 <g key={t} transform={`translate(0,${y(t)})`}>
-                  {grid && <line x2={w} stroke="#e8ece7" />}
+                  {yAxis.grid && <line x2={w} stroke="#e8ece7" />}
                   <text x={-8} dy=".32em" textAnchor="end" fontSize="10" fill="#78857d">
                     {signed(t)}
                   </text>
@@ -267,6 +290,14 @@ export function ResidualPanel({
             </g>
           </svg>
         )}
+        {width > 90 &&
+          height > 55 &&
+          xAxisControl?.({
+            left: margin.left - 6,
+            top: TOP + h + 3,
+            width: w + 12,
+            height: bottom - 4,
+          })}
       </div>
     </div>
   );
@@ -302,69 +333,6 @@ const ICONS = {
   ),
   histogram: <path d="M5 6h6M5 10h12M5 14h9M5 18h4" />,
 };
-
-/**
- * One option row of the residuals menu: icon tile, title, description and a switch.
- * @param props - Icon, texts, current value, change callback, and optional disabled state.
- * @returns The rendered React element.
- */
-function OptionRow({
-  icon,
-  title,
-  description,
-  value,
-  onChange,
-  disabled,
-}: {
-  icon: keyof typeof ICONS;
-  title: string;
-  description: string;
-  value: boolean;
-  onChange: (value: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={value}
-      aria-disabled={disabled || undefined}
-      onClick={() => {
-        if (!disabled) onChange(!value);
-      }}
-      className={`grid w-full grid-cols-[26px_1fr_auto] items-center gap-2.5 rounded-lg px-2 py-[7px] text-left transition-colors hover:bg-background focus-visible:outline-2 focus-visible:outline-brand-coral ${disabled ? "cursor-not-allowed opacity-55 hover:bg-transparent" : ""}`}
-    >
-      <span
-        aria-hidden="true"
-        className={`grid size-[26px] place-items-center rounded-md ${value ? "bg-foreground/10 text-foreground" : "bg-muted text-muted-foreground"}`}
-      >
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-        >
-          {ICONS[icon]}
-        </svg>
-      </span>
-      <span className="min-w-0">
-        <b className="block text-xs font-medium">{title}</b>
-        <small className="mt-px block text-[11px] text-muted-foreground">{description}</small>
-      </span>
-      <span
-        aria-hidden="true"
-        className={`flex h-[18px] w-[30px] shrink-0 items-center rounded-full p-0.5 transition-colors ${value ? "bg-foreground" : "bg-muted ring-1 ring-inset ring-border"}`}
-      >
-        <span
-          className={`size-3.5 rounded-full bg-white shadow-sm transition-transform ${value ? "translate-x-3" : ""}`}
-        />
-      </span>
-    </button>
-  );
-}
 
 /**
  * Popover with the residuals panel options: Y limits and which elements to show.
@@ -479,14 +447,14 @@ function ResidualOptions({ settings, hasSigma }: { settings: ChartSettings; hasS
           <h3 className={heading}>Exibir</h3>
           <div className="-mx-2 grid gap-0.5">
             <OptionRow
-              icon="stems"
+              icon={ICONS.stems}
               title="Hastes até o zero"
               description="Linha de cada ponto até o resíduo nulo"
               value={residualStems}
               onChange={setResidualStems}
             />
             <OptionRow
-              icon="band"
+              icon={ICONS.band}
               title="Faixa ±σ"
               description={hasSigma ? "Incerteza média das medidas" : needsSigma}
               disabled={!hasSigma}
@@ -494,7 +462,7 @@ function ResidualOptions({ settings, hasSigma }: { settings: ChartSettings; hasS
               onChange={setResidualBand}
             />
             <OptionRow
-              icon="errorBars"
+              icon={ICONS.errorBars}
               title="Barras de incerteza"
               description={hasSigma ? "σ de cada ponto" : needsSigma}
               disabled={!hasSigma}
@@ -502,7 +470,7 @@ function ResidualOptions({ settings, hasSigma }: { settings: ChartSettings; hasS
               onChange={setResidualErrorBars}
             />
             <OptionRow
-              icon="histogram"
+              icon={ICONS.histogram}
               title="Histograma lateral"
               description="Distribuição dos resíduos"
               value={residualHistogram}

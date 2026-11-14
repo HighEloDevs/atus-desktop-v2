@@ -5,6 +5,14 @@
 
 import { useState } from "react";
 import type { LabelAlignment } from "./EditableChartLabel";
+import {
+  AXIS_DEFAULTS,
+  AXIS_STYLE_KEYS,
+  clampAxisValue,
+  restoreAxis,
+  type AxisKey,
+  type AxisSettings,
+} from "./axisSettings";
 
 export const chartLinePatterns = {
   solid: "",
@@ -24,8 +32,14 @@ export const residualDefaults = {
 
 /**
  * Creates local state and setters for chart presentation.
- * @param initial - Optional persisted chart values.
- * @returns Current settings and React state setters.
+ *
+ * Each axis keeps its settings in one object (`xAxis`, `yAxis`). The legacy flat fields
+ * (`xMin`, `xLog`, `ticks`, `grid`...) are derived from those objects and write back to
+ * them, so the sidebar and the axis popover always show the same values. `ticks` and
+ * `grid` cover both axes: writing them changes X and Y.
+ * @param initial - Optional persisted chart values; projects saved before per-axis
+ * settings migrate from the legacy fields.
+ * @returns Current settings and setters.
  */
 export function useChartSettings(initial?: Partial<ChartValues>) {
   const [title, setTitle] = useState(initial?.title ?? "Gráfico de exemplo");
@@ -40,19 +54,11 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
   const [yAlignment, setYAlignment] = useState<LabelAlignment>(initial?.yAlignment ?? "center");
   const [xLabel, setXLabel] = useState(initial?.xLabel ?? "x");
   const [yLabel, setYLabel] = useState(initial?.yLabel ?? "y");
-  const [grid, setGrid] = useState(initial?.grid ?? true);
   const [legend, setLegend] = useState(initial?.legend ?? true);
   const [legendOrientation, setLegendOrientation] = useState<"horizontal" | "vertical">(
     initial?.legendOrientation ?? "vertical",
   );
   const [legendPosition, setLegendPosition] = useState(initial?.legendPosition ?? { x: 1, y: 0.5 });
-  const [xLog, setXLog] = useState(initial?.xLog ?? false);
-  const [yLog, setYLog] = useState(initial?.yLog ?? false);
-  const [xMin, setXMin] = useState(initial?.xMin ?? "");
-  const [xMax, setXMax] = useState(initial?.xMax ?? "");
-  const [yMin, setYMin] = useState(initial?.yMin ?? "");
-  const [yMax, setYMax] = useState(initial?.yMax ?? "");
-  const [ticks, setTicks] = useState(initial?.ticks ?? 5);
   const [color, setColor] = useState(initial?.color ?? "#f25a3c");
   const [radius, setRadius] = useState(initial?.radius ?? 5);
   const [symbol, setSymbol] = useState(initial?.symbol ?? "circle");
@@ -77,7 +83,30 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
   const [residualHistogram, setResidualHistogram] = useState(
     initial?.residualHistogram ?? residualDefaults.histogram,
   );
+  const [axes, setAxes] = useState(() => ({
+    x: restoreAxis("x", initial?.xAxis, initial),
+    y: restoreAxis("y", initial?.yAxis, initial),
+  }));
+  const updateAxis = (axis: AxisKey, patch: Partial<AxisSettings>) =>
+    setAxes((current) => ({ ...current, [axis]: { ...current[axis], ...patch } }));
+  const updateBoth = (patch: Partial<AxisSettings>) =>
+    setAxes((current) => ({ x: { ...current.x, ...patch }, y: { ...current.y, ...patch } }));
+  /** Restores every setting of an axis; the title text is user content and stays. */
+  const resetAxis = (axis: AxisKey) =>
+    setAxes((current) => ({ ...current, [axis]: { ...AXIS_DEFAULTS } }));
+  /** Copies tick, grid and text style to the other axis, leaving its range alone. */
+  const copyAxisStyle = (from: AxisKey) =>
+    setAxes((current) => {
+      const to: AxisKey = from === "x" ? "y" : "x";
+      const style = Object.fromEntries(AXIS_STYLE_KEYS.map((key) => [key, current[from][key]]));
+      return { ...current, [to]: { ...current[to], ...style } };
+    });
   return {
+    xAxis: axes.x,
+    yAxis: axes.y,
+    updateAxis,
+    resetAxis,
+    copyAxisStyle,
     title,
     setTitle,
     titleAlignment,
@@ -94,28 +123,30 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
     setXLabel,
     yLabel,
     setYLabel,
-    grid,
-    setGrid,
+    /** True when either axis shows its major grid. */
+    grid: axes.x.grid || axes.y.grid,
+    setGrid: (grid: boolean) => updateBoth({ grid }),
     legend,
     setLegend,
     legendOrientation,
     setLegendOrientation,
     legendPosition,
     setLegendPosition,
-    xLog,
-    setXLog,
-    yLog,
-    setYLog,
-    xMin,
-    setXMin,
-    xMax,
-    setXMax,
-    yMin,
-    setYMin,
-    yMax,
-    setYMax,
-    ticks,
-    setTicks,
+    xLog: axes.x.log,
+    setXLog: (log: boolean) => updateAxis("x", { log }),
+    yLog: axes.y.log,
+    setYLog: (log: boolean) => updateAxis("y", { log }),
+    xMin: axes.x.min,
+    setXMin: (min: string) => updateAxis("x", { min }),
+    xMax: axes.x.max,
+    setXMax: (max: string) => updateAxis("x", { max }),
+    yMin: axes.y.min,
+    setYMin: (min: string) => updateAxis("y", { min }),
+    yMax: axes.y.max,
+    setYMax: (max: string) => updateAxis("y", { max }),
+    /** X tick count; the sidebar shows it only while both axes agree. */
+    ticks: axes.x.ticks,
+    setTicks: (ticks: number) => updateBoth({ ticks: clampAxisValue("ticks", ticks) }),
     color,
     setColor,
     radius,
@@ -150,6 +181,10 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
 export type ChartSettings = ReturnType<typeof useChartSettings>;
 
 export type ChartValues = {
+  /** Settings of the X axis; projects saved without it migrate from the legacy fields. */
+  xAxis: AxisSettings;
+  /** Settings of the Y axis; projects saved without it migrate from the legacy fields. */
+  yAxis: AxisSettings;
   title: string;
   titleAlignment: LabelAlignment;
   subtitleAlignment: LabelAlignment;
@@ -162,6 +197,7 @@ export type ChartValues = {
   legend: boolean;
   legendOrientation: "horizontal" | "vertical";
   legendPosition: { x: number; y: number };
+  /** Legacy fields below are derived from the axes and still saved for older versions. */
   xLog: boolean;
   yLog: boolean;
   xMin: string;

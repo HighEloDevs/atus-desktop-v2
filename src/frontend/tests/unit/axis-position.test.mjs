@@ -41,3 +41,14 @@ it("falls back to the classic edges when zero has no finite position", () => {
     y: 100,
   });
 });
+
+it("keeps an axis on the border when the user pins it there", () => {
+  expect(axisPosition(xPixel, yPixel, 200, 100, false, false, { y: true })).toEqual({
+    x: 0,
+    y: 50,
+  });
+  expect(axisPosition(xPixel, yPixel, 200, 100, false, false, { x: true })).toEqual({
+    x: 50,
+    y: 100,
+  });
+});
