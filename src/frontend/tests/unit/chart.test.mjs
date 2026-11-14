@@ -80,6 +80,17 @@ it("excludes non-positive values from logarithmic axes", async () => {
   }
 });
 
+it("bends the fitted line on a logarithmic axis instead of joining its samples straight", async () => {
+  const fitPath = () =>
+    node.querySelector('svg[role="img"]').querySelector('path[stroke="#123456"]').getAttribute("d");
+  await act(async () => root.render(createElement(Harness)));
+  expect(fitPath().match(/L/g)).toHaveLength(1);
+  await act(async () => root.unmount());
+  root = createRoot(node);
+  await act(async () => root.render(createElement(Harness, { initial: { yLog: true } })));
+  expect(fitPath().match(/L/g)).toHaveLength(256);
+});
+
 const axisLines = (svg) => [...svg.querySelectorAll('line[stroke="#aebbb0"]')];
 
 it("draws the axes as a cross through zero, sticking to an edge when zero is out of range", async () => {

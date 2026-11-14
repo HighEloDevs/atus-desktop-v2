@@ -32,6 +32,7 @@ import { hasResiduals, residualYDomain, type ChartResidual } from "./residuals";
 import { EditableChartLabel } from "./EditableChartLabel";
 import { ChartTooltip } from "./ChartTooltip";
 import { axisPosition } from "./axisPosition";
+import { densifyCurve } from "./curvePath";
 import {
   AXIS_COLORS,
   formatAxisTick,
@@ -78,6 +79,8 @@ type ChartProps = {
   fitShortcut?: string;
 };
 const finite = (p: ChartPoint) => Number.isFinite(p.x) && Number.isFinite(p.y);
+/** Points drawn per curve segment when an axis is logarithmic. */
+const CURVE_STEPS = 256;
 /** Smallest pointer target radius, in pixels, around a data point. */
 const HIT_RADIUS = 12;
 function domain(values: number[], log: boolean): [number, number] {
@@ -570,7 +573,10 @@ export function Chart({
                         const path = line<ChartPoint>()
                           .defined((p) => finite(p) && (!xLog || p.x > 0) && (!yLog || p.y > 0))
                           .x((p) => x(p.x))
-                          .y((p) => y(p.y))(linePoints);
+                          .y((p) => y(p.y))(
+                          // Straight segments in the data bend on a log scale.
+                          densifyCurve(linePoints, xLog || yLog ? CURVE_STEPS : 1),
+                        );
                         return (
                           <g
                             key={id}
