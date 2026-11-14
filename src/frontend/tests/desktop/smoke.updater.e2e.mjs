@@ -77,6 +77,17 @@ after(async () => {
   await server?.close();
 });
 
+test("never reaches GitHub from the test build until a test server is configured", async () => {
+  assert.deepEqual(await main.invoke("update_check"), {
+    kind: "unavailable",
+    reason: "developmentBuild",
+  });
+  assert.deepEqual(await main.invoke("update_status"), {
+    kind: "unavailable",
+    reason: "developmentBuild",
+  });
+});
+
 test("starts idle, and nothing is checked until asked", async () => {
   await configure({ status: 204 });
   assert.deepEqual(await main.invoke("update_status"), { kind: "idle" });
@@ -135,7 +146,11 @@ test("downloads in the background with progress, verifies the signature and inst
   // A second download or check while one runs is refused.
   await assert.rejects(main.invoke("update_download"), /em andamento/);
   await assert.rejects(main.invoke("update_check"), /em andamento/);
-  assert.deepEqual(await waitFor("ready"), { kind: "ready", version: NEWER });
+  assert.deepEqual(await waitFor("ready"), {
+    kind: "ready",
+    version: NEWER,
+    notes: "Resumo da versão.",
+  });
   const all = (await events()).filter((state) => state.kind === "downloading");
   // The first event only announces the start, before the size is known.
   assert.deepEqual(all[0], { kind: "downloading", version: NEWER, downloaded: 0, total: null });
@@ -154,10 +169,18 @@ test("downloads in the background with progress, verifies the signature and inst
   // A periodic check while the package is ready keeps it, quietly: no `checking` in between and
   // no event at all, so the interface does not flicker. The same holds when the check fails.
   const quiet = (await events()).length;
-  assert.deepEqual(await main.invoke("update_check"), { kind: "ready", version: NEWER });
+  assert.deepEqual(await main.invoke("update_check"), {
+    kind: "ready",
+    version: NEWER,
+    notes: "Resumo da versão.",
+  });
   const original = server.routes["/latest.json"];
   server.routes = { ...server.routes, "/latest.json": { status: 500 } };
-  assert.deepEqual(await main.invoke("update_check"), { kind: "ready", version: NEWER });
+  assert.deepEqual(await main.invoke("update_check"), {
+    kind: "ready",
+    version: NEWER,
+    notes: "Resumo da versão.",
+  });
   server.routes = { ...server.routes, "/latest.json": original };
   assert.equal((await events()).length, quiet, "a quiet check sends no events");
   // Nothing was installed by downloading.
@@ -175,6 +198,52 @@ test("downloads in the background with progress, verifies the signature and inst
   await assert.rejects(main.invoke("update_install"), /em andamento/);
 });
 
+test("the interface follows the native state: button, banner and confirmation", async () => {
+  // The app may be on the home screen (a labelled button in the header) or on the analysis
+  // screen (an icon button in the toolbar), so the buttons are found by name, not by place.
+  const named = (name) => `//button[@aria-label="${name}" or normalize-space(.)="${name}"]`;
+  // A fresh profile shows the banner; a profile that already showed it today would not.
+  await main.run("localStorage.removeItem('atus.update-banner')");
+  await configure(offer());
+  await main.invoke("update_check");
+  await main.invoke("update_download");
+  await waitFor("ready");
+  await main.find('//p[contains(., "Nova versão · 99.0.0")]', "The banner never appeared");
+  await main.waitForText("Resumo da versão.");
+  await main.find(named("Atualizar"), "The toolbar never offered the update");
+  // Closing the banner keeps the update button.
+  await main.click(named("Fechar até amanhã"));
+  await until(
+    async () => !(await main.exists('//*[contains(text(), "Nova versão")]')),
+    "The banner stayed",
+  );
+  assert.ok(await main.exists(named("Atualizar")));
+  // The button opens a confirmation, which can be dismissed.
+  await main.click(named("Atualizar"));
+  await main.find(
+    '//*[@role="dialog"]//*[contains(., "Atualizar para o ATUS 99.0.0")]',
+    "The confirmation never opened",
+  );
+  await main.clickButton("Depois");
+  await until(
+    async () => !(await main.exists('//*[@role="dialog"]')),
+    "The confirmation stayed open",
+  );
+  // Confirming installs (recorded, not run, in the test build) and the button shows it.
+  await main.click(named("Atualizar"));
+  await main.clickButton("Atualizar e reiniciar");
+  await main.find(named("Instalando…"), "The button never showed the installation");
+  await until(
+    async () => (await main.invoke("update_test_installed")) !== null,
+    "The installer never received the package",
+  );
+  assert.deepEqual(Buffer.from(await main.invoke("update_test_installed")), pkg);
+  // Back to a clean interface for the tests that follow.
+  await configure({ status: 204 });
+  await main.invoke("update_check");
+  await until(async () => !(await main.exists(named("Instalando…"))), "The update button stayed");
+});
+
 test("cancelling a download goes back to the announced update, which can be downloaded again", async () => {
   await configure(offer());
   await main.invoke("update_check");
@@ -190,7 +259,11 @@ test("cancelling a download goes back to the announced update, which can be down
     notes: "Resumo da versão.",
   });
   await main.invoke("update_download");
-  assert.deepEqual(await waitFor("ready"), { kind: "ready", version: NEWER });
+  assert.deepEqual(await waitFor("ready"), {
+    kind: "ready",
+    version: NEWER,
+    notes: "Resumo da versão.",
+  });
 });
 
 test("rejects a package that does not match its signature, and allows trying again", async () => {
@@ -205,7 +278,11 @@ test("rejects a package that does not match its signature, and allows trying aga
   await assert.rejects(main.invoke("update_install"), /ainda não foi baixada/);
   server.routes = { ...server.routes, "/package": { body: pkg } };
   await main.invoke("update_download");
-  assert.deepEqual(await waitFor("ready"), { kind: "ready", version: NEWER });
+  assert.deepEqual(await waitFor("ready"), {
+    kind: "ready",
+    version: NEWER,
+    notes: "Resumo da versão.",
+  });
 });
 
 test("rejects a signature from another key", async () => {

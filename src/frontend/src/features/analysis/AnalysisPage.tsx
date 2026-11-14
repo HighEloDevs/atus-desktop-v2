@@ -8,6 +8,9 @@ import { QuickAnalysisDialog } from "@/features/quick-analysis/QuickAnalysisDial
 import type { QuickAnalysis } from "@/features/quick-analysis/quick-analysis-client";
 import { Button } from "@/components/ui/button";
 import { useProjectSave } from "@/features/projects/useProjectSave";
+import { UpdateBanner } from "@/features/updates/UpdateBanner";
+import { UpdateButton } from "@/features/updates/UpdateButton";
+import { useBeforeUpdateInstall } from "@/features/updates/update-context";
 import { ProjectTitle } from "@/features/projects/ProjectTitle";
 import type { OpenProject } from "@/features/projects/project-client";
 import { useEffect, useLayoutEffect, useRef, useState, type SetStateAction } from "react";
@@ -206,6 +209,8 @@ export function AnalysisPage({
         : [],
     ),
   );
+  // Installing an update restarts the app, so the open project is saved first.
+  useBeforeUpdateInstall(saving.flush);
   useEffect(() => {
     if (saving.error)
       notify.error("Não foi possível salvar o projeto", {
@@ -911,6 +916,7 @@ export function AnalysisPage({
         </aside>
       )}
       <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+        <UpdateBanner />
         <div className="flex h-[54px] shrink-0 items-center gap-3 border-b border-[#d8ded7] bg-white px-4">
           <button
             type="button"
@@ -958,6 +964,7 @@ export function AnalysisPage({
             </span>
           )}
           <ChartExportMenu graphic={graphicRef} disabled={!data} />
+          <UpdateButton compact className="ml-auto" />
         </div>
         <div
           className={`analysis-canvas relative flex min-h-0 flex-1 ${data ? "overflow-hidden p-0" : "items-center justify-center overflow-auto px-6 py-8"}`}

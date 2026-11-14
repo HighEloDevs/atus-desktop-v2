@@ -100,6 +100,9 @@ pub enum ManualReason {
     InstallFailed,
     /// The AppImage file cannot be replaced by this user.
     NotWritable,
+    /// The app runs from a read-only place (a mounted disk image, or an app that macOS moved to a
+    /// temporary location), so it cannot replace itself. Moving it to Applications fixes that.
+    ReadOnlyLocation,
     /// The previous launch started installing this version, but it is still not installed.
     PreviousAttemptFailed,
 }
@@ -142,7 +145,10 @@ pub enum UpdateState {
         total: Option<u64>,
     },
     /// Downloaded and verified, waiting for the person to install it.
-    Ready { version: String },
+    Ready {
+        version: String,
+        notes: Option<String>,
+    },
     /// Installing. `started_at` is the Unix time in seconds, so the interface can tell when an
     /// installation is taking too long (for example while a password prompt is open).
     Installing { version: String, started_at: u64 },
@@ -151,6 +157,7 @@ pub enum UpdateState {
         version: String,
         reason: ManualReason,
         url: String,
+        notes: Option<String>,
     },
     /// A step failed; checking again or downloading again is allowed.
     Error { stage: Stage, message: String },
@@ -174,7 +181,8 @@ pub enum Support {
 ///
 /// `debug_build` is true for builds with debug assertions, which only update in the integration
 /// tests (`allow_debug`). `appimage_writable` is whether the running AppImage file can be
-/// replaced, when known.
+/// replaced, when known. `read_only_location` is true when the app runs from a place it cannot
+/// replace itself in (see [`is_read_only_location`]).
 ///
 /// # Errors
 /// Returns the reason updates are unavailable.
@@ -183,6 +191,7 @@ pub fn check_gate(
     allow_debug: bool,
     format: Option<InstallFormat>,
     appimage_writable: Option<bool>,
+    read_only_location: bool,
 ) -> Result<Support, UnavailableReason> {
     if debug_build && !allow_debug {
         return Err(UnavailableReason::DevelopmentBuild);
@@ -192,9 +201,18 @@ pub fn check_gate(
         return Err(UnavailableReason::UnknownInstallation);
     };
     Ok(match (format, appimage_writable) {
+        _ if read_only_location => Support::Manual(ManualReason::ReadOnlyLocation),
         (InstallFormat::AppImage, Some(false)) => Support::Manual(ManualReason::NotWritable),
         _ => Support::Automatic,
     })
+}
+
+/// Whether an executable path is in a place the app cannot replace itself in: a mounted disk
+/// image (`/Volumes/...`) or the temporary copy macOS runs a downloaded app from (App
+/// Translocation). Only meaningful on macOS.
+pub fn is_read_only_location(executable: &Path) -> bool {
+    let path = executable.to_string_lossy();
+    path.starts_with("/Volumes/") || path.contains("/AppTranslocation/")
 }
 
 /// The state after a check, from the newest release found, whether this installation updates
@@ -216,11 +234,13 @@ pub fn state_after_check(
         version: found.version.clone(),
         reason,
         url: RELEASES_URL.to_owned(),
+        notes: found.notes.clone(),
     };
     match support {
         Support::Manual(reason) => manual(reason),
         Support::Automatic if ready == Some(found.version.as_str()) => UpdateState::Ready {
             version: found.version,
+            notes: found.notes,
         },
         Support::Automatic if failed_before == Some(found.version.as_str()) => {
             manual(ManualReason::PreviousAttemptFailed)
@@ -367,7 +387,7 @@ impl UpdateState {
     /// Installing is only possible once the download finished and was verified.
     pub fn install_allowed(&self) -> Result<String, String> {
         match self {
-            Self::Ready { version } => Ok(version.clone()),
+            Self::Ready { version, .. } => Ok(version.clone()),
             Self::Installing { .. } => Err(busy("instalar")),
             _ => Err("A atualização ainda não foi baixada.".to_owned()),
         }
@@ -590,11 +610,24 @@ pub async fn update_check(
 ) -> Result<UpdateState, String> {
     store.state().check_allowed()?;
     let allow_debug = cfg!(feature = "desktop-e2e");
+    // The integration-test build only talks to the server a test configured, never to GitHub.
+    #[cfg(feature = "desktop-e2e")]
+    if store.e2e.endpoint.lock().unwrap().is_none() {
+        return Ok(set_state(
+            &app,
+            UpdateState::Unavailable {
+                reason: UnavailableReason::DevelopmentBuild,
+            },
+        ));
+    }
+    let read_only = cfg!(target_os = "macos")
+        && std::env::current_exe().is_ok_and(|path| is_read_only_location(&path));
     let support = match check_gate(
         cfg!(debug_assertions),
         allow_debug,
         current_format(),
         appimage_writable(),
+        read_only,
     ) {
         Ok(support) => support,
         Err(reason) => return Ok(set_state(&app, UpdateState::Unavailable { reason })),
@@ -611,11 +644,11 @@ pub async fn update_check(
         Ok(update) => {
             let found = update.as_ref().map(|update| Found {
                 version: update.version.clone(),
-                notes: update.body.clone().filter(|notes| !notes.trim().is_empty()),
+                notes: summary_of(update),
             });
             let failed = store.failed_before.lock().unwrap().clone();
             let ready = match &previous {
-                UpdateState::Ready { version } => Some(version.as_str()),
+                UpdateState::Ready { version, .. } => Some(version.as_str()),
                 _ => None,
             };
             let state = state_after_check(found, support, failed.as_deref(), ready);
@@ -666,7 +699,13 @@ pub fn update_download(
     Ok(state)
 }
 
+/// The one-line summary the release announced, when it has one.
+fn summary_of(update: &Update) -> Option<String> {
+    update.body.clone().filter(|notes| !notes.trim().is_empty())
+}
+
 async fn run_download<R: Runtime>(app: AppHandle<R>, update: Update, version: String) {
+    let notes = summary_of(&update);
     let progress = app.clone();
     let progress_version = version.clone();
     let mut throttle = Throttle::default();
@@ -693,7 +732,7 @@ async fn run_download<R: Runtime>(app: AppHandle<R>, update: Update, version: St
     match result {
         Ok(bytes) => {
             *store.package.lock().unwrap() = Some(bytes);
-            set_state(&app, UpdateState::Ready { version });
+            set_state(&app, UpdateState::Ready { version, notes });
         }
         Err(error) => {
             set_state(
@@ -722,13 +761,7 @@ pub fn update_cancel_download(
     if let Some(task) = store.download.lock().unwrap().take() {
         task.abort();
     }
-    let notes = store
-        .update
-        .lock()
-        .unwrap()
-        .as_ref()
-        .and_then(|update| update.body.clone())
-        .filter(|notes| !notes.trim().is_empty());
+    let notes = store.update.lock().unwrap().as_ref().and_then(summary_of);
     Ok(set_state(&app, UpdateState::Available { version, notes }))
 }
 
@@ -761,6 +794,7 @@ pub fn update_install(
     let started_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs());
+    let notes = summary_of(&update);
     let dir = app.path().app_data_dir().ok();
     #[cfg(not(feature = "desktop-e2e"))]
     if let Some(dir) = &dir {
@@ -793,6 +827,7 @@ pub fn update_install(
                         version,
                         reason,
                         url: RELEASES_URL.to_owned(),
+                        notes,
                     },
                     InstallFailure::Retry(message) => UpdateState::Error {
                         stage: Stage::Install,
@@ -885,39 +920,63 @@ mod tests {
     fn debug_and_unmarked_builds_never_update_themselves() {
         use InstallFormat::*;
         assert_eq!(
-            check_gate(true, false, Some(App), None),
+            check_gate(true, false, Some(App), None, false),
             Err(UnavailableReason::DevelopmentBuild)
         );
         assert_eq!(
-            check_gate(false, false, None, None),
+            check_gate(false, false, None, None, false),
             Err(UnavailableReason::UnknownInstallation)
         );
         assert_eq!(
-            check_gate(false, false, Some(Deb), None),
+            check_gate(false, false, Some(Deb), None, false),
             Ok(Support::Automatic)
         );
         // Integration tests run debug builds with no recorded origin.
-        assert_eq!(check_gate(true, true, None, None), Ok(Support::Automatic));
+        assert_eq!(
+            check_gate(true, true, None, None, false),
+            Ok(Support::Automatic)
+        );
+    }
+
+    #[test]
+    fn an_app_run_from_a_disk_image_or_a_translocated_copy_is_updated_by_hand() {
+        use InstallFormat::*;
+        assert_eq!(
+            check_gate(false, false, Some(App), None, true),
+            Ok(Support::Manual(ManualReason::ReadOnlyLocation))
+        );
+        assert!(is_read_only_location(Path::new(
+            "/Volumes/ATUS Desktop/ATUS Desktop.app/Contents/MacOS/atus-desktop"
+        )));
+        assert!(is_read_only_location(Path::new(
+            "/private/var/folders/x/T/AppTranslocation/AB12/d/ATUS Desktop.app/Contents/MacOS/atus-desktop"
+        )));
+        assert!(!is_read_only_location(Path::new(
+            "/Applications/ATUS Desktop.app/Contents/MacOS/atus-desktop"
+        )));
+        assert!(!is_read_only_location(Path::new(
+            "/Users/ana/Downloads/ATUS Desktop.app/Contents/MacOS/atus-desktop"
+        )));
     }
 
     #[test]
     fn an_appimage_that_cannot_be_replaced_is_updated_by_hand() {
         use InstallFormat::*;
         assert_eq!(
-            check_gate(false, false, Some(AppImage), Some(false)),
+            check_gate(false, false, Some(AppImage), Some(false), false),
             Ok(Support::Manual(ManualReason::NotWritable))
         );
         assert_eq!(
-            check_gate(false, false, Some(AppImage), Some(true)),
+            check_gate(false, false, Some(AppImage), Some(true), false),
             Ok(Support::Automatic)
         );
         assert_eq!(
-            check_gate(false, false, Some(AppImage), None),
+            check_gate(false, false, Some(AppImage), None, false),
             Ok(Support::Automatic)
         );
         // A file that is not an AppImage is not affected by the AppImage check.
         assert_eq!(
-            check_gate(false, false, Some(Nsis), Some(false)),
+            check_gate(false, false, Some(Nsis), Some(false), false),
             Ok(Support::Automatic)
         );
     }
@@ -962,6 +1021,7 @@ mod tests {
             version: "0.3.0".to_owned(),
             reason,
             url: RELEASES_URL.to_owned(),
+            notes: Some("Resumo.".to_owned()),
         };
         assert_eq!(
             state_after_check(
@@ -988,6 +1048,7 @@ mod tests {
     fn a_check_keeps_the_version_that_is_already_downloaded() {
         let ready = |version: &str| UpdateState::Ready {
             version: version.to_owned(),
+            notes: Some("Resumo.".to_owned()),
         };
         // The same version stays ready, so the package is not thrown away...
         assert_eq!(
@@ -1016,11 +1077,13 @@ mod tests {
             },
             UpdateState::Ready {
                 version: "0.3.0".to_owned(),
+                notes: None,
             },
             UpdateState::Manual {
                 version: "0.3.0".to_owned(),
                 reason: ManualReason::NotWritable,
                 url: RELEASES_URL.to_owned(),
+                notes: None,
             },
         ];
         for state in offered {
@@ -1118,6 +1181,7 @@ mod tests {
         };
         let ready = UpdateState::Ready {
             version: "0.3.0".to_owned(),
+            notes: None,
         };
         let installing = UpdateState::Installing {
             version: "0.3.0".to_owned(),
@@ -1209,9 +1273,17 @@ mod tests {
             json(&UpdateState::Manual {
                 version: "0.3.0".to_owned(),
                 reason: ManualReason::PreviousAttemptFailed,
-                url: RELEASES_URL.to_owned()
+                url: RELEASES_URL.to_owned(),
+                notes: Some("Resumo.".to_owned())
             }),
-            serde_json::json!({ "kind": "manual", "version": "0.3.0", "reason": "previousAttemptFailed", "url": RELEASES_URL })
+            serde_json::json!({ "kind": "manual", "version": "0.3.0", "reason": "previousAttemptFailed", "url": RELEASES_URL, "notes": "Resumo." })
+        );
+        assert_eq!(
+            json(&UpdateState::Ready {
+                version: "0.3.0".to_owned(),
+                notes: None
+            }),
+            serde_json::json!({ "kind": "ready", "version": "0.3.0", "notes": null })
         );
         assert_eq!(
             json(&UpdateState::Error {
