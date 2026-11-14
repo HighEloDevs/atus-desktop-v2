@@ -12,9 +12,10 @@ import { useUpdate } from "./update-context";
  * by hand (with **Baixar**). The once-a-day rule lives in the provider; the close button hides it
  * until the next day. The header button stays, so the update is never lost.
  *
+ * @param props - `onViewNews`, when the screen can open the news page, adds **Ver novidades**.
  * @returns The banner, or nothing when it is not due.
  */
-export function UpdateBanner() {
+export function UpdateBanner({ onViewNews }: { onViewNews?: () => void }) {
   const { state, bannerVisible, install, openReleases, dismissBanner } = useUpdate();
   if (!bannerVisible || (state.kind !== "ready" && state.kind !== "manual")) return null;
   const ready = state.kind === "ready";
@@ -46,6 +47,11 @@ export function UpdateBanner() {
         </p>
       </div>
       <div className="flex items-center gap-1.5">
+        {onViewNews && (
+          <Button type="button" variant="outline" size="sm" onClick={onViewNews}>
+            Ver novidades
+          </Button>
+        )}
         {ready ? (
           <Button type="button" size="sm" onClick={() => void install()}>
             Atualizar e reiniciar

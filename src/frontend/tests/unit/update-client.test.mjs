@@ -84,6 +84,18 @@ it("ignores an answer that is not a state, and passes failures on", async () => 
   await expect(updateClient.download()).rejects.toBe("Há outra etapa em andamento.");
 });
 
+it("asks the core which version this launch was just updated to, and ignores anything else", async () => {
+  bridge.invoke.mockResolvedValue("0.2.9");
+  expect(await updateClient.takeInstalled()).toBe("0.2.9");
+  expect(bridge.invoke).toHaveBeenCalledWith("update_take_installed");
+  for (const answer of [null, undefined, "", "0.2", "latest", 29, {}]) {
+    bridge.invoke.mockResolvedValue(answer);
+    expect(await updateClient.takeInstalled()).toBeNull();
+  }
+  bridge.invoke.mockRejectedValue("falhou");
+  await expect(updateClient.takeInstalled()).rejects.toBe("falhou");
+});
+
 it("listens to the state event and drops payloads that are not states", async () => {
   const unlisten = vi.fn();
   bridge.listen.mockResolvedValue(unlisten);

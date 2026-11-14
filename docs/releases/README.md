@@ -50,5 +50,5 @@ Fica sob o gráfico e acompanha o zoom.
 ## Restrições
 
 - Sem HTML (nem comentários `<!-- -->`) e sem títulos `#`.
-- Links só com `https://`.
+- Links só com `https://` para o projeto no GitHub (`github.com/HighEloDevs/...`), o YouTube (`youtu.be`, `www.youtube.com`) e o site do ATUS (`atusweb.com.br`): são os únicos lugares que o app abre no navegador.
 - Versões de pré-release (`-rc`) não são publicadas.

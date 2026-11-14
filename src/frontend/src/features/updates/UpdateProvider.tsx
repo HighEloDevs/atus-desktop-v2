@@ -7,6 +7,8 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { EMBEDDED_CHANGELOG } from "@/features/news/embedded-changelog";
+import { mergeChangelogs, parseChangelog, type ChangelogVersion } from "@/features/news/changelog";
 import { notify } from "@/lib/notify";
 import { localDay, readBannerRecord, shouldShowBanner, writeBannerRecord } from "./banner-schedule";
 import { UpdateContext, type UpdateApi } from "./update-context";
@@ -51,11 +53,14 @@ export function UpdateProvider({
   const [state, setState] = useState<UpdateState>({ kind: "idle" });
   const [bannerVersion, setBannerVersion] = useState<string | null>(null);
   const [dialogRequested, setDialogRequested] = useState(false);
+  const [announced, setAnnounced] = useState<ChangelogVersion[]>([]);
+  const [justUpdated, setJustUpdated] = useState<string | null>(null);
   const stateRef = useRef(state);
   const guard = useRef<(() => Promise<boolean>) | null>(null);
   const installing = useRef(false);
   const downloadRequested = useRef<string | null>(null);
   const bannerDecided = useRef<string | null>(null);
+  const changelogRequested = useRef<string | null>(null);
 
   const apply = useCallback(
     (next: UpdateState) => {
@@ -86,6 +91,18 @@ export function UpdateProvider({
           setBannerVersion(next.version);
         }
       }
+      if (
+        (next.kind === "available" || next.kind === "ready" || next.kind === "manual") &&
+        changelogRequested.current !== next.version
+      ) {
+        // The notes of the new version travel in the manifest the core downloaded. They come from
+        // the network, so they are validated before use; a failure just leaves the page without them.
+        changelogRequested.current = next.version;
+        client
+          .changelog()
+          .then((raw) => setAnnounced(parseChangelog(raw)))
+          .catch(() => {});
+      }
       if (automatic && next.kind === "available" && downloadRequested.current !== next.version) {
         downloadRequested.current = next.version;
         client.download().catch(() => {});
@@ -112,6 +129,13 @@ export function UpdateProvider({
         // The core keeps a downloaded update while this window is closed, so start from it.
         const current = await client.status();
         if (active && current) apply(current);
+      } catch (error) {
+        console.error(error);
+      }
+      try {
+        // The core noticed that the app was just updated to this version, which opens its news.
+        const installed = await client.takeInstalled();
+        if (active && installed) setJustUpdated(installed);
       } catch (error) {
         console.error(error);
       }
@@ -214,9 +238,12 @@ export function UpdateProvider({
   }, []);
 
   const offered = state.kind === "ready" || state.kind === "manual";
+  const changelog = useMemo(() => mergeChangelogs(EMBEDDED_CHANGELOG, announced), [announced]);
   const api = useMemo<UpdateApi>(
     () => ({
       state,
+      changelog,
+      justUpdated,
       bannerVisible: offered && bannerVersion === state.version,
       dialogOpen: dialogRequested && state.kind === "ready",
       check,
@@ -232,6 +259,8 @@ export function UpdateProvider({
     }),
     [
       state,
+      changelog,
+      justUpdated,
       offered,
       bannerVersion,
       dialogRequested,

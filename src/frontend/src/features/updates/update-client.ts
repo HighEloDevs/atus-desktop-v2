@@ -110,6 +110,10 @@ export interface UpdateClient {
   cancelDownload(): Promise<UpdateState | null>;
   /** Installs the downloaded update and restarts. Save the open project first. */
   install(): Promise<UpdateState | null>;
+  /** The notes of every version announced with the update found, as received; validate them. */
+  changelog(): Promise<unknown>;
+  /** The version this launch has just been updated to, once; null on any other launch. */
+  takeInstalled(): Promise<string | null>;
   /** Calls `callback` for every state the core reports; resolves to the unsubscribe function. */
   onState(callback: (state: UpdateState) => void): Promise<() => void>;
 }
@@ -127,6 +131,11 @@ export const updateClient: UpdateClient = {
   download: () => command("update_download"),
   cancelDownload: () => command("update_cancel_download"),
   install: () => command("update_install"),
+  changelog: () => invoke<unknown>("update_changelog"),
+  takeInstalled: async () => {
+    const version = await invoke<unknown>("update_take_installed");
+    return typeof version === "string" && /^\d+\.\d+\.\d+$/.test(version) ? version : null;
+  },
   onState: (callback) =>
     getCurrentWindow().listen<unknown>(UPDATE_STATE_EVENT, ({ payload }) => {
       if (isUpdateState(payload)) callback(payload);

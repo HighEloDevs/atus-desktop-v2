@@ -97,18 +97,24 @@ export function verifySignatures(selected, publicKey, version) {
 
 /**
  * Create the `latest.json` manifest the updater downloads from the latest release.
- * @param {{version: string, notes: string, pubDate: string, repository: string, signatures: Record<string, string>}} release
- *   Version, short notes, RFC 3339 publication date, `owner/name` and signatures by asset name.
+ *
+ * Besides the Tauri fields it carries the notes of every version (`changelog`, the same object as
+ * `changelog.json`): the app cannot fetch `changelog.json` itself (its content policy only allows
+ * IPC, and GitHub downloads send no CORS headers), but the updater plugin keeps the extra fields
+ * of the manifest it downloads, so the Novidades page reads the newer notes from there.
+ * @param {{version: string, notes: string, pubDate: string, repository: string, signatures: Record<string, string>, changelog?: object}} release
+ *   Version, short notes, RFC 3339 publication date, `owner/name`, signatures by asset name and
+ *   the changelog to embed.
  * @returns {object} Manifest in the Tauri static JSON format.
  * @throws {Error} When an updater target has no signature.
  */
-export function createUpdateManifest({ version, notes, pubDate, repository, signatures }) {
+export function createUpdateManifest({ version, notes, pubDate, repository, signatures, changelog }) {
   const platforms = {};
   for (const [target, name] of Object.entries(UPDATER_TARGETS)) {
     if (!signatures[name]) throw new Error(`No signature for ${name} (${target})`);
     platforms[target] = { signature: signatures[name], url: `https://github.com/${repository}/releases/download/v${version}/${name}` };
   }
-  return { version, notes, pub_date: pubDate, platforms };
+  return { version, notes, pub_date: pubDate, platforms, ...(changelog ? { changelog } : {}) };
 }
 
 /**
@@ -234,9 +240,10 @@ export function publish({ run, artifacts, repository }) {
   verifyManifest(manifest, directory, { sha, version, names });
   writeFileSync(join(directory, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
   writeFileSync(join(directory, 'SHA256SUMS'), formatChecksums(manifest));
-  const updateManifest = createUpdateManifest({ version, notes: current.notes.summary, pubDate: execFileSync('git', ['show', '-s', '--format=%cI', sha], { encoding: 'utf8' }).trim(), repository, signatures });
+  const changelog = createChangelog(history, { repository, sha });
+  const updateManifest = createUpdateManifest({ version, notes: current.notes.summary, pubDate: execFileSync('git', ['show', '-s', '--format=%cI', sha], { encoding: 'utf8' }).trim(), repository, signatures, changelog });
   writeFileSync(join(directory, 'latest.json'), JSON.stringify(updateManifest, null, 2) + '\n');
-  writeFileSync(join(directory, 'changelog.json'), JSON.stringify(createChangelog(history, { repository, sha }), null, 2) + '\n');
+  writeFileSync(join(directory, 'changelog.json'), JSON.stringify(changelog, null, 2) + '\n');
   const ref = apiOptional(`repos/${repository}/git/ref/tags/${tag}`);
   if (ref && (ref.object.type !== 'commit' || ref.object.sha !== sha)) throw new Error('Tag points to another object');
   const existing = findRelease(repository, tag);

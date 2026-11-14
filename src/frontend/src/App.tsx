@@ -26,20 +26,39 @@ import {
 } from "@/features/quick-analysis/quick-analysis-client";
 import { useQuitRequest } from "@/hooks/use-quit-request";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { ChevronRight, CircleHelp, FileClock, House, Info } from "lucide-react";
+import { ChevronRight, CircleHelp, House, Info, Sparkles } from "lucide-react";
 import { APP_VERSION } from "@/lib/app-version";
 import { UpdateBanner } from "@/features/updates/UpdateBanner";
 import { UpdateButton } from "@/features/updates/UpdateButton";
+import { useUpdate } from "@/features/updates/update-context";
+import { compareVersions } from "@/features/news/changelog";
+import { NewsPage } from "@/features/news/NewsPage";
+import {
+  NEWS_SEEN_KEY,
+  readSeen,
+  versionToShowAfterUpdate,
+  writeSeen,
+} from "@/features/news/news-seen";
+import { useUpdateSeen } from "@/features/news/use-update-seen";
 
-type Page = "home" | "about" | "analysis";
+type Page = "home" | "news" | "about" | "analysis";
 
 const navigation = [
+  { label: "Novidades", icon: Sparkles, page: "news" as const },
   { label: "Sobre", icon: Info, page: "about" as const },
-  { label: "Changelog", icon: FileClock },
   { label: "Ajuda", icon: CircleHelp },
 ];
 
-function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (page: Page) => void }) {
+function Sidebar({
+  page,
+  onNavigate,
+  unseenNews,
+}: {
+  page: Page;
+  onNavigate: (page: Page) => void;
+  /** An update is waiting and its news were not opened yet. */
+  unseenNews: boolean;
+}) {
   return (
     <aside className="sidebar flex min-h-0 flex-col border-r border-[#d8ded7] bg-[#eff1ed]">
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-[#d8ded7] px-5">
@@ -76,14 +95,25 @@ function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (page: Page) =>
               <button
                 key={label}
                 type="button"
-                onClick={() => onNavigate("about")}
+                onClick={() => onNavigate(item.page)}
                 aria-current={page === item.page ? "page" : undefined}
                 className={`flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-[12px] ${page === item.page ? "bg-[#dfe5dd] font-semibold text-[#20272c]" : "text-[#52625a] hover:bg-[#e6eae4]"}`}
               >
                 <Icon size={15} strokeWidth={1.7} />
                 {label}
-                {page === item.page && (
+                {page === item.page ? (
                   <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#f25a3c]" />
+                ) : (
+                  item.page === "news" &&
+                  unseenNews && (
+                    <>
+                      <span
+                        aria-hidden="true"
+                        className="ml-auto h-1.5 w-1.5 rounded-full bg-[#f25a3c]"
+                      />
+                      <span className="sr-only"> — há uma versão nova</span>
+                    </>
+                  )
                 )}
               </button>
             ) : (
@@ -124,8 +154,47 @@ function reportProjectError(error: unknown) {
 }
 
 function App() {
-  const [page, setPage] = useState<Page>("home");
+  // After an update the first launch opens the news of the version that is running now, once.
+  const [afterUpdate] = useState(() =>
+    versionToShowAfterUpdate(readSeen(NEWS_SEEN_KEY), APP_VERSION),
+  );
+  const [page, setPage] = useState<Page>(afterUpdate ? "news" : "home");
+  const [newsVersion, setNewsVersion] = useState(afterUpdate ?? APP_VERSION);
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+  const update = useUpdate();
+  const offeredVersion =
+    update.state.kind === "available" ||
+    update.state.kind === "downloading" ||
+    update.state.kind === "ready" ||
+    update.state.kind === "installing" ||
+    update.state.kind === "manual"
+      ? update.state.version
+      : null;
+  const { unseen: unseenNews, markSeen } = useUpdateSeen(offeredVersion);
+  // The core says when this launch is the first after an update; then the news of that version
+  // open once, if the person is still on the home screen. (Adjusting state while rendering, as
+  // React recommends, keeps this out of an effect.)
+  const [handledUpdate, setHandledUpdate] = useState<string | null>(null);
+  if (update.justUpdated && update.justUpdated !== handledUpdate) {
+    setHandledUpdate(update.justUpdated);
+    if (page === "home") {
+      setNewsVersion(update.justUpdated);
+      setPage("news");
+    }
+  }
+  useEffect(() => {
+    writeSeen(NEWS_SEEN_KEY, APP_VERSION);
+  }, []);
+  /** Opens the news page on the update that is waiting, or on the installed version. */
+  const openNews = useCallback(() => {
+    const target =
+      offeredVersion && compareVersions(offeredVersion, APP_VERSION) > 0
+        ? offeredVersion
+        : APP_VERSION;
+    setNewsVersion(target);
+    setPage("news");
+    markSeen();
+  }, [offeredVersion, markSeen]);
 
   const [project, setProject] = useState<OpenProject | null>(null);
   const opening = useRef(false);
@@ -287,201 +356,218 @@ function App() {
 
   return (
     <div className="app-shell bg-[#f7f7f3] text-[#20272c]">
-      <Sidebar page={page} onNavigate={setPage} />
+      <Sidebar
+        page={page}
+        onNavigate={(next) => (next === "news" ? openNews() : setPage(next))}
+        unseenNews={unseenNews}
+      />
       <main className="flex min-h-0 min-w-0 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#d8ded7] bg-[#fafbf8] px-6">
           <div className="flex items-center gap-2 text-[12px] text-[#859188]">
             <span>Área de trabalho</span>
             <ChevronRight size={13} />
             <span className="font-semibold text-[#20272c]">
-              {page === "home" ? "Início" : "Sobre"}
+              {page === "home" ? "Início" : page === "news" ? "Novidades" : "Sobre"}
             </span>
           </div>
           <UpdateButton />
         </header>
-        <UpdateBanner />
-        <div className="min-h-0 flex-1 overflow-auto">
-          <div className="mx-auto max-w-[1120px] p-6 sm:p-8">
-            {page === "home" ? (
-              <>
-                <div className="border-b border-border pb-5">
-                  <h1 className="text-[28px] leading-tight font-semibold tracking-[-.045em]">
-                    Projetos
-                  </h1>
-                </div>
-                <ProjectQuickActions
-                  isMac={isMac}
-                  onCreate={createProject}
-                  onOpen={
-                    isTauri()
-                      ? () => {
-                          void runProjectAction(async () => {
-                            const path = await chooseProject();
-                            return path ? projectClient.open(path) : null;
-                          });
-                        }
-                      : undefined
-                  }
-                />
-                {isTauri() && <ProjectTables onOpen={openProject} />}
-              </>
-            ) : (
-              <section className="max-w-[980px]" aria-labelledby="about-title">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[#d8ded7] bg-white">
-                    <BrandMark />
+        {page !== "news" && <UpdateBanner onViewNews={openNews} />}
+        {page === "news" ? (
+          <NewsPage
+            versions={update.changelog}
+            installed={APP_VERSION}
+            selected={newsVersion}
+            onSelect={setNewsVersion}
+          />
+        ) : (
+          <div className="min-h-0 flex-1 overflow-auto">
+            <div className="mx-auto max-w-[1120px] p-6 sm:p-8">
+              {page === "home" ? (
+                <>
+                  <div className="border-b border-border pb-5">
+                    <h1 className="text-[28px] leading-tight font-semibold tracking-[-.045em]">
+                      Projetos
+                    </h1>
                   </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h1 id="about-title" className="text-[24px] font-semibold tracking-[-.04em]">
-                        Sobre o ATUS
-                      </h1>
-                      <span className="rounded border border-[#d8ded7] bg-[#eff2ed] px-2 py-0.5 text-[10px] font-medium text-[#6b796f]">
-                        Desktop · v{APP_VERSION}
-                      </span>
+                  <ProjectQuickActions
+                    isMac={isMac}
+                    onCreate={createProject}
+                    onOpen={
+                      isTauri()
+                        ? () => {
+                            void runProjectAction(async () => {
+                              const path = await chooseProject();
+                              return path ? projectClient.open(path) : null;
+                            });
+                          }
+                        : undefined
+                    }
+                  />
+                  {isTauri() && <ProjectTables onOpen={openProject} />}
+                </>
+              ) : (
+                <section className="max-w-[980px]" aria-labelledby="about-title">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[#d8ded7] bg-white">
+                      <BrandMark />
                     </div>
-                    <p className="mt-1 text-[13px] leading-5 text-[#758078]">
-                      Uma ferramenta aberta para explorar e compreender dados experimentais.
-                    </p>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h1
+                          id="about-title"
+                          className="text-[24px] font-semibold tracking-[-.04em]"
+                        >
+                          Sobre o ATUS
+                        </h1>
+                        <span className="rounded border border-[#d8ded7] bg-[#eff2ed] px-2 py-0.5 text-[10px] font-medium text-[#6b796f]">
+                          Desktop · v{APP_VERSION}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[13px] leading-5 text-[#758078]">
+                        Uma ferramenta aberta para explorar e compreender dados experimentais.
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="mt-7 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-                  <div className="space-y-4">
-                    <section className="rounded-md border border-[#d8ded7] bg-white">
-                      <div className="border-b border-[#e8ece7] px-5 py-4">
-                        <h2 className="text-[13px] font-semibold">Nossa história</h2>
-                        <p className="mt-1 text-[12px] text-[#87938a]">
-                          Uma solução criada a partir de uma necessidade real.
-                        </p>
-                      </div>
-                      <div className="space-y-4 px-5 py-5 text-[13px] leading-[1.8] text-[#52625a]">
-                        <p>
-                          O ATUS nasceu em 2021, durante a pandemia, para ajudar estudantes e
-                          professores do Instituto de Física da USP a superar as dificuldades de
-                          acesso às ferramentas de análise usadas nas aulas de Física Experimental.
-                        </p>
-                        <p>
-                          A primeira versão desktop levou a análise para o computador de cada
-                          estudante. Desde então, o projeto evolui com o mesmo propósito: tornar a
-                          análise científica mais simples e acessível.
-                        </p>
-                      </div>
-                    </section>
-                    <section className="rounded-md border border-[#d8ded7] bg-white">
-                      <div className="border-b border-[#e8ece7] px-5 py-4">
-                        <h2 className="text-[13px] font-semibold">Quem faz o ATUS</h2>
-                        <p className="mt-1 text-[12px] text-[#87938a]">
-                          Pessoas que dedicam seu tempo ao projeto.
-                        </p>
-                      </div>
-                      <div className="divide-y divide-[#edf0ec]">
-                        {[
-                          {
-                            initials: "WM",
-                            name: "Willian Maximo",
-                            role: "Infraestrutura e desenvolvimento",
-                            url: "https://www.linkedin.com/in/willian-gama-maximo-85297017b/",
-                          },
-                          {
-                            initials: "LT",
-                            name: "Leonardo Tamayose",
-                            role: "Desenvolvimento de produto",
-                            url: "https://www.linkedin.com/in/leoeiji/",
-                          },
-                          {
-                            initials: "GF",
-                            name: "Guilherme Ferrari",
-                            role: "Análise quantitativa e métodos estatísticos",
-                            url: "https://www.linkedin.com/in/ferrarigui/",
-                          },
-                        ].map((person) => (
-                          <div key={person.name} className="flex items-center gap-3 px-5 py-3.5">
-                            <span
-                              aria-hidden="true"
-                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#eff2ed] text-[10px] font-bold text-[#607066]"
-                            >
-                              {person.initials}
-                            </span>
-                            <div>
-                              <h3 className="text-[13px] font-semibold">{person.name}</h3>
-                              <p className="mt-0.5 text-[11px] text-[#849087]">{person.role}</p>
-                            </div>
-                            <button
-                              type="button"
-                              aria-label={`Abrir LinkedIn de ${person.name} no navegador`}
-                              title={`LinkedIn de ${person.name}`}
-                              onClick={() => {
-                                void openProfile(person.url).catch(() =>
-                                  notify.error("Não foi possível abrir o navegador", {
-                                    description: "Tente novamente.",
-                                    id: "profile-error",
-                                  }),
-                                );
-                              }}
-                              className="ml-auto rounded p-2 text-[#66766c] hover:bg-[#eff2ed] hover:text-[#364cff]"
-                            >
-                              <svg
+                  <div className="mt-7 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+                    <div className="space-y-4">
+                      <section className="rounded-md border border-[#d8ded7] bg-white">
+                        <div className="border-b border-[#e8ece7] px-5 py-4">
+                          <h2 className="text-[13px] font-semibold">Nossa história</h2>
+                          <p className="mt-1 text-[12px] text-[#87938a]">
+                            Uma solução criada a partir de uma necessidade real.
+                          </p>
+                        </div>
+                        <div className="space-y-4 px-5 py-5 text-[13px] leading-[1.8] text-[#52625a]">
+                          <p>
+                            O ATUS nasceu em 2021, durante a pandemia, para ajudar estudantes e
+                            professores do Instituto de Física da USP a superar as dificuldades de
+                            acesso às ferramentas de análise usadas nas aulas de Física
+                            Experimental.
+                          </p>
+                          <p>
+                            A primeira versão desktop levou a análise para o computador de cada
+                            estudante. Desde então, o projeto evolui com o mesmo propósito: tornar a
+                            análise científica mais simples e acessível.
+                          </p>
+                        </div>
+                      </section>
+                      <section className="rounded-md border border-[#d8ded7] bg-white">
+                        <div className="border-b border-[#e8ece7] px-5 py-4">
+                          <h2 className="text-[13px] font-semibold">Quem faz o ATUS</h2>
+                          <p className="mt-1 text-[12px] text-[#87938a]">
+                            Pessoas que dedicam seu tempo ao projeto.
+                          </p>
+                        </div>
+                        <div className="divide-y divide-[#edf0ec]">
+                          {[
+                            {
+                              initials: "WM",
+                              name: "Willian Maximo",
+                              role: "Infraestrutura e desenvolvimento",
+                              url: "https://www.linkedin.com/in/willian-gama-maximo-85297017b/",
+                            },
+                            {
+                              initials: "LT",
+                              name: "Leonardo Tamayose",
+                              role: "Desenvolvimento de produto",
+                              url: "https://www.linkedin.com/in/leoeiji/",
+                            },
+                            {
+                              initials: "GF",
+                              name: "Guilherme Ferrari",
+                              role: "Análise quantitativa e métodos estatísticos",
+                              url: "https://www.linkedin.com/in/ferrarigui/",
+                            },
+                          ].map((person) => (
+                            <div key={person.name} className="flex items-center gap-3 px-5 py-3.5">
+                              <span
                                 aria-hidden="true"
-                                width="17"
-                                height="17"
-                                viewBox="0 0 24 24"
-                                fill="currentColor"
+                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#eff2ed] text-[10px] font-bold text-[#607066]"
                               >
-                                <path d="M20.45 2H3.55C2.69 2 2 2.68 2 3.52v16.96c0 .84.69 1.52 1.55 1.52h16.9c.86 0 1.55-.68 1.55-1.52V3.52c0-.84-.69-1.52-1.55-1.52ZM7.93 18.75H4.98V9.21h2.95v9.54ZM6.45 7.91a1.71 1.71 0 1 1 0-3.42 1.71 1.71 0 0 1 0 3.42Zm12.3 10.84H15.8v-4.64c0-1.11-.02-2.53-1.55-2.53-1.55 0-1.79 1.2-1.79 2.45v4.72H9.52V9.21h2.83v1.3h.04a3.1 3.1 0 0 1 2.8-1.54c3 0 3.56 1.97 3.56 4.53v5.25Z" />
-                              </svg>
-                            </button>
+                                {person.initials}
+                              </span>
+                              <div>
+                                <h3 className="text-[13px] font-semibold">{person.name}</h3>
+                                <p className="mt-0.5 text-[11px] text-[#849087]">{person.role}</p>
+                              </div>
+                              <button
+                                type="button"
+                                aria-label={`Abrir LinkedIn de ${person.name} no navegador`}
+                                title={`LinkedIn de ${person.name}`}
+                                onClick={() => {
+                                  void openProfile(person.url).catch(() =>
+                                    notify.error("Não foi possível abrir o navegador", {
+                                      description: "Tente novamente.",
+                                      id: "profile-error",
+                                    }),
+                                  );
+                                }}
+                                className="ml-auto rounded p-2 text-[#66766c] hover:bg-[#eff2ed] hover:text-[#364cff]"
+                              >
+                                <svg
+                                  aria-hidden="true"
+                                  width="17"
+                                  height="17"
+                                  viewBox="0 0 24 24"
+                                  fill="currentColor"
+                                >
+                                  <path d="M20.45 2H3.55C2.69 2 2 2.68 2 3.52v16.96c0 .84.69 1.52 1.55 1.52h16.9c.86 0 1.55-.68 1.55-1.52V3.52c0-.84-.69-1.52-1.55-1.52ZM7.93 18.75H4.98V9.21h2.95v9.54ZM6.45 7.91a1.71 1.71 0 1 1 0-3.42 1.71 1.71 0 0 1 0 3.42Zm12.3 10.84H15.8v-4.64c0-1.11-.02-2.53-1.55-2.53-1.55 0-1.79 1.2-1.79 2.45v4.72H9.52V9.21h2.83v1.3h.04a3.1 3.1 0 0 1 2.8-1.54c3 0 3.56 1.97 3.56 4.53v5.25Z" />
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    </div>
+                    <div className="space-y-4">
+                      <section className="rounded-md border border-[#d8ded7] bg-[#f0f3ee] p-5">
+                        <span className="block h-1.5 w-6 rounded-full bg-[#f25a3c]" />
+                        <h2 className="mt-4 text-[14px] font-semibold">Ciência mais acessível</h2>
+                        <p className="mt-2 text-[12px] leading-6 text-[#65736a]">
+                          O ATUS é gratuito e de código aberto, feito para apoiar quem transforma
+                          observações em conhecimento.
+                        </p>
+                      </section>
+                      <section className="rounded-md border border-[#d8ded7] bg-white p-5">
+                        <h2 className="text-[13px] font-semibold">Contato</h2>
+                        <p className="mt-2 text-[12px] leading-5 text-[#758078]">
+                          Dúvidas, sugestões ou interesse em contribuir?
+                        </p>
+                        <p className="mt-3 select-all text-[12px] font-medium text-[#364cff]">
+                          atusdevs@gmail.com
+                        </p>
+                      </section>
+                      <section className="rounded-md border border-[#d8ded7] bg-white p-5">
+                        <h2 className="text-[13px] font-semibold">Sobre esta versão</h2>
+                        <dl className="mt-3 space-y-2.5 text-[12px]">
+                          <div className="flex justify-between gap-3">
+                            <dt className="text-[#849087]">Aplicativo</dt>
+                            <dd className="font-medium">ATUS Desktop</dd>
                           </div>
-                        ))}
-                      </div>
-                    </section>
+                          <div className="flex justify-between gap-3">
+                            <dt className="text-[#849087]">Versão</dt>
+                            <dd className="font-medium">{APP_VERSION}</dd>
+                          </div>
+                          <div className="flex justify-between gap-3">
+                            <dt className="text-[#849087]">Licença</dt>
+                            <dd className="font-medium">Código aberto</dd>
+                          </div>
+                        </dl>
+                      </section>
+                    </div>
                   </div>
-                  <div className="space-y-4">
-                    <section className="rounded-md border border-[#d8ded7] bg-[#f0f3ee] p-5">
-                      <span className="block h-1.5 w-6 rounded-full bg-[#f25a3c]" />
-                      <h2 className="mt-4 text-[14px] font-semibold">Ciência mais acessível</h2>
-                      <p className="mt-2 text-[12px] leading-6 text-[#65736a]">
-                        O ATUS é gratuito e de código aberto, feito para apoiar quem transforma
-                        observações em conhecimento.
-                      </p>
-                    </section>
-                    <section className="rounded-md border border-[#d8ded7] bg-white p-5">
-                      <h2 className="text-[13px] font-semibold">Contato</h2>
-                      <p className="mt-2 text-[12px] leading-5 text-[#758078]">
-                        Dúvidas, sugestões ou interesse em contribuir?
-                      </p>
-                      <p className="mt-3 select-all text-[12px] font-medium text-[#364cff]">
-                        atusdevs@gmail.com
-                      </p>
-                    </section>
-                    <section className="rounded-md border border-[#d8ded7] bg-white p-5">
-                      <h2 className="text-[13px] font-semibold">Sobre esta versão</h2>
-                      <dl className="mt-3 space-y-2.5 text-[12px]">
-                        <div className="flex justify-between gap-3">
-                          <dt className="text-[#849087]">Aplicativo</dt>
-                          <dd className="font-medium">ATUS Desktop</dd>
-                        </div>
-                        <div className="flex justify-between gap-3">
-                          <dt className="text-[#849087]">Versão</dt>
-                          <dd className="font-medium">{APP_VERSION}</dd>
-                        </div>
-                        <div className="flex justify-between gap-3">
-                          <dt className="text-[#849087]">Licença</dt>
-                          <dd className="font-medium">Código aberto</dd>
-                        </div>
-                      </dl>
-                    </section>
-                  </div>
-                </div>
-                <p
-                  className="mt-9 pb-2 text-center text-[16px] text-[#8a978c]"
-                  style={{ fontFamily: "cursive" }}
-                >
-                  Aqui o mundo é criado, o mundo é lógico
-                </p>
-              </section>
-            )}
+                  <p
+                    className="mt-9 pb-2 text-center text-[16px] text-[#8a978c]"
+                    style={{ fontFamily: "cursive" }}
+                  >
+                    Aqui o mundo é criado, o mundo é lógico
+                  </p>
+                </section>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );

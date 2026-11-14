@@ -98,10 +98,16 @@ export async function serve(routes = {}) {
 }
 
 /** A manifest that offers `version` for every platform the test runners use. */
-export function manifest({ version, notes, signature, url }) {
+export function manifest({ version, notes, signature, url, changelog }) {
   const platforms = {};
   for (const os of ["darwin", "linux", "windows"]) {
     for (const arch of ["x86_64", "aarch64"]) platforms[`${os}-${arch}`] = { signature, url };
   }
-  return { version, notes, pub_date: "2026-11-13T00:00:00Z", platforms };
+  return {
+    version,
+    notes,
+    pub_date: "2026-11-13T00:00:00Z",
+    platforms,
+    ...(changelog === undefined ? {} : { changelog }),
+  };
 }

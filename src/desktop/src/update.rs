@@ -417,8 +417,11 @@ fn parse_version(version: &str) -> Option<(u64, u64, u64)> {
 /// What to do with a recorded attempt once the app starts again as `running`.
 #[derive(Debug, PartialEq)]
 pub enum Reconciled {
-    /// The attempt took effect (or is obsolete): forget it.
+    /// The attempt is obsolete (a newer version is running, or the record is not understood):
+    /// forget it.
     Done,
+    /// The recorded version is the one running now: the app has just been updated to it.
+    Installed { version: String },
     /// The recorded version is still not installed.
     Failed { version: String },
 }
@@ -427,6 +430,9 @@ pub enum Reconciled {
 pub fn reconcile(attempt: &InstallAttempt, running: &str) -> Reconciled {
     match (parse_version(&attempt.version), parse_version(running)) {
         (Some(attempted), Some(running)) if running < attempted => Reconciled::Failed {
+            version: attempt.version.clone(),
+        },
+        (Some(attempted), Some(running)) if running == attempted => Reconciled::Installed {
             version: attempt.version.clone(),
         },
         _ => Reconciled::Done,
@@ -477,18 +483,21 @@ pub struct UpdateStore {
     download: Mutex<Option<JoinHandle<()>>>,
     /// Version whose installation failed in a previous launch.
     failed_before: Mutex<Option<String>>,
+    /// Version this launch has just been updated to, until the interface takes it.
+    installed: Mutex<Option<String>>,
     #[cfg(feature = "desktop-e2e")]
     pub e2e: E2eOverrides,
 }
 
 impl UpdateStore {
-    fn new(failed_before: Option<String>) -> Self {
+    fn new(failed_before: Option<String>, installed: Option<String>) -> Self {
         Self {
             state: Mutex::new(UpdateState::Idle),
             update: Mutex::new(None),
             package: Mutex::new(None),
             download: Mutex::new(None),
             failed_before: Mutex::new(failed_before),
+            installed: Mutex::new(installed),
             #[cfg(feature = "desktop-e2e")]
             e2e: E2eOverrides::default(),
         }
@@ -518,16 +527,19 @@ impl UpdateStore {
 /// not the running one, the next check reports it as [`ManualReason::PreviousAttemptFailed`]
 /// instead of offering the same automatic installation again.
 pub fn install<R: Runtime>(app: &AppHandle<R>) {
-    let dir = app.path().app_data_dir().ok();
-    let failed = dir.as_deref().and_then(|dir| {
-        let attempt = read_attempt(dir)?;
-        clear_attempt(dir);
-        match reconcile(&attempt, &app.package_info().version.to_string()) {
-            Reconciled::Failed { version } => Some(version),
-            Reconciled::Done => None,
+    let mut failed = None;
+    let mut installed = None;
+    if let Some(dir) = app.path().app_data_dir().ok() {
+        if let Some(attempt) = read_attempt(&dir) {
+            clear_attempt(&dir);
+            match reconcile(&attempt, &app.package_info().version.to_string()) {
+                Reconciled::Failed { version } => failed = Some(version),
+                Reconciled::Installed { version } => installed = Some(version),
+                Reconciled::Done => {}
+            }
         }
-    });
-    app.manage(UpdateStore::new(failed));
+    }
+    app.manage(UpdateStore::new(failed, installed));
 }
 
 fn set_state<R: Runtime>(app: &AppHandle<R>, state: UpdateState) -> UpdateState {
@@ -668,6 +680,27 @@ pub async fn update_check(
     Ok(set_state(&app, state))
 }
 
+/// The version this launch has just been updated to, once.
+///
+/// Before installing, the app records the version it is installing; the next launch compares it
+/// with the version that is running. When they are equal the update worked, and the interface
+/// uses it to open the news of the new version. Returns `None` on any other launch, and after
+/// the first call.
+#[tauri::command]
+pub fn update_take_installed(store: State<'_, UpdateStore>) -> Option<String> {
+    store.installed.lock().unwrap().take()
+}
+
+/// The notes of every version, as announced by the update found. `None` when there is no update
+/// or its manifest carries no (or an oversized) `changelog`.
+#[tauri::command]
+pub fn update_changelog(store: State<'_, UpdateStore>) -> Option<serde_json::Value> {
+    let update = store.update.lock().unwrap();
+    update
+        .as_ref()
+        .and_then(|update| changelog_of(&update.raw_json))
+}
+
 /// Starts downloading the announced update in the background and returns at once; progress and
 /// the result arrive through [`STATE_EVENT`].
 ///
@@ -697,6 +730,21 @@ pub fn update_download(
     let task = tauri::async_runtime::spawn(run_download(app.clone(), update, version));
     *store.download.lock().unwrap() = Some(task);
     Ok(state)
+}
+
+/// The largest changelog the interface accepts, in bytes of JSON.
+const MAX_CHANGELOG_BYTES: usize = 2 * 1024 * 1024;
+
+/// The notes of every version, from the `changelog` field of the manifest the updater downloaded.
+///
+/// The updater keeps the fields it does not use, and the releases put the same object as
+/// `changelog.json` there. The manifest is not signed, so this only checks that the field is an
+/// object of a sane size; the interface validates what is inside.
+pub fn changelog_of(manifest: &serde_json::Value) -> Option<serde_json::Value> {
+    let changelog = manifest.get("changelog")?;
+    let small =
+        serde_json::to_string(changelog).is_ok_and(|text| text.len() <= MAX_CHANGELOG_BYTES);
+    (changelog.is_object() && small).then(|| changelog.clone())
 }
 
 /// The one-line summary the release announced, when it has one.
@@ -1045,6 +1093,33 @@ mod tests {
     }
 
     #[test]
+    fn the_changelog_comes_from_the_manifest_when_it_is_a_reasonable_object() {
+        let manifest =
+            serde_json::json!({ "version": "0.3.0", "changelog": { "schema": 1, "versions": [] } });
+        assert_eq!(
+            changelog_of(&manifest),
+            Some(serde_json::json!({ "schema": 1, "versions": [] }))
+        );
+        assert_eq!(
+            changelog_of(&serde_json::json!({ "version": "0.3.0" })),
+            None
+        );
+        assert_eq!(
+            changelog_of(&serde_json::json!({ "changelog": [1, 2] })),
+            None
+        );
+        assert_eq!(
+            changelog_of(&serde_json::json!({ "changelog": "text" })),
+            None
+        );
+        let huge = "x".repeat(MAX_CHANGELOG_BYTES);
+        assert_eq!(
+            changelog_of(&serde_json::json!({ "changelog": { "text": huge } })),
+            None
+        );
+    }
+
+    #[test]
     fn a_check_keeps_the_version_that_is_already_downloaded() {
         let ready = |version: &str| UpdateState::Ready {
             version: version.to_owned(),
@@ -1314,7 +1389,14 @@ mod tests {
                 version: "0.10.0".to_owned()
             }
         );
-        assert_eq!(reconcile(&attempt, "0.10.0"), Reconciled::Done);
+        // The version that was being installed is now the one running: the update worked.
+        assert_eq!(
+            reconcile(&attempt, "0.10.0"),
+            Reconciled::Installed {
+                version: "0.10.0".to_owned()
+            }
+        );
+        // A newer version is running (it was updated again, or installed by hand): obsolete.
         assert_eq!(reconcile(&attempt, "0.11.0"), Reconciled::Done);
         // A record the app cannot understand never blocks updates.
         let odd = InstallAttempt {

@@ -30,8 +30,33 @@ async function configure(route, pubkey = key.pubkey) {
   await main.run("window.__updateStates.length = 0");
 }
 
+/** The notes of the new version, as the releases publish them in `latest.json`. */
+const CHANGELOG = {
+  schema: 1,
+  versions: [
+    {
+      version: NEWER,
+      date: "2026-12-02",
+      title: "Versão de teste",
+      summary: "Resumo da versão.",
+      cover: null,
+      features: [
+        { title: "Recurso novo", text: ["Texto do **recurso**."], images: [], video: null },
+      ],
+      improvements: ["Melhoria."],
+      fixes: [],
+    },
+  ],
+};
+
 /** The manifest route for a package signed as `signedAs`, announcing `version`. */
-function offer({ version = NEWER, signedAs = version, signer = key, comment } = {}) {
+function offer({
+  version = NEWER,
+  signedAs = version,
+  signer = key,
+  comment,
+  changelog = CHANGELOG,
+} = {}) {
   const signature = signer.sign(pkg, comment ?? trustedComment(signedAs));
   return {
     json: manifest({
@@ -39,6 +64,7 @@ function offer({ version = NEWER, signedAs = version, signer = key, comment } = 
       notes: "Resumo da versão.",
       signature,
       url: `${server.url}/package`,
+      changelog,
     }),
   };
 }
@@ -86,6 +112,8 @@ test("never reaches GitHub from the test build until a test server is configured
     kind: "unavailable",
     reason: "developmentBuild",
   });
+  // The test build never records an installation, so no launch of it counts as just updated.
+  assert.equal(await main.invoke("update_take_installed"), null);
 });
 
 test("starts idle, and nothing is checked until asked", async () => {
@@ -196,6 +224,50 @@ test("downloads in the background with progress, verifies the signature and inst
   );
   assert.deepEqual(Buffer.from(await main.invoke("update_test_installed")), pkg);
   await assert.rejects(main.invoke("update_install"), /em andamento/);
+});
+
+test("carries the notes announced with the update, only when the manifest has them as an object", async () => {
+  await configure({ status: 204 });
+  assert.equal(await main.invoke("update_changelog"), null);
+  await configure(offer());
+  assert.equal(await main.invoke("update_changelog"), null, "no update found yet");
+  await main.invoke("update_check");
+  assert.deepEqual(await main.invoke("update_changelog"), CHANGELOG);
+  await configure(offer({ changelog: "texto" }));
+  await main.invoke("update_check");
+  assert.equal(await main.invoke("update_changelog"), null);
+  const route = offer();
+  delete route.json.changelog;
+  await configure(route);
+  await main.invoke("update_check");
+  assert.equal(await main.invoke("update_changelog"), null);
+});
+
+test("the news page lists the notes announced with the update beside the embedded ones", async () => {
+  await configure(offer());
+  await main.invoke("update_check");
+  await waitFor("available");
+  // The page lives on the home screen; the app may be on the analysis screen.
+  if (await main.exists('//button[@aria-label="Voltar ao início"]')) {
+    await main.click('//button[@aria-label="Voltar ao início"]');
+  }
+  await main.waitForText("Acesso rápido");
+  await main.click('//aside//nav//button[contains(., "Novidades")]');
+  const versions = '//aside[@aria-label="Versões"]';
+  await main.find(
+    `${versions}//button[contains(., "99.0.0") and contains(., "nova")]`,
+    "The announced version never showed up as new",
+  );
+  await main.find(`${versions}//button[contains(., "0.2.0")]`, "The embedded notes are missing");
+  await main.find('//article//h2[contains(., "Versão de teste")]', "The new notes did not open");
+  await main.find('//article//h4[contains(., "Recurso novo")]', "The feature is missing");
+  await main.find('//article//strong[contains(., "recurso")]', "Inline text was not formatted");
+  // Back home, with a clean interface for the tests that follow.
+  await main.click('//aside//nav//button[contains(., "Início")]');
+  await main.waitForText("Acesso rápido");
+  await configure({ status: 204 });
+  await main.invoke("update_check");
+  await waitFor("upToDate");
 });
 
 test("the interface follows the native state: button, banner and confirmation", async () => {

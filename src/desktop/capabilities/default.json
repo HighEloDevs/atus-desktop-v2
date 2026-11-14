@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-capability",
-  "description": "Allow project dialogs, clipboard text reading and image writing, revealing project files, window closing, team profile links and the releases page.",
+  "description": "Allow project dialogs, clipboard text reading and image writing, revealing project files, window closing, team profile links and the places the release notes may link to (the project on GitHub, YouTube and the ATUS site).",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -18,7 +18,11 @@
         { "url": "https://www.linkedin.com/in/willian-gama-maximo-85297017b/" },
         { "url": "https://www.linkedin.com/in/leoeiji/" },
         { "url": "https://www.linkedin.com/in/ferrarigui/" },
-        { "url": "https://github.com/HighEloDevs/atus-desktop-v2/releases/latest" }
+        { "url": "https://github.com/HighEloDevs/*" },
+        { "url": "https://youtu.be/*" },
+        { "url": "https://www.youtube.com/*" },
+        { "url": "https://atusweb.com.br/*" },
+        { "url": "https://www.atusweb.com.br/*" }
       ]
     }
   ]

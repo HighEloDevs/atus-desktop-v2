@@ -194,6 +194,15 @@ it("announces a downloaded update in the banner, which installs or closes", asyn
   expect(spies.dismissBanner).toHaveBeenCalledTimes(1);
 });
 
+it("offers to open the news only on screens that can, and does it from the banner", async () => {
+  const onViewNews = vi.fn();
+  await show(createElement(UpdateBanner), { state: ready, bannerVisible: true });
+  expect(buttonNamed("Ver novidades")).toBeUndefined();
+  await show(createElement(UpdateBanner, { onViewNews }), { state: ready, bannerVisible: true });
+  await click(buttonNamed("Ver novidades"));
+  expect(onViewNews).toHaveBeenCalledTimes(1);
+});
+
 it("falls back to a generic line when the release has no summary", async () => {
   await show(createElement(UpdateBanner), {
     state: { kind: "ready", version: "0.3.0", notes: null },
