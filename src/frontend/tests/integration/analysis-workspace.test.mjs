@@ -314,3 +314,12 @@ it("reports a failed save as a snackbar once per distinct error", async () => {
   });
   expect(node.querySelector('[role="alert"]')).toBeNull();
 });
+
+it("keeps the sidebar header and the toolbar at the same fixed height", async () => {
+  await render();
+  const header = node.querySelector("aside header");
+  const toolbar = node.querySelector('button[aria-label="Ocultar painel"]').parentElement;
+  const height = (el) => el.className.match(/\bh-\[(\d+)px\]/)?.[1];
+  expect(height(header)).toBeDefined();
+  expect(height(header)).toBe(height(toolbar));
+});

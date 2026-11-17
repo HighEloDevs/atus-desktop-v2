@@ -11,6 +11,7 @@ import {
   FileChartColumn,
   FileSearch,
   FileWarning,
+  FolderSearch,
   MoreHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { notify } from "@/lib/notify";
+import { Empty } from "@/components/ui/empty";
 import { EmptyRecentProjects } from "./EmptyRecentProjects";
 import { DeleteProjectDialog, RenameProjectDialog } from "./ProjectDialogs";
 import { formatModified, formatSize } from "./format-project";
@@ -507,9 +509,11 @@ export function ProjectTables({
           />
         </div>
         {loading ? null : visible.length === 0 ? (
-          <p className="rounded-md border border-dashed border-border bg-white p-6 text-center text-sm text-muted-foreground">
-            Nenhum projeto encontrado.
-          </p>
+          <Empty
+            icon={FolderSearch}
+            title="Nenhum projeto encontrado"
+            description="Ajuste a busca ou os filtros para ver outros projetos."
+          />
         ) : (
           <>
             <ProjectsTable

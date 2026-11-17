@@ -749,7 +749,7 @@ export function AnalysisPage({
           data-tour="analysis-panel"
           className="analysis-panel flex h-full w-[360px] shrink-0 flex-col border-r border-[#d8ded7] bg-[#f7f8f5]"
         >
-          <header className="border-b border-border bg-white px-3 py-3">
+          <header className="flex h-[66px] shrink-0 flex-col justify-center border-b border-border bg-white px-3">
             <div className="flex items-center gap-2">
               <Button
                 type="button"
@@ -932,7 +932,7 @@ export function AnalysisPage({
       )}
       <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
         <UpdateBanner />
-        <div className="flex h-[54px] shrink-0 items-center gap-3 border-b border-[#d8ded7] bg-white px-4">
+        <div className="flex h-[66px] shrink-0 items-center gap-3 border-b border-border bg-white px-4">
           <button
             type="button"
             onClick={() => setPanelOpen(!panelOpen)}

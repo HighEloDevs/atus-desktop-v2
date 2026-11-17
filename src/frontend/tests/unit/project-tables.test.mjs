@@ -96,7 +96,17 @@ const click = (el) => act(async () => el.click());
 it("shows the empty state and no results message for an empty list", async () => {
   await render();
   expect(node.textContent).toContain("Nenhum projeto recente");
-  expect(node.textContent).toContain("Nenhum projeto encontrado.");
+  expect(node.textContent).toContain("Nenhum projeto encontrado");
+});
+
+it("renders both empty states with the same shared markup", async () => {
+  await render();
+  const cards = [...node.querySelectorAll("div.flex-col.rounded-md.border")].filter((el) =>
+    /Nenhum projeto (recente|encontrado)/.test(el.textContent),
+  );
+  expect(cards).toHaveLength(2);
+  expect(cards[0].className).toBe(cards[1].className);
+  expect(cards.every((card) => card.querySelector("svg"))).toBe(true);
 });
 
 it("lists recents (including outside projects) and all projects separately", async () => {
