@@ -131,3 +131,57 @@ it("updates the marker color", async () => {
   });
   expect(values.color).toBe("#364cff");
 });
+
+it("keeps the sidebar and the per-axis settings in sync", async () => {
+  await render({ section: "chart" });
+  const nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+  const divisions = () => byText("label", "Divisões").querySelector("input");
+  await act(async () => {
+    nativeSet.call(divisions(), "8");
+    divisions().dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect([values.xAxis.ticks, values.yAxis.ticks]).toEqual([8, 8]);
+  await act(async () => values.updateAxis("y", { ticks: 3, grid: false, min: "-1", log: true }));
+  expect(divisions().value).toBe("");
+  expect(divisions().placeholder).toBe("X 8 · Y 3");
+  expect(values.yMin).toBe("-1");
+  expect(values.yLog).toBe(true);
+  expect(
+    byText('[role="switch"]', "Escala logarítmica no eixo Y").getAttribute("aria-checked"),
+  ).toBe("true");
+  // The grid switch shows on while one axis has a grid, and writes both.
+  expect(byText('[role="switch"]', "Linhas de grade").getAttribute("aria-checked")).toBe("true");
+  await act(async () => byText('[role="switch"]', "Linhas de grade").click());
+  expect([values.xAxis.grid, values.yAxis.grid]).toEqual([false, false]);
+});
+
+it("saves the axes and reopens them as they were", async () => {
+  await render();
+  await act(async () => {
+    values.updateAxis("x", { min: "2", minor: 4, format: "scientific", rotation: 45 });
+    values.updateAxis("y", { invert: true, tickDirection: "cross" });
+  });
+  const saved = JSON.parse(JSON.stringify(values));
+  const before = { x: values.xAxis, y: values.yAxis };
+  await act(async () => root.unmount());
+  root = createRoot(node);
+  await render({ initial: saved });
+  expect({ x: values.xAxis, y: values.yAxis }).toEqual(before);
+  expect(values.xMin).toBe("2");
+});
+
+it("copies the style to the other axis and restores an axis without touching its title", async () => {
+  await render();
+  await act(async () => {
+    values.setXLabel("t (s)");
+    values.updateAxis("x", { min: "1", fontSize: 14, format: "decimal", grid: false });
+  });
+  await act(async () => values.copyAxisStyle("x"));
+  await act(async () => values.copyAxisStyle("y", "residual"));
+  expect(values.residualAxis).toMatchObject({ min: "", fontSize: 14, format: "decimal" });
+  expect(values.yAxis).toMatchObject({ min: "", fontSize: 14, format: "decimal", grid: false });
+  await act(async () => values.resetAxis("x"));
+  expect(values.xAxis.fontSize).toBe(10);
+  expect(values.xMin).toBe("");
+  expect(values.xLabel).toBe("t (s)");
+});

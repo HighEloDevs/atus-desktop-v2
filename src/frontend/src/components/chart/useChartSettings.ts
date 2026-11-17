@@ -5,6 +5,20 @@
 
 import { useState } from "react";
 import type { LabelAlignment } from "./EditableChartLabel";
+import {
+  axisDefaults,
+  AXIS_STYLE_KEYS,
+  clampAxisValue,
+  restoreAxis,
+  type AxisKey,
+  type AxisSettings,
+} from "./axisSettings";
+import {
+  LEGEND_DEFAULT_POSITION,
+  LEGEND_DEFAULTS,
+  restoreLegendStyle,
+  type LegendStyle,
+} from "./legendSettings";
 
 export const chartLinePatterns = {
   solid: "",
@@ -24,8 +38,14 @@ export const residualDefaults = {
 
 /**
  * Creates local state and setters for chart presentation.
- * @param initial - Optional persisted chart values.
- * @returns Current settings and React state setters.
+ *
+ * Each axis keeps its settings in one object (`xAxis`, `yAxis`). The legacy flat fields
+ * (`xMin`, `xLog`, `ticks`, `grid`...) are derived from those objects and write back to
+ * them, so the sidebar and the axis popover always show the same values. `ticks` and
+ * `grid` cover both axes: writing them changes X and Y.
+ * @param initial - Optional persisted chart values; projects saved before per-axis
+ * settings migrate from the legacy fields.
+ * @returns Current settings and setters.
  */
 export function useChartSettings(initial?: Partial<ChartValues>) {
   const [title, setTitle] = useState(initial?.title ?? "Gráfico de exemplo");
@@ -40,19 +60,22 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
   const [yAlignment, setYAlignment] = useState<LabelAlignment>(initial?.yAlignment ?? "center");
   const [xLabel, setXLabel] = useState(initial?.xLabel ?? "x");
   const [yLabel, setYLabel] = useState(initial?.yLabel ?? "y");
-  const [grid, setGrid] = useState(initial?.grid ?? true);
   const [legend, setLegend] = useState(initial?.legend ?? true);
   const [legendOrientation, setLegendOrientation] = useState<"horizontal" | "vertical">(
     initial?.legendOrientation ?? "vertical",
   );
-  const [legendPosition, setLegendPosition] = useState(initial?.legendPosition ?? { x: 1, y: 0.5 });
-  const [xLog, setXLog] = useState(initial?.xLog ?? false);
-  const [yLog, setYLog] = useState(initial?.yLog ?? false);
-  const [xMin, setXMin] = useState(initial?.xMin ?? "");
-  const [xMax, setXMax] = useState(initial?.xMax ?? "");
-  const [yMin, setYMin] = useState(initial?.yMin ?? "");
-  const [yMax, setYMax] = useState(initial?.yMax ?? "");
-  const [ticks, setTicks] = useState(initial?.ticks ?? 5);
+  const [legendPosition, setLegendPosition] = useState(
+    initial?.legendPosition ?? LEGEND_DEFAULT_POSITION,
+  );
+  const [legendStyle, setLegendStyle] = useState(() => restoreLegendStyle(initial?.legendStyle));
+  const updateLegendStyle = (patch: Partial<LegendStyle>) =>
+    setLegendStyle((current) => ({ ...current, ...patch }));
+  /** Restores the legend layout and look; its title is user content and stays. */
+  const resetLegend = () => {
+    setLegendStyle((current) => ({ ...LEGEND_DEFAULTS, title: current.title }));
+    setLegendOrientation("vertical");
+    setLegendPosition(LEGEND_DEFAULT_POSITION);
+  };
   const [color, setColor] = useState(initial?.color ?? "#f25a3c");
   const [radius, setRadius] = useState(initial?.radius ?? 5);
   const [symbol, setSymbol] = useState(initial?.symbol ?? "circle");
@@ -65,8 +88,6 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
   const [residualYLabel, setResidualYLabel] = useState(
     initial?.residualYLabel ?? residualDefaults.yLabel,
   );
-  const [residualYMin, setResidualYMin] = useState(initial?.residualYMin ?? "");
-  const [residualYMax, setResidualYMax] = useState(initial?.residualYMax ?? "");
   const [residualStems, setResidualStems] = useState(
     initial?.residualStems ?? residualDefaults.stems,
   );
@@ -77,7 +98,39 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
   const [residualHistogram, setResidualHistogram] = useState(
     initial?.residualHistogram ?? residualDefaults.histogram,
   );
+  const [axes, setAxes] = useState(() => ({
+    x: restoreAxis("x", initial?.xAxis, initial),
+    y: restoreAxis("y", initial?.yAxis, initial),
+    residual: restoreAxis("residual", initial?.residualAxis, initial),
+  }));
+  const updateAxis = (axis: AxisKey, patch: Partial<AxisSettings>) =>
+    setAxes((current) => ({ ...current, [axis]: { ...current[axis], ...patch } }));
+  const updateBoth = (patch: Partial<AxisSettings>) =>
+    setAxes((current) => ({
+      ...current,
+      x: { ...current.x, ...patch },
+      y: { ...current.y, ...patch },
+    }));
+  /** Restores every setting of an axis; the title text is user content and stays. */
+  const resetAxis = (axis: AxisKey) =>
+    setAxes((current) => ({ ...current, [axis]: axisDefaults(axis) }));
+  /**
+   * Copies tick, grid and text style to another axis, leaving its range alone.
+   * Without a target: X to Y, Y to X, and the residual axis to Y.
+   */
+  const copyAxisStyle = (from: AxisKey, target?: AxisKey) =>
+    setAxes((current) => {
+      const to: AxisKey = target ?? (from === "y" ? "x" : "y");
+      const style = Object.fromEntries(AXIS_STYLE_KEYS.map((key) => [key, current[from][key]]));
+      return { ...current, [to]: { ...current[to], ...style } };
+    });
   return {
+    xAxis: axes.x,
+    yAxis: axes.y,
+    residualAxis: axes.residual,
+    updateAxis,
+    resetAxis,
+    copyAxisStyle,
     title,
     setTitle,
     titleAlignment,
@@ -94,28 +147,33 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
     setXLabel,
     yLabel,
     setYLabel,
-    grid,
-    setGrid,
+    /** True when either axis shows its major grid. */
+    grid: axes.x.grid || axes.y.grid,
+    setGrid: (grid: boolean) => updateBoth({ grid }),
     legend,
     setLegend,
     legendOrientation,
     setLegendOrientation,
     legendPosition,
     setLegendPosition,
-    xLog,
-    setXLog,
-    yLog,
-    setYLog,
-    xMin,
-    setXMin,
-    xMax,
-    setXMax,
-    yMin,
-    setYMin,
-    yMax,
-    setYMax,
-    ticks,
-    setTicks,
+    legendStyle,
+    updateLegendStyle,
+    resetLegend,
+    xLog: axes.x.log,
+    setXLog: (log: boolean) => updateAxis("x", { log }),
+    yLog: axes.y.log,
+    setYLog: (log: boolean) => updateAxis("y", { log }),
+    xMin: axes.x.min,
+    setXMin: (min: string) => updateAxis("x", { min }),
+    xMax: axes.x.max,
+    setXMax: (max: string) => updateAxis("x", { max }),
+    yMin: axes.y.min,
+    setYMin: (min: string) => updateAxis("y", { min }),
+    yMax: axes.y.max,
+    setYMax: (max: string) => updateAxis("y", { max }),
+    /** X tick count; the sidebar shows it only while both axes agree. */
+    ticks: axes.x.ticks,
+    setTicks: (ticks: number) => updateBoth({ ticks: clampAxisValue("ticks", ticks) }),
     color,
     setColor,
     radius,
@@ -132,10 +190,10 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
     setResiduals,
     residualYLabel,
     setResidualYLabel,
-    residualYMin,
-    setResidualYMin,
-    residualYMax,
-    setResidualYMax,
+    residualYMin: axes.residual.min,
+    setResidualYMin: (min: string) => updateAxis("residual", { min }),
+    residualYMax: axes.residual.max,
+    setResidualYMax: (max: string) => updateAxis("residual", { max }),
     residualStems,
     setResidualStems,
     residualBand,
@@ -150,6 +208,12 @@ export function useChartSettings(initial?: Partial<ChartValues>) {
 export type ChartSettings = ReturnType<typeof useChartSettings>;
 
 export type ChartValues = {
+  /** Settings of the X axis; projects saved without it migrate from the legacy fields. */
+  xAxis: AxisSettings;
+  /** Settings of the Y axis; projects saved without it migrate from the legacy fields. */
+  yAxis: AxisSettings;
+  /** Settings of the residuals Y axis; older projects migrate from `residualYMin/Max`. */
+  residualAxis: AxisSettings;
   title: string;
   titleAlignment: LabelAlignment;
   subtitleAlignment: LabelAlignment;
@@ -162,6 +226,9 @@ export type ChartValues = {
   legend: boolean;
   legendOrientation: "horizontal" | "vertical";
   legendPosition: { x: number; y: number };
+  /** Legend content, box and sizes; older projects take the defaults. */
+  legendStyle: LegendStyle;
+  /** Legacy fields below are derived from the axes and still saved for older versions. */
   xLog: boolean;
   yLog: boolean;
   xMin: string;

@@ -39,6 +39,7 @@ import { ChartExportMenu } from "@/components/chart/ChartExportMenu";
 import { ChartSettingsPanel } from "@/components/chart/ChartSettingsPanel";
 import { useChartSettings, type ChartValues } from "@/components/chart/useChartSettings";
 import { hasResiduals } from "@/components/chart/residuals";
+import { fittedEquationLatex } from "@/features/analysis/fit/fitted-equation";
 import {
   Activity,
   ArrowLeft,
@@ -186,6 +187,9 @@ export function AnalysisPage({
   const chartSeries: ChartSeries[] = datasets.map((item) => ({
     ...item,
     residuals: item.result?.residuals,
+    legendEquation: item.result
+      ? (fittedEquationLatex(item.result.equation, item.result.parameters) ?? undefined)
+      : undefined,
   }));
   const residualsAvailable = hasResiduals(chartSeries);
   const residualsOn = chartSettings.residuals && residualsAvailable;

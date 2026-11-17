@@ -24,6 +24,8 @@ export type AxisPosition = {
  * @param height - Plot area height in pixels.
  * @param xLog - Whether the X scale is logarithmic.
  * @param yLog - Whether the Y scale is logarithmic.
+ * @param edges - Axes pinned to the plot border by the user: `x` keeps the X axis at
+ * the bottom and `y` keeps the Y axis at the left, wherever zero is.
  * @returns The Y axis horizontal position and the X axis vertical position.
  * @example
  * axisPosition((v) => 50 + v * 10, (v) => 100 - v * 10, 200, 100, false, false);
@@ -36,11 +38,12 @@ export function axisPosition(
   height: number,
   xLog: boolean,
   yLog: boolean,
+  edges: { x?: boolean; y?: boolean } = {},
 ): AxisPosition {
   const place = (value: number, max: number, fallback: number) =>
     Number.isFinite(value) ? Math.min(max, Math.max(0, value)) : fallback;
   return {
-    x: xLog ? 0 : place(xPixel(0), width, 0),
-    y: yLog ? height : place(yPixel(0), height, height),
+    x: xLog || edges.y ? 0 : place(xPixel(0), width, 0),
+    y: yLog || edges.x ? height : place(yPixel(0), height, height),
   };
 }
