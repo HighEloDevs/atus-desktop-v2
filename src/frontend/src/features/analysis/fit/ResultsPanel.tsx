@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Activity, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 import { equationToLatex } from "./equation-to-latex";
 import { FitDetailsDialog } from "./FitDetailsDialog";
+import { useLessonEvent } from "@/features/learn/lesson-events";
 import type { FitResponse } from "./fit-service";
 import {
   CARD_PARAMETER_LIMIT,
@@ -61,9 +62,11 @@ export function ResultsPanel({
 }) {
   const [open, setOpen] = useState(true);
   const [detailsId, setDetailsId] = useState<string | null>(null);
+  const reportLessonEvent = useLessonEvent();
   const details = results.find((item) => item.id === detailsId && item.result);
   return (
     <section
+      data-tour="analysis-results"
       className={`-mx-5 -mb-5 mt-3 flex shrink-0 flex-col border-t border-border bg-background ${open ? "h-[min(40vh,340px)]" : "h-12"}`}
       aria-label="Resultados da análise"
     >
@@ -159,7 +162,11 @@ export function ResultsPanel({
                           </div>
                           <button
                             type="button"
-                            onClick={() => setDetailsId(item.id)}
+                            data-tour="fit-details"
+                            onClick={() => {
+                              setDetailsId(item.id);
+                              reportLessonEvent("details.opened");
+                            }}
                             aria-label={`Ver detalhes de ${item.name}`}
                             className="mt-auto flex w-full items-center justify-between rounded-[7px] bg-muted px-2.5 py-1.5 text-xs font-semibold transition-colors after:absolute after:inset-0 after:rounded-[10px] group-hover:bg-ring group-hover:text-white focus-visible:bg-ring focus-visible:text-white"
                           >
@@ -180,7 +187,15 @@ export function ResultsPanel({
           )}
         </div>
       )}
-      {details && <FitDetailsDialog item={details} onClose={() => setDetailsId(null)} />}
+      {details && (
+        <FitDetailsDialog
+          item={details}
+          onClose={() => {
+            setDetailsId(null);
+            reportLessonEvent("details.closed");
+          }}
+        />
+      )}
     </section>
   );
 }

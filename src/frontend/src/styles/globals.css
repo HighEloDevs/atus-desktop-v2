@@ -272,3 +272,78 @@ a:focus-visible {
     animation-timing-function: steps(10, end);
   }
 }
+
+/* Lessons (features/learn): the driver.js balloon and the layers that must stay above its overlay. */
+.lesson-popover.driver-popover {
+  max-width: 320px;
+  border-radius: 8px;
+  padding: 14px 16px 12px;
+  color: #20272c;
+  font-family: "Inter Variable", Inter, sans-serif;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.25);
+}
+.lesson-popover .driver-popover-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.lesson-popover .driver-popover-description {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #3a4448;
+}
+.lesson-popover .lesson-why {
+  display: block;
+  margin-top: 8px;
+  border-radius: 5px;
+  background: #f0f3ee;
+  padding: 7px 9px;
+}
+.lesson-popover .lesson-progress {
+  display: block;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #66716e;
+}
+.lesson-popover kbd,
+.lesson-popover code {
+  border: 1px solid #cbd4ca;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+}
+.lesson-popover .driver-popover-next-btn {
+  border: 0;
+  border-radius: 6px;
+  background: #20272c;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  text-shadow: none;
+}
+.lesson-popover .driver-popover-next-btn:focus-visible {
+  outline: 3px solid #f25a3c;
+  outline-offset: 2px;
+}
+html.lesson-active .z-40 {
+  z-index: 10001;
+}
+html.lesson-active .z-50 {
+  z-index: 10002;
+}
+html.lesson-active [data-sonner-toaster],
+html.lesson-active .lesson-controls {
+  z-index: 1000001 !important;
+}
+/* driver.js turns off pointer events on everything but the highlight (`.driver-active *`);
+   the lesson controls and the toasts must stay clickable so the student can always pause,
+   leave or retry. */
+html.lesson-active [data-sonner-toaster],
+html.lesson-active [data-sonner-toaster] *,
+html.lesson-active .lesson-controls,
+html.lesson-active .lesson-controls * {
+  pointer-events: auto;
+}
