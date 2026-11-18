@@ -10,7 +10,14 @@
 
 import { CALIPER, caliperX, RULER, rulerX } from "./geometry";
 import type { MeasureHighlight } from "./measure-lesson";
-import { caliperReading, RULER_MAX_MM, VERNIER_DIVISION_MM, VERNIER_LINES } from "./reading";
+import {
+  caliperReading,
+  formatMm,
+  RULER_MAX_MM,
+  VERNIER_005,
+  vernierDivision,
+  type Vernier,
+} from "./reading";
 
 /** Analysis colour used for every highlight. */
 const COBALT = "#364cff";
@@ -182,11 +189,12 @@ export function RulerScene({
 }
 
 /**
- * Vernier caliper of 0,05 mm, optionally holding a brass piece between the jaws.
+ * Vernier caliper, optionally holding a brass piece between the jaws.
  * @param props.id - Prefix of {@link InstrumentDefs}.
  * @param props.sceneId - Id of the group, for the loupe.
  * @param props.hundredths - Opening in hundredths of millimetre.
  * @param props.piece - Draws the piece between the jaws.
+ * @param props.vernier - Vernier engraved on the slider; the 0,05 mm one by default.
  * @param props.highlights - Marks to draw.
  */
 export function CaliperScene({
@@ -195,17 +203,20 @@ export function CaliperScene({
   hundredths,
   piece = false,
   highlights = [],
+  vernier = VERNIER_005,
 }: {
   id: string;
   sceneId?: string;
   hundredths: number;
   piece?: boolean;
   highlights?: MeasureHighlight[];
+  vernier?: Vernier;
 }) {
   const { base, scale, x0, scaleMm } = CALIPER;
-  const { mm, coincidentMm, value } = caliperReading(hundredths);
+  const { mm, coincidentMm, value } = caliperReading(hundredths, vernier);
   const xv = caliperX(value);
-  const step = VERNIER_DIVISION_MM * scale;
+  const step = vernierDivision(vernier) * scale;
+  const every = vernier.labelEvery;
   const main = [];
   for (let m = 0; m <= scaleMm; m++) {
     const x = caliperX(m);
@@ -236,22 +247,22 @@ export function CaliperScene({
         </text>,
       );
   }
-  const vernier = [];
-  for (let k = 0; k <= VERNIER_LINES; k++) {
+  const lines = [];
+  for (let k = 0; k <= vernier.lines; k++) {
     const x = xv + k * step;
-    vernier.push(
+    lines.push(
       <line
         key={k}
         x1={x}
         y1={base}
         x2={x}
-        y2={base + (k % 2 === 0 ? 14 : 9)}
+        y2={base + (k % every === 0 ? 14 : 9)}
         stroke={ENGRAVED}
         strokeWidth={0.8}
       />,
     );
-    if (k % 2 === 0)
-      vernier.push(
+    if (k % every === 0)
+      lines.push(
         <text
           key={`n${k}`}
           x={x}
@@ -261,11 +272,11 @@ export function CaliperScene({
           fontSize={8.5}
           fill={ENGRAVED}
         >
-          {k / 2}
+          {k / every}
         </text>,
       );
   }
-  const slider = 434;
+  const slider = vernier.spanMm * scale + 44;
   return (
     <g id={sceneId} data-instrument="caliper">
       <rect
@@ -313,7 +324,7 @@ export function CaliperScene({
         stroke="#7d848a"
       />
       <rect
-        x={xv + 330}
+        x={xv + slider - 104}
         y={base - 70}
         width={34}
         height={13}
@@ -330,9 +341,9 @@ export function CaliperScene({
         stroke="#8d9397"
       />
       <rect x={xv - 2} y={base} width={slider} height={44} fill={`url(#${id}-brush)`} />
-      {vernier}
-      <text x={xv + 424} y={base + 39} textAnchor="end" fontSize={8} fill="#4b5359">
-        0,05 mm
+      {lines}
+      <text x={xv + slider - 10} y={base + 39} textAnchor="end" fontSize={8} fill="#4b5359">
+        {formatMm(vernier.resolution, 2)} mm
       </text>
       {highlights.includes("vernierZero") && (
         <>

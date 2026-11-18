@@ -10,22 +10,55 @@
  * erros", IFUSP 2009; Marineli, Oliveira, Guimarães-Filho and Pacca, XV SNEF 2003).
  */
 
-/** Number of lines of the caliper vernier after its zero. */
-export const VERNIER_LINES = 20;
-/** Length of the vernier in millimetres: 20 divisions over 39 mm give 0.05 mm. */
-export const VERNIER_SPAN_MM = 39;
-/** Spacing between two vernier lines in millimetres. */
-export const VERNIER_DIVISION_MM = VERNIER_SPAN_MM / VERNIER_LINES;
-/** Largest opening of the simulated caliper, in hundredths of millimetre. */
-export const CALIPER_MAX_HUNDREDTHS = 6000;
 /** Length of the simulated ruler scale in millimetres. */
 export const RULER_MAX_MM = 60;
+
+/** A vernier: how many lines it has, the length they span and what it reads. */
+export type Vernier = {
+  /** Number of divisions after the vernier zero. */
+  lines: number;
+  /** Length of the vernier in millimetres. */
+  spanMm: number;
+  /** Smallest division of the reading, in millimetres. */
+  resolution: number;
+  /** A number is engraved every this many lines; each number is a tenth of millimetre. */
+  labelEvery: number;
+  /** Largest opening that keeps the whole vernier on the scale, in hundredths. */
+  maxHundredths: number;
+  /** Reading uncertainty as written: half the resolution with one significant figure. */
+  uncertainty: number;
+};
+
+/** Vernier of 20 divisions over 39 mm: reads 0,05 mm; 0,025 mm is written 0,03 mm. */
+export const VERNIER_005: Vernier = {
+  lines: 20,
+  spanMm: 39,
+  resolution: 0.05,
+  labelEvery: 2,
+  maxHundredths: 6000,
+  uncertainty: 0.03,
+};
+
+/** Vernier of 50 divisions over 49 mm: reads 0,02 mm, with 0,01 mm of uncertainty. */
+export const VERNIER_002: Vernier = {
+  lines: 50,
+  spanMm: 49,
+  resolution: 0.02,
+  labelEvery: 5,
+  maxHundredths: 5000,
+  uncertainty: 0.01,
+};
+
+/** Spacing between two vernier lines, in millimetres (1,95 or 0,98). */
+export const vernierDivision = (vernier: Vernier) => vernier.spanMm / vernier.lines;
+/** Step of the opening in hundredths of millimetre (5 or 2). */
+export const vernierStep = (vernier: Vernier) => Math.round(vernier.resolution * 100);
 
 /** Reading of a vernier caliper. */
 export type CaliperReading = {
   /** Whole millimetres passed by the vernier zero. */
   mm: number;
-  /** Vernier line that coincides with a main-scale line (0 to 19). */
+  /** Vernier line that coincides with a main-scale line. */
   line: number;
   /** Main-scale millimetre where the coinciding vernier line falls. */
   coincidentMm: number;
@@ -36,19 +69,25 @@ export type CaliperReading = {
 /**
  * Reads a caliper opened by a given amount.
  *
- * Vernier line `k` sits at `value + 1.95 k`; with `value = mm + 0.05 n` it falls on the
- * main-scale line `mm + 2n` exactly when `k = n`.
- * @param hundredths - Opening in hundredths of millimetre; a non-negative multiple of 5.
+ * Vernier line `k` sits at `value + d k`, with `d` the vernier division. With
+ * `value = mm + r n` it falls on the main-scale line `mm + (d + r) n` exactly when `k = n`;
+ * `d + r` is 2 mm on the 0,05 vernier and 1 mm on the 0,02 one.
+ * @param hundredths - Opening in hundredths of millimetre; a non-negative multiple of the
+ * vernier step.
+ * @param vernier - Vernier of the caliper; the 0,05 mm one by default.
  * @returns The whole millimetres, the coinciding line and the reading.
  * @throws RangeError when the opening is not a reachable vernier position.
  * @example caliperReading(2365) // { mm: 23, line: 13, coincidentMm: 49, value: 23.65 }
+ * @example caliperReading(2364, VERNIER_002) // { mm: 23, line: 32, coincidentMm: 55, ... }
  */
-export function caliperReading(hundredths: number): CaliperReading {
-  if (!Number.isInteger(hundredths) || hundredths < 0 || hundredths % 5 !== 0)
+export function caliperReading(hundredths: number, vernier = VERNIER_005): CaliperReading {
+  const step = vernierStep(vernier);
+  if (!Number.isInteger(hundredths) || hundredths < 0 || hundredths % step !== 0)
     throw new RangeError(`Invalid caliper opening: ${hundredths}`);
   const mm = Math.floor(hundredths / 100);
-  const line = (hundredths % 100) / 5;
-  return { mm, line, coincidentMm: mm + 2 * line, value: hundredths / 100 };
+  const line = (hundredths % 100) / step;
+  const jump = Math.round(vernierDivision(vernier) + vernier.resolution);
+  return { mm, line, coincidentMm: mm + jump * line, value: hundredths / 100 };
 }
 
 /**
@@ -158,43 +197,58 @@ export function checkRuler(
  * Checks a caliper reading written as value and uncertainty.
  *
  * The value must be the exact vernier reading, written to the hundredth; the uncertainty is
- * half of 0,05 mm with one significant figure, rounded up: `0,03`. Wrong values are matched
- * against the usual mistakes: counting each vernier line as 0,1 mm, the wrong whole
+ * half the resolution with one significant figure, rounded up (`0,03` on the 0,05 mm
+ * vernier, `0,01` on the 0,02 mm one). Wrong values are matched against the usual mistakes:
+ * counting each line as 0,1 mm or with another caliper's resolution, the wrong whole
  * millimetres and a neighbouring line.
  * @param valueText - Length typed by the student, in millimetres.
  * @param uncertaintyText - Uncertainty typed by the student, in millimetres.
  * @param hundredths - Simulated opening, in hundredths of millimetre.
+ * @param vernier - Vernier of the caliper; the 0,05 mm one by default.
  * @returns The verdict and what to fix.
  */
 export function checkCaliper(
   valueText: string,
   uncertaintyText: string,
   hundredths: number,
+  vernier = VERNIER_005,
 ): MeasureCheck {
-  const { mm, line, value: reading } = caliperReading(hundredths);
+  const { mm, line, value: reading } = caliperReading(hundredths, vernier);
   const value = parseDecimal(valueText);
   const uncertainty = parseDecimal(uncertaintyText);
   if (Number.isNaN(value))
     return { correct: false, messages: ["Escreva o comprimento em milímetros."] };
   const messages: string[] = [];
+  const resolution = vernier.resolution;
+  const r = formatMm(resolution, 2);
+  const half = resolution / 2;
+  const expected = vernier.uncertainty;
+  const u = formatMm(expected, 2);
   const difference = value - reading;
+  const otherResolution = [0.05, 0.02].find(
+    (x) => x !== resolution && near(value, mm + line * x, 1e-4),
+  );
   if (!near(value, reading, 1e-4)) {
     const hundredthsOf = (x: number) => ((Math.round(x * 100) % 100) + 100) % 100;
     if (near(value, mm + line * 0.1, 1e-4))
       messages.push(
-        "Cada traço do nônio vale 0,05 mm, não 0,1 mm. Os números marcam décimos, mas há um traço entre cada par deles.",
+        `Cada traço do nônio vale ${r} mm, não 0,1 mm. Os números marcam décimos, mas há ${vernier.labelEvery} traços entre um número e o seguinte.`,
+      );
+    else if (otherResolution !== undefined)
+      messages.push(
+        `Neste paquímetro cada traço do nônio vale ${r} mm, não ${formatMm(otherResolution, 2)} mm. A menor divisão vem gravada no cursor.`,
       );
     else if (hundredthsOf(value) === hundredths % 100 && Math.abs(difference) >= 0.99)
       messages.push(
         `Os décimos e centésimos estão certos, mas os milímetros inteiros não. O zero do nônio passou do traço ${mm} da escala de cima.`,
       );
-    else if (near(Math.abs(difference), 0.05, 1e-4))
+    else if (near(Math.abs(difference), resolution, 1e-4))
       messages.push(
         "Quase. Use a lupa: o traço do nônio que coincide é o vizinho do que você escolheu.",
       );
     else if (Math.abs(difference) < 1)
       messages.push(
-        `Os milímetros inteiros estão certos (${mm} mm). Procure com a lupa o traço do nônio que se alinha com um traço da escala de cima e multiplique por 0,05 mm.`,
+        `Os milímetros inteiros estão certos (${mm} mm). Procure com a lupa o traço do nônio que se alinha com um traço da escala de cima e multiplique por ${r} mm.`,
       );
     else
       messages.push(
@@ -202,26 +256,27 @@ export function checkCaliper(
       );
   } else if (decimalPlaces(valueText) > 2)
     messages.push(
-      "Não complete o valor com zeros à direita. Com incerteza de 0,03 mm, ele termina na segunda casa decimal.",
+      `Não complete o valor com zeros à direita. Com incerteza de ${u} mm, ele termina na segunda casa decimal.`,
     );
   else if (decimalPlaces(valueText) < 2)
     messages.push("Escreva o valor até os centésimos, a mesma casa da incerteza.");
+  const halfText = formatMm(half, 3).replace(/0$/, "");
   if (Number.isNaN(uncertainty)) messages.push(MISSING_UNCERTAINTY);
-  else if (near(uncertainty, 0.025))
+  else if (!near(half, expected) && near(uncertainty, half))
     messages.push(
-      "Quase: 0,025 mm tem dois algarismos significativos. Incerteza estimada leva um só: arredonde para 0,03 mm.",
+      `Quase: ${halfText} mm tem dois algarismos significativos. Incerteza estimada leva um só: arredonde para ${u} mm.`,
     );
-  else if (near(uncertainty, 0.02))
+  else if (!near(half, expected) && uncertainty > 0 && uncertainty < half)
     messages.push(
-      "Arredonde 0,025 para cima, 0,03 mm, para não declarar uma incerteza menor do que a estimada.",
+      `Arredonde ${halfText} para cima, ${u} mm, para não declarar uma incerteza menor do que a estimada.`,
     );
-  else if (near(uncertainty, 0.03) && significantFigures(uncertaintyText) > 1)
-    messages.push("A incerteza leva um só algarismo significativo: 0,03 mm.");
-  else if (!near(uncertainty, 0.03))
+  else if (near(uncertainty, expected) && significantFigures(uncertaintyText) > 1)
+    messages.push(`A incerteza leva um só algarismo significativo: ${u} mm.`);
+  else if (!near(uncertainty, expected))
     messages.push(
-      near(uncertainty, 0.05)
-        ? "A incerteza de leitura é metade da menor divisão: 0,05 mm ÷ 2 = 0,025 mm, que se escreve 0,03 mm."
-        : "A incerteza de leitura do paquímetro é metade da menor divisão, 0,025 mm, escrita com um significativo: 0,03 mm.",
+      near(uncertainty, resolution)
+        ? `A incerteza de leitura é metade da menor divisão: ${r} mm ÷ 2 = ${halfText} mm${near(half, expected) ? "." : `, que se escreve ${u} mm.`}`
+        : `A incerteza de leitura do paquímetro é metade da menor divisão, ${halfText} mm${near(half, expected) ? "" : `, escrita com um significativo: ${u} mm`}.`,
     );
   return { correct: messages.length === 0, messages };
 }
@@ -247,12 +302,20 @@ export function drawRulerLength(random: () => number, previous?: number): number
  * Whole millimetres are skipped, so the coinciding line is never the vernier zero.
  * @param random - Uniform source in [0, 1).
  * @param previous - Previous opening, in hundredths of millimetre.
- * @returns An opening between 8 and 52 mm, in hundredths, multiple of 5.
+ * @param vernier - Vernier of the caliper; the 0,05 mm one by default.
+ * @returns An opening from 8 mm up to 8 mm short of the largest one, in hundredths, on the
+ * vernier step.
  */
-export function drawCaliperOpening(random: () => number, previous?: number): number {
+export function drawCaliperOpening(
+  random: () => number,
+  previous?: number,
+  vernier = VERNIER_005,
+): number {
+  const step = vernierStep(vernier);
+  const range = vernier.maxHundredths - 1600;
   for (let attempt = 0; ; attempt++) {
-    let opening = 5 * Math.round((800 + random() * 4400) / 5);
-    if (opening % 100 === 0) opening += 35;
+    let opening = step * Math.round((800 + random() * range) / step);
+    if (opening % 100 === 0) opening += 7 * step;
     if (previous === undefined || Math.abs(opening - previous) >= 300) return opening;
     // A source stuck on one value would never leave the previous piece.
     if (attempt === 50) return opening > 3000 ? opening - 1000 : opening + 1000;

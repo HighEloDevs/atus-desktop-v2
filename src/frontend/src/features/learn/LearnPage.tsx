@@ -27,7 +27,12 @@ function MeasureCover({ lesson }: { lesson: MeasureLesson }) {
       {ruler ? (
         <RulerScene id={id} length={23.4} />
       ) : (
-        <CaliperScene id={id} hundredths={2365} piece />
+        <CaliperScene
+          id={id}
+          hundredths={Math.round(lesson.example * 100)}
+          piece
+          vernier={lesson.vernier}
+        />
       )}
     </svg>
   );

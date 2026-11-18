@@ -8,7 +8,7 @@
  * the drawing.
  */
 
-import { caliperReading, formatMm } from "./reading";
+import { caliperReading, formatMm, VERNIER_005, type Vernier } from "./reading";
 
 /** Simulated instrument of a lesson. */
 export type Instrument = "ruler" | "caliper";
@@ -66,6 +66,8 @@ export type MeasureLesson = {
   topics: string[];
   /** Example value of the guide, in millimetres: the piece length or the caliper reading. */
   example: number;
+  /** Vernier of a caliper lesson; the 0,05 mm one when omitted. */
+  vernier?: Vernier;
   steps: MeasureStep[];
   /** Works the lesson follows, as plain text. */
   references: string[];
@@ -86,23 +88,27 @@ export const toHundredths = (mm: number) => Math.round(mm * 100);
  * `{C}` main-scale line it meets, `{labels}` where that line sits among the vernier numbers.
  * @param instrument - Instrument of the lesson.
  * @param value - Length or reading, in millimetres.
+ * @param vernier - Vernier of a caliper; the 0,05 mm one by default.
  * @returns The placeholder values.
  */
-export function templateValues(instrument: Instrument, value: number): Record<string, string> {
+export function templateValues(
+  instrument: Instrument,
+  value: number,
+  vernier = VERNIER_005,
+): Record<string, string> {
   if (instrument === "ruler") {
     const whole = Math.floor(value);
     return { L: formatMm(value, 1), a: String(whole), b: String(whole + 1) };
   }
-  const { mm, line, coincidentMm } = caliperReading(toHundredths(value));
+  const { mm, line, coincidentMm } = caliperReading(toHundredths(value), vernier);
+  const every = vernier.labelEvery;
+  const below = Math.floor(line / every);
   return {
     L: formatMm(value, 2),
     M: String(mm),
     n: String(line),
     C: String(coincidentMm),
-    labels:
-      line % 2 === 0
-        ? `o número ${line / 2}`
-        : `entre os números ${(line - 1) / 2} e ${(line + 1) / 2}`,
+    labels: line % every === 0 ? `o número ${below}` : `entre os números ${below} e ${below + 1}`,
   };
 }
 
@@ -121,13 +127,19 @@ export function fillTemplate(text: string, values: Record<string, string>): stri
  * @param instrument - Instrument of the lesson.
  * @param focus - Point of interest.
  * @param value - Length or reading, in millimetres.
+ * @param vernier - Vernier of a caliper; the 0,05 mm one by default.
  * @returns The scale position in millimetres.
  */
-export function focusMm(instrument: Instrument, focus: MeasureFocus, value: number): number {
+export function focusMm(
+  instrument: Instrument,
+  focus: MeasureFocus,
+  value: number,
+  vernier = VERNIER_005,
+): number {
   if (focus === "zero") return instrument === "ruler" ? 0.5 : 0;
   if (focus === "division") return 10.5;
   if (focus === "end") return value;
-  const reading = caliperReading(toHundredths(value));
+  const reading = caliperReading(toHundredths(value), vernier);
   // The vernier zero sits a little right of centre, so the whole millimetre passed shows.
   if (focus === "vernierZero") return reading.value - 1;
   return reading.coincidentMm;

@@ -21,7 +21,6 @@ import {
   type MeasureLesson,
 } from "./measure-lesson";
 import {
-  CALIPER_MAX_HUNDREDTHS,
   caliperReading,
   checkCaliper,
   checkRuler,
@@ -30,7 +29,10 @@ import {
   formatMm,
   parseDecimal,
   RULER_MAX_MM,
+  VERNIER_005,
+  vernierStep,
   type MeasureCheck,
+  type Vernier,
 } from "./reading";
 
 type Mode = "guide" | "explore" | "practice";
@@ -93,6 +95,8 @@ export function MeasureLessonView({
   const id = `m${useId().replace(/[^\w-]/g, "")}`;
   const sceneId = `${id}-scene`;
   const ruler = lesson.instrument === "ruler";
+  const vernier = lesson.vernier ?? VERNIER_005;
+  const r = formatMm(vernier.resolution, 2);
   const [mode, setMode] = useState<Mode>("guide");
   const [stepIndex, setStepIndex] = useState(0);
   const [explore, setExplore] = useState(EXPLORE_START);
@@ -108,7 +112,7 @@ export function MeasureLessonView({
     setPiece(
       ruler
         ? drawRulerLength(random, previous ?? undefined)
-        : drawCaliperOpening(random, previous ?? undefined),
+        : drawCaliperOpening(random, previous ?? undefined, vernier),
     );
     setPracticeLens(0);
     setValue("");
@@ -123,7 +127,7 @@ export function MeasureLessonView({
 
   const step = lesson.steps[stepIndex];
   const example = lesson.example;
-  const values = templateValues(lesson.instrument, example);
+  const values = templateValues(lesson.instrument, example, vernier);
   const fill = (text: string) => fillTemplate(text, values);
 
   // What the stage shows in the current mode.
@@ -135,21 +139,27 @@ export function MeasureLessonView({
     measured = step.closed ? 0 : example;
     showPiece = !step.closed;
     highlights = step.highlight ?? [];
-    lensMm = focusMm(lesson.instrument, step.focus, example);
+    lensMm = focusMm(lesson.instrument, step.focus, example, vernier);
   } else if (mode === "explore") {
     measured = explore / 100;
     showPiece = false;
     highlights = ["vernierZero", "coincident"];
-    lensMm = caliperReading(explore).coincidentMm;
+    lensMm = caliperReading(explore, vernier).coincidentMm;
   } else {
     measured = ruler ? (piece ?? example) : (piece ?? toHundredths(example)) / 100;
     lensMm = practiceLens;
   }
   const lens = lensRect(lesson.instrument, lensMm);
-  const reading = ruler ? null : caliperReading(toHundredths(measured));
+  const reading = ruler ? null : caliperReading(toHundredths(measured), vernier);
+  const openingStep = vernierStep(vernier);
 
   const setOpening = (hundredths: number) =>
-    setExplore(Math.max(0, Math.min(CALIPER_MAX_HUNDREDTHS, 5 * Math.round(hundredths / 5))));
+    setExplore(
+      Math.max(
+        0,
+        Math.min(vernier.maxHundredths, openingStep * Math.round(hundredths / openingStep)),
+      ),
+    );
   const svgX = (event: PointerEvent<SVGSVGElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
     const [x0, , width] = CALIPER.viewBox.split(" ").map(Number);
@@ -162,14 +172,14 @@ export function MeasureLessonView({
         role: "slider",
         "aria-label": "Abertura do paquímetro",
         "aria-valuemin": 0,
-        "aria-valuemax": CALIPER_MAX_HUNDREDTHS / 100,
+        "aria-valuemax": vernier.maxHundredths / 100,
         "aria-valuenow": explore / 100,
         "aria-valuetext": `${formatMm(explore / 100, 2)} mm`,
         onKeyDown: (event: KeyboardEvent<SVGSVGElement>) => {
           const sign = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
           if (!sign) return;
           event.preventDefault();
-          setOpening(explore + sign * (event.shiftKey ? 100 : 5));
+          setOpening(explore + sign * (event.shiftKey ? 100 : openingStep));
         },
         onPointerDown: (event: PointerEvent<SVGSVGElement>) => {
           event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -188,7 +198,7 @@ export function MeasureLessonView({
     if (piece === null) return;
     const result = ruler
       ? checkRuler(value, uncertainty, piece)
-      : checkCaliper(value, uncertainty, piece);
+      : checkCaliper(value, uncertainty, piece, vernier);
     setCheck(result);
     if (!score.answered)
       setScore((s) => ({
@@ -233,7 +243,7 @@ export function MeasureLessonView({
                 ? undefined
                 : ruler
                   ? "Régua milimetrada com uma peça de latão encostada no zero"
-                  : "Paquímetro com nônio de 0,05 mm"
+                  : `Paquímetro com nônio de ${r} mm`
             }
             {...sliderProps}
           >
@@ -247,6 +257,7 @@ export function MeasureLessonView({
                 hundredths={toHundredths(measured)}
                 piece={showPiece}
                 highlights={highlights}
+                vernier={vernier}
               />
             )}
             <rect
@@ -299,7 +310,7 @@ export function MeasureLessonView({
                     aria-live="polite"
                     className="rounded-md border border-border bg-white px-3 py-2 font-mono text-[14px] text-foreground tabular-nums"
                   >
-                    {reading.mm} mm + <b className="text-[#364cff]">{reading.line}</b> × 0,05 mm ={" "}
+                    {reading.mm} mm + <b className="text-[#364cff]">{reading.line}</b> × {r} mm ={" "}
                     <b className="text-[#364cff]">{formatMm(reading.value, 2)} mm</b>
                   </output>
                   <span>A lupa segue o traço do nônio que coincide.</span>
@@ -392,14 +403,22 @@ export function MeasureLessonView({
               <h2 className="text-[14px] font-semibold">Mova o cursor</h2>
               <p className="leading-5">
                 Arraste o bico móvel ou use as setas com o paquímetro em foco. Veja o zero do nônio
-                andar sobre a escala e o traço que coincide mudar a cada 0,05 mm.
+                andar sobre a escala e o traço que coincide mudar a cada {r} mm.
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => setOpening(explore - 5)}>
-                  − 0,05 mm
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setOpening(explore - openingStep)}
+                >
+                  − {r} mm
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setOpening(explore + 5)}>
-                  + 0,05 mm
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setOpening(explore + openingStep)}
+                >
+                  + {r} mm
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setOpening(explore - 100)}>
                   − 1 mm
@@ -409,7 +428,7 @@ export function MeasureLessonView({
                 </Button>
               </div>
               <p className="border-l-2 border-border pl-2 text-[12px] leading-5 text-muted-foreground">
-                Ao abrir 0,05 mm, o traço que coincide pula para o vizinho. Ao abrir 1 mm inteiro,
+                Ao abrir {r} mm, o traço que coincide pula para o vizinho. Ao abrir 1 mm inteiro,
                 ele volta ao mesmo traço.
               </p>
               <Button size="sm" className="self-start" onClick={() => changeMode("practice")}>
@@ -466,7 +485,13 @@ export function MeasureLessonView({
               </form>
               <div aria-live="polite">
                 {check && piece !== null && (
-                  <Feedback check={check} ruler={ruler} piece={piece} value={value} />
+                  <Feedback
+                    check={check}
+                    ruler={ruler}
+                    piece={piece}
+                    value={value}
+                    vernier={vernier}
+                  />
                 )}
               </div>
             </>
@@ -492,17 +517,20 @@ export function MeasureLessonView({
  * @param props.ruler - Whether the instrument is the ruler.
  * @param props.piece - Simulated length (mm) or opening (hundredths).
  * @param props.value - Value typed by the student.
+ * @param props.vernier - Vernier of a caliper.
  */
 function Feedback({
   check,
   ruler,
   piece,
   value,
+  vernier,
 }: {
   check: MeasureCheck;
   ruler: boolean;
   piece: number;
   value: string;
+  vernier: Vernier;
 }) {
   if (!check.correct)
     return (
@@ -522,12 +550,15 @@ function Feedback({
         </p>
       </div>
     );
-  const { mm, line, coincidentMm, value: reading } = caliperReading(piece);
+  const { mm, line, coincidentMm, value: reading } = caliperReading(piece, vernier);
+  const r = formatMm(vernier.resolution, 2);
   return (
     <div className="flex flex-col gap-1 rounded-md bg-[#e2f2e9] px-3 py-2 leading-5 text-success">
-      <strong>Certo: L = ({formatMm(reading, 2)} ± 0,03) mm</strong>
+      <strong>
+        Certo: L = ({formatMm(reading, 2)} ± {formatMm(vernier.uncertainty, 2)}) mm
+      </strong>
       <p className="text-foreground">
-        {mm} mm + {line} × 0,05 mm. O traço {line} do nônio coincide com o traço {coincidentMm} da
+        {mm} mm + {line} × {r} mm. O traço {line} do nônio coincide com o traço {coincidentMm} da
         escala.
       </p>
     </div>

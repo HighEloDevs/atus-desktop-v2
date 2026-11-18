@@ -60,7 +60,6 @@ it("opens the ruler and the caliper from the Aprender tab and returns", async ()
   expect(node.textContent).toContain("Micrômetro");
   // Each card draws its own instrument.
   expect(node.querySelectorAll('[data-instrument="ruler"]')).toHaveLength(1);
-  expect(node.querySelectorAll('[data-instrument="caliper"]')).toHaveLength(1);
 
   await click(buttons().find((b) => b.textContent.includes("Régua")));
   expect(node.querySelector("h1").textContent).toBe("Régua");
@@ -68,8 +67,12 @@ it("opens the ruler and the caliper from the Aprender tab and returns", async ()
   await click(buttons().find((b) => b.textContent.trim() === "Aprender"));
   expect(node.querySelector("h1").textContent).toBe("Aprender");
 
-  await click(buttons().find((b) => b.textContent.includes("Paquímetro")));
-  expect(node.querySelector("h1").textContent).toBe("Paquímetro");
+  expect(node.querySelectorAll('[data-instrument="caliper"]')).toHaveLength(2);
+  await click(buttons().find((b) => b.textContent.includes("Paquímetro de 0,02 mm")));
+  expect(node.querySelector("h1").textContent).toBe("Paquímetro de 0,02 mm");
+  await click(buttons().find((b) => b.textContent.trim() === "Aprender"));
+  await click(buttons().find((b) => b.textContent.includes("Paquímetro de 0,05 mm")));
+  expect(node.querySelector("h1").textContent).toBe("Paquímetro de 0,05 mm");
   // Leaving through the sidebar closes the lesson, so coming back shows the tab.
   await click(nav("Início"));
   await click(nav("Aprender"));

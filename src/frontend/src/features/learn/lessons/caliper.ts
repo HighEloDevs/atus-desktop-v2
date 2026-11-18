@@ -9,6 +9,7 @@
  */
 
 import type { MeasureLesson } from "../measure/measure-lesson";
+import { VERNIER_005 } from "../measure/reading";
 
 /** The vernier caliper lesson. */
 export const caliperLesson: MeasureLesson = {
@@ -17,11 +18,12 @@ export const caliperLesson: MeasureLesson = {
   track: "measure",
   version: 1,
   instrument: "caliper",
-  title: "Paquímetro",
+  title: "Paquímetro de 0,05 mm",
   summary: "Ler o nônio de 0,05 mm: milímetros inteiros, traço que coincide e incerteza.",
   minutes: 8,
   topics: ["0,05 mm", "± 0,03 mm"],
   example: 23.65,
+  vernier: VERNIER_005,
   steps: [
     {
       id: "zero",

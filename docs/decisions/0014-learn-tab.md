@@ -4,7 +4,7 @@
 
 Quem chega ao ATUS sabendo pouco de análise de dados precisa de mais do que uma ferramenta: precisa ver o caminho inteiro, do experimento ao resultado com incerteza. A proposta é uma aba com lições guiadas dentro do próprio app, em que o estudante usa a interface real (colar com `Cmd/Ctrl+B`, escrever a equação, ajustar, abrir os detalhes, exportar) enquanto um balão explica cada passo e destaca onde agir.
 
-O conceito foi validado num protótipo clicável antes do código. A primeira lição é a queda livre com faiscador (o "ovinho" do IFUSP). Uma segunda trilha, **Como medir**, ensina a ler instrumentos: régua e paquímetro já existem, e o micrômetro está anunciado.
+O conceito foi validado num protótipo clicável antes do código. A primeira lição é a queda livre com faiscador (o "ovinho" do IFUSP). Uma segunda trilha, **Como medir**, ensina a ler instrumentos: régua e paquímetros de 0,05 mm e 0,02 mm já existem, e o micrômetro está anunciado.
 
 ## Decisão
 
@@ -29,19 +29,20 @@ O conceito foi validado num protótipo clicável antes do código. A primeira li
 
 ### Trilha Como medir
 
-- **Lição de instrumento é outro manifesto** (`MeasureLesson` em `features/learn/measure/measure-lesson.ts`; `lessons/ruler.ts` e `lessons/caliper.ts`): textos, passos e o que cada passo destaca. Os textos têm marcadores (`{L}`, `{M}`, `{n}`) preenchidos a partir da leitura do valor de exemplo, então o texto sempre bate com o desenho.
+- **Lição de instrumento é outro manifesto** (`MeasureLesson` em `features/learn/measure/measure-lesson.ts`; `lessons/ruler.ts`, `lessons/caliper.ts` e `lessons/caliper-002.ts`): textos, passos e o que cada passo destaca. Os textos têm marcadores (`{L}`, `{M}`, `{n}`) preenchidos a partir da leitura do valor de exemplo, então o texto sempre bate com o desenho.
 - **Não usa o driver.js nem a tela de análise.** O instrumento é simulado e cabe numa tela só (`MeasureLessonView.tsx`), aberta na própria aba Aprender. Os passos ficam num painel ao lado do instrumento e a lupa mostra a região de cada passo. O paquímetro tem também o modo **Explorar**, em que o bico móvel se move por arraste, setas (`Shift` para 1 mm) e botões. Os dois instrumentos têm **Praticar**, com peças sorteadas e correção.
-- **Desenhos vetoriais gerados por código** (`InstrumentScenes.tsx`, geometria em `geometry.ts`): aço escovado, traços gravados e a peça de latão, todos posicionados pela mesma escala em milímetros. Por isso dá para sortear medidas sem uma foto para cada valor. A lupa reaproveita o desenho com `<use>`. O nônio tem 20 divisões em 39 mm, e a leitura (`caliperReading` em `reading.ts`) é conferida contra essa geometria em todas as aberturas.
+- **Desenhos vetoriais gerados por código** (`InstrumentScenes.tsx`, geometria em `geometry.ts`): aço escovado, traços gravados e a peça de latão, todos posicionados pela mesma escala em milímetros. Por isso dá para sortear medidas sem uma foto para cada valor. A lupa reaproveita o desenho com `<use>`. O nônio é um dado (`Vernier` em `reading.ts`): `VERNIER_005` tem 20 divisões em 39 mm e `VERNIER_002`, 50 divisões em 49 mm, numeradas a cada 5 traços. Os dois existem no laboratório didático do IFUSP (_Física Experimental 1_, 2011). A leitura (`caliperReading`) é conferida contra a geometria em todas as aberturas dos dois.
 - **Convenções do laboratório didático do IFUSP** (Tabacniks, _Conceitos básicos da teoria de erros_, IFUSP 2009; Marineli, Oliveira, Guimarães-Filho e Pacca, XV SNEF 2003):
   - a incerteza de leitura é a metade da menor divisão, e a regra é dita em cada lição;
   - incerteza estimada leva um algarismo significativo, e o valor tem as mesmas casas decimais que ela;
   - na régua, o estudante estima os décimos de milímetro, o dígito duvidoso: L = (42,3 ± 0,5) mm;
+  - no paquímetro de 0,02 mm, a incerteza é 0,01 mm, que já tem um algarismo: L = (23,64 ± 0,01) mm;
   - no paquímetro de 0,05 mm, a incerteza de 0,025 mm é arredondada para cima, ficando L = (23,65 ± 0,03) mm. Completar o valor com zero (23,650) para igualar as casas a uma incerteza de dois algarismos é um dos erros que o artigo de 2003 encontrou nos relatórios, e a lição o aponta;
   - no micrômetro de 0,01 mm, quando existir, a incerteza será ± 0,005 mm.
 
   Quando outra fonte de incerteza é maior, como o borrão de movimento na queda livre, a lição avisa e usa a maior.
 
-- **A correção reconhece os erros comuns do artigo de 2003** (`checkRuler` e `checkCaliper`): falta de incerteza, falta do dígito duvidoso, excesso de algarismos, zero à direita e incerteza com dois algarismos. Também reconhece erros de leitura: leitura em centímetros, traço do nônio contado como 0,1 mm, milímetros inteiros errados e traço vizinho. Cada um tem uma mensagem própria.
+- **A correção reconhece os erros comuns do artigo de 2003** (`checkRuler` e `checkCaliper`): falta de incerteza, falta do dígito duvidoso, excesso de algarismos, zero à direita e incerteza com dois algarismos. Também reconhece erros de leitura: leitura em centímetros, traço do nônio contado como 0,1 mm ou com a menor divisão do outro paquímetro, milímetros inteiros errados e traço vizinho. Cada um tem uma mensagem própria.
 
 ## Alternativas descartadas
 
@@ -55,5 +56,5 @@ O conceito foi validado num protótipo clicável antes do código. A primeira li
 
 - Componentes da análise ganharam atributos `data-tour` estáveis; renomeá-los quebra as lições, e o teste `tests/integration/app-learn.test.mjs` percorre a lição inteira para detectar isso.
 - As lições ainda não guardam progresso entre aberturas, e a lição de queda livre não oferece salvar o resultado como projeto.
-- As lições de régua e paquímetro foram conferidas num WKWebView pelo servidor de desenvolvimento, no macOS. Ainda falta verificá-las no app empacotado.
+- As lições de régua e dos dois paquímetros foram conferidas num WKWebView pelo servidor de desenvolvimento, no macOS. Ainda falta verificá-las no app empacotado.
 - A lição foi percorrida de ponta a ponta no Chromium (servidor de desenvolvimento, macOS), com pausa, `Esc` dentro e fora do diálogo, cópia dos parâmetros e saída. Ainda falta verificá-la no app empacotado (WKWebView, WebView2, WebKitGTK).
