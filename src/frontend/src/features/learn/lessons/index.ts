@@ -8,6 +8,7 @@ import type { MeasureLesson } from "../measure/measure-lesson";
 import { caliperLesson } from "./caliper";
 import { caliper002Lesson } from "./caliper-002";
 import { gravityLesson } from "./gravity";
+import { micrometerLesson } from "./micrometer";
 import { rulerLesson } from "./ruler";
 
 /** Lessons available now, in display order. */
@@ -20,9 +21,12 @@ export const upcomingLessons: UpcomingLesson[] = [
 ];
 
 /** Lessons of the Como medir track, in display order. */
-export const measureLessons: MeasureLesson[] = [rulerLesson, caliperLesson, caliper002Lesson];
+export const measureLessons: MeasureLesson[] = [
+  rulerLesson,
+  caliperLesson,
+  caliper002Lesson,
+  micrometerLesson,
+];
 
 /** Instruments announced as "Em breve" in the Como medir track. */
-export const upcomingMeasureLessons: UpcomingLesson[] = [
-  { title: "Micrômetro", topics: ["0,01 mm", "± 0,005 mm"] },
-];
+export const upcomingMeasureLessons: UpcomingLesson[] = [];

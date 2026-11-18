@@ -10,6 +10,7 @@ import { MeasureLessonView } from "../../src/features/learn/measure/MeasureLesso
 import { rulerLesson } from "../../src/features/learn/lessons/ruler";
 import { caliperLesson } from "../../src/features/learn/lessons/caliper";
 import { caliper002Lesson } from "../../src/features/learn/lessons/caliper-002";
+import { micrometerLesson } from "../../src/features/learn/lessons/micrometer";
 
 let root;
 let node;
@@ -236,5 +237,68 @@ describe("0,02 mm caliper lesson", () => {
     await answer("25,14", "0,01");
     expect(panel()).toContain("Certo: L = (25,14 ± 0,01) mm");
     expect(panel()).toContain("25 mm + 7 × 0,02 mm. O traço 7 do nônio coincide com o traço 32");
+  });
+});
+
+describe("micrometer lesson", () => {
+  it("reads 7,872 mm from sleeve, half millimetre and thimble", async () => {
+    await render(micrometerLesson);
+    expect(node.querySelector("h1").textContent).toBe("Micrômetro");
+    // Closed and empty to check the zero.
+    expect(node.querySelector("[data-piece]")).toBeNull();
+    await click(button("Próximo"));
+    expect(node.querySelector("[data-piece]")).not.toBeNull();
+    expect(panel()).toContain("são 7 mm");
+    expect(panel()).toContain("também já apareceu: some 0,5 mm");
+    expect(instrument().querySelectorAll("[data-highlight]")).toHaveLength(2);
+    await click(button("Próximo"));
+    expect(panel()).toContain("entre os traços 37 e 38");
+    expect(panel()).toContain("cerca de 37,2 divisões");
+    await click(button("Próximo"));
+    expect(panel()).toContain("7 + 0,5 + 37,2 × 0,01 = 7,872 mm");
+    await click(button("Próximo"));
+    expect(panel()).toContain("L = (7,872 ± 0,005) mm");
+  });
+
+  it("turns the thimble by keys, buttons and drag, and checks a practice reading", async () => {
+    await render(micrometerLesson, { random: () => 0.5 });
+    for (let i = 0; i < 4; i++) await click(button("Próximo"));
+    await click(button("Explorar"));
+    const svg = instrument();
+    const output = () => node.querySelector("output").textContent;
+    expect(output()).toBe("5 mm + 0,5 mm + 28 × 0,01 mm = 5,78 mm");
+    await act(() =>
+      svg.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" })),
+    );
+    expect(output()).toBe("5 mm + 0,5 mm + 29 × 0,01 mm = 5,79 mm");
+    await act(() =>
+      svg.dispatchEvent(
+        new KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight", shiftKey: true }),
+      ),
+    );
+    expect(output()).toBe("6 mm + 29 × 0,01 mm = 6,29 mm");
+    await click(button("− 1 volta"));
+    await click(button("− 0,01 mm"));
+    expect(svg.getAttribute("aria-valuetext")).toBe("5,78 mm");
+    await click(button("+ 0,01 mm"));
+    await click(button("+ 1 volta"));
+    expect(svg.getAttribute("aria-valuenow")).toBe("6.29");
+
+    // 24 SVG units are 1 mm; the view box starts at x = 0 and is 1660 wide.
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1660, height: 230 });
+    const pointer = (type, clientX) =>
+      act(() => svg.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX })));
+    await pointer("pointerdown", 900);
+    await pointer("pointermove", 912);
+    await pointer("pointerup", 912);
+    expect(svg.getAttribute("aria-valuenow")).toBe("6.79");
+
+    await click(button("Praticar"));
+    // 1000 + 0,5 × 23000 µm = 12,500 mm.
+    await answer("12,000", "0,005");
+    expect(panel()).toContain("Faltou o meio milímetro");
+    await answer("12,500", "0,005");
+    expect(panel()).toContain("Certo: L = (12,500 ± 0,005) mm");
+    expect(panel()).toContain("12 mm + 0,5 mm + 0,0 × 0,01 mm");
   });
 });

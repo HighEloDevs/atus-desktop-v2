@@ -1,7 +1,8 @@
 /**
  * @module
  * Screen of a Como medir lesson: the simulated instrument with its loupe and a side panel
- * with the guided steps, the free exploration (caliper) and the practice with correction.
+ * with the guided steps, the free exploration (caliper and micrometer) and the practice with
+ * correction. What depends on the instrument comes from its {@link InstrumentKit}.
  */
 
 import { useId, useState, type FormEvent, type KeyboardEvent, type PointerEvent } from "react";
@@ -10,35 +11,19 @@ import { Segmented } from "@/components/chart/PopoverFields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { CALIPER, lensRect, RULER } from "./geometry";
-import { CaliperScene, InstrumentDefs, RulerScene } from "./InstrumentScenes";
+import { lensRect } from "./geometry";
+import { InstrumentDefs } from "./InstrumentScenes";
+import { instrumentKit, type InstrumentKit } from "./instrument-kits";
 import {
   fillTemplate,
   focusMm,
   templateValues,
-  toHundredths,
   type MeasureHighlight,
   type MeasureLesson,
 } from "./measure-lesson";
-import {
-  caliperReading,
-  checkCaliper,
-  checkRuler,
-  drawCaliperOpening,
-  drawRulerLength,
-  formatMm,
-  parseDecimal,
-  RULER_MAX_MM,
-  VERNIER_005,
-  vernierStep,
-  type MeasureCheck,
-  type Vernier,
-} from "./reading";
+import type { MeasureCheck } from "./reading";
 
 type Mode = "guide" | "explore" | "practice";
-
-/** Opening the caliper shows when exploration starts, in hundredths of millimetre. */
-const EXPLORE_START = 1240;
 
 /**
  * Side view of a ruler read from above and from the side.
@@ -94,12 +79,11 @@ export function MeasureLessonView({
 }) {
   const id = `m${useId().replace(/[^\w-]/g, "")}`;
   const sceneId = `${id}-scene`;
-  const ruler = lesson.instrument === "ruler";
-  const vernier = lesson.vernier ?? VERNIER_005;
-  const r = formatMm(vernier.resolution, 2);
+  const kit = instrumentKit(lesson);
+  const explorer = kit.explore;
   const [mode, setMode] = useState<Mode>("guide");
   const [stepIndex, setStepIndex] = useState(0);
-  const [explore, setExplore] = useState(EXPLORE_START);
+  const [explore, setExplore] = useState(explorer?.start ?? 0);
   const [piece, setPiece] = useState<number | null>(null);
   const [practiceLens, setPracticeLens] = useState(0);
   const [value, setValue] = useState("");
@@ -109,11 +93,7 @@ export function MeasureLessonView({
   const [drag, setDrag] = useState<{ x: number; start: number } | null>(null);
 
   const newPiece = (previous: number | null) => {
-    setPiece(
-      ruler
-        ? drawRulerLength(random, previous ?? undefined)
-        : drawCaliperOpening(random, previous ?? undefined, vernier),
-    );
+    setPiece(kit.draw(random, previous ?? undefined));
     setPracticeLens(0);
     setValue("");
     setUncertainty("");
@@ -127,78 +107,74 @@ export function MeasureLessonView({
 
   const step = lesson.steps[stepIndex];
   const example = lesson.example;
-  const values = templateValues(lesson.instrument, example, vernier);
+  const exampleUnits = Math.round(example * kit.units);
+  const values = templateValues(lesson.instrument, example, lesson.vernier);
   const fill = (text: string) => fillTemplate(text, values);
 
-  // What the stage shows in the current mode.
-  let measured: number;
+  // What the stage shows in the current mode, in the kit unit.
+  let units: number;
   let highlights: MeasureHighlight[] = [];
   let lensMm: number;
   let showPiece = true;
   if (mode === "guide") {
-    measured = step.closed ? 0 : example;
+    units = step.closed ? 0 : exampleUnits;
     showPiece = !step.closed;
     highlights = step.highlight ?? [];
-    lensMm = focusMm(lesson.instrument, step.focus, example, vernier);
-  } else if (mode === "explore") {
-    measured = explore / 100;
+    lensMm = focusMm(lesson.instrument, step.focus, example, lesson.vernier);
+  } else if (mode === "explore" && explorer) {
+    units = explore;
     showPiece = false;
-    highlights = ["vernierZero", "coincident"];
-    lensMm = caliperReading(explore, vernier).coincidentMm;
+    highlights = explorer.highlights;
+    lensMm = explorer.lensMm(explore);
   } else {
-    measured = ruler ? (piece ?? example) : (piece ?? toHundredths(example)) / 100;
+    units = piece ?? exampleUnits;
     lensMm = practiceLens;
   }
   const lens = lensRect(lesson.instrument, lensMm);
-  const reading = ruler ? null : caliperReading(toHundredths(measured), vernier);
-  const openingStep = vernierStep(vernier);
 
-  const setOpening = (hundredths: number) =>
-    setExplore(
-      Math.max(
-        0,
-        Math.min(vernier.maxHundredths, openingStep * Math.round(hundredths / openingStep)),
-      ),
-    );
+  const exploring = mode === "explore" && explorer !== undefined;
+  const move = (next: number) => {
+    if (!explorer) return;
+    const { step: unit, max } = explorer;
+    setExplore(Math.max(0, Math.min(max, unit * Math.round(next / unit))));
+  };
   const svgX = (event: PointerEvent<SVGSVGElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
-    const [x0, , width] = CALIPER.viewBox.split(" ").map(Number);
+    const [x0, , width] = kit.viewBox.split(" ").map(Number);
     return box.width ? x0 + ((event.clientX - box.left) * width) / box.width : 0;
   };
-  const exploring = mode === "explore";
-  const sliderProps = exploring
-    ? {
-        tabIndex: 0,
-        role: "slider",
-        "aria-label": "Abertura do paquímetro",
-        "aria-valuemin": 0,
-        "aria-valuemax": vernier.maxHundredths / 100,
-        "aria-valuenow": explore / 100,
-        "aria-valuetext": `${formatMm(explore / 100, 2)} mm`,
-        onKeyDown: (event: KeyboardEvent<SVGSVGElement>) => {
-          const sign = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-          if (!sign) return;
-          event.preventDefault();
-          setOpening(explore + sign * (event.shiftKey ? 100 : openingStep));
-        },
-        onPointerDown: (event: PointerEvent<SVGSVGElement>) => {
-          event.currentTarget.setPointerCapture?.(event.pointerId);
-          setDrag({ x: svgX(event), start: explore });
-        },
-        onPointerMove: (event: PointerEvent<SVGSVGElement>) => {
-          if (drag) setOpening(drag.start + ((svgX(event) - drag.x) / CALIPER.scale) * 100);
-        },
-        onPointerUp: () => setDrag(null),
-        onPointerCancel: () => setDrag(null),
-      }
-    : { role: "img" };
+  const sliderProps =
+    exploring && explorer
+      ? {
+          tabIndex: 0,
+          role: "slider",
+          "aria-label": explorer.ariaLabel,
+          "aria-valuemin": 0,
+          "aria-valuemax": explorer.max / kit.units,
+          "aria-valuenow": explore / kit.units,
+          "aria-valuetext": explorer.valueText(explore),
+          onKeyDown: (event: KeyboardEvent<SVGSVGElement>) => {
+            const sign = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+            if (!sign) return;
+            event.preventDefault();
+            move(explore + sign * (event.shiftKey ? explorer.bigStep : explorer.step));
+          },
+          onPointerDown: (event: PointerEvent<SVGSVGElement>) => {
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+            setDrag({ x: svgX(event), start: explore });
+          },
+          onPointerMove: (event: PointerEvent<SVGSVGElement>) => {
+            if (drag) move(drag.start + ((svgX(event) - drag.x) / kit.svgPerMm) * kit.units);
+          },
+          onPointerUp: () => setDrag(null),
+          onPointerCancel: () => setDrag(null),
+        }
+      : { role: "img", "aria-label": kit.label };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (piece === null) return;
-    const result = ruler
-      ? checkRuler(value, uncertainty, piece)
-      : checkCaliper(value, uncertainty, piece, vernier);
+    const result = kit.check(value, uncertainty, piece);
     setCheck(result);
     if (!score.answered)
       setScore((s) => ({
@@ -210,10 +186,10 @@ export function MeasureLessonView({
 
   const modes: { value: Mode; label: string }[] = [
     { value: "guide", label: "Guia" },
-    ...(ruler ? [] : [{ value: "explore" as const, label: "Explorar" }]),
+    ...(explorer ? [{ value: "explore" as const, label: "Explorar" }] : []),
     { value: "practice", label: "Praticar" },
   ];
-  const nextMode: Mode = ruler ? "practice" : "explore";
+  const nextMode: Mode = explorer ? "explore" : "practice";
 
   return (
     <section aria-labelledby="measure-title" className="flex flex-col gap-5">
@@ -236,37 +212,19 @@ export function MeasureLessonView({
         <div className="flex min-w-0 flex-col gap-3 rounded-md bg-[#e9ece7] p-3">
           <svg
             data-testid="instrument"
-            viewBox={ruler ? RULER.viewBox : CALIPER.viewBox}
+            viewBox={kit.viewBox}
             className={`block h-auto w-full touch-none ${exploring ? "cursor-ew-resize rounded-sm focus-visible:outline-3 focus-visible:outline-brand-coral" : ""}`}
-            aria-label={
-              exploring
-                ? undefined
-                : ruler
-                  ? "Régua milimetrada com uma peça de latão encostada no zero"
-                  : `Paquímetro com nônio de ${r} mm`
-            }
             {...sliderProps}
           >
             <InstrumentDefs id={id} />
-            {ruler ? (
-              <RulerScene id={id} sceneId={sceneId} length={measured} highlights={highlights} />
-            ) : (
-              <CaliperScene
-                id={id}
-                sceneId={sceneId}
-                hundredths={toHundredths(measured)}
-                piece={showPiece}
-                highlights={highlights}
-                vernier={vernier}
-              />
-            )}
+            {kit.scene({ id, sceneId, units, piece: showPiece, highlights })}
             <rect
               data-lens=""
               {...lens}
               rx={3}
               fill="none"
               stroke="#20272c"
-              strokeWidth={ruler ? 1.5 : 2}
+              strokeWidth={1.5}
               strokeDasharray="5 4"
             />
           </svg>
@@ -293,27 +251,22 @@ export function MeasureLessonView({
                   <Slider
                     aria-labelledby={`${id}-lens`}
                     min={0}
-                    max={ruler ? RULER_MAX_MM : CALIPER.scaleMm}
+                    max={kit.lensMax}
                     step={0.1}
                     value={[practiceLens]}
                     onValueChange={([next]) => setPracticeLens(next)}
                   />
-                  <span>
-                    {ruler
-                      ? "Leve a lupa até a ponta da peça."
-                      : "Leve a lupa ao zero do nônio e depois ao traço que coincide."}
-                  </span>
+                  <span>{kit.practiceHint}</span>
                 </div>
-              ) : exploring && reading ? (
+              ) : exploring && explorer ? (
                 <>
                   <output
                     aria-live="polite"
                     className="rounded-md border border-border bg-white px-3 py-2 font-mono text-[14px] text-foreground tabular-nums"
                   >
-                    {reading.mm} mm + <b className="text-[#364cff]">{reading.line}</b> × {r} mm ={" "}
-                    <b className="text-[#364cff]">{formatMm(reading.value, 2)} mm</b>
+                    {explorer.readout(explore)}
                   </output>
-                  <span>A lupa segue o traço do nônio que coincide.</span>
+                  <span>{explorer.lensHint}</span>
                 </>
               ) : (
                 <span>A lupa acompanha cada passo do guia.</span>
@@ -398,38 +351,34 @@ export function MeasureLessonView({
             </>
           )}
 
-          {exploring && (
+          {exploring && explorer && (
             <>
-              <h2 className="text-[14px] font-semibold">Mova o cursor</h2>
-              <p className="leading-5">
-                Arraste o bico móvel ou use as setas com o paquímetro em foco. Veja o zero do nônio
-                andar sobre a escala e o traço que coincide mudar a cada {r} mm.
-              </p>
+              <h2 className="text-[14px] font-semibold">{explorer.title}</h2>
+              <p className="leading-5">{explorer.intro}</p>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setOpening(explore - openingStep)}
-                >
-                  − {r} mm
+                <Button variant="outline" size="sm" onClick={() => move(explore - explorer.step)}>
+                  − {explorer.stepLabel}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => move(explore + explorer.step)}>
+                  + {explorer.stepLabel}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setOpening(explore + openingStep)}
+                  onClick={() => move(explore - explorer.bigStep)}
                 >
-                  + {r} mm
+                  − {explorer.bigStepLabel}
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setOpening(explore - 100)}>
-                  − 1 mm
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setOpening(explore + 100)}>
-                  + 1 mm
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => move(explore + explorer.bigStep)}
+                >
+                  + {explorer.bigStepLabel}
                 </Button>
               </div>
               <p className="border-l-2 border-border pl-2 text-[12px] leading-5 text-muted-foreground">
-                Ao abrir {r} mm, o traço que coincide pula para o vizinho. Ao abrir 1 mm inteiro,
-                ele volta ao mesmo traço.
+                {explorer.why}
               </p>
               <Button size="sm" className="self-start" onClick={() => changeMode("practice")}>
                 Praticar
@@ -456,7 +405,7 @@ export function MeasureLessonView({
                     <Input
                       inputMode="decimal"
                       autoComplete="off"
-                      placeholder={ruler ? "0,0" : "0,00"}
+                      placeholder={kit.placeholder}
                       value={value}
                       onChange={(event) => setValue(event.target.value)}
                       className="font-mono"
@@ -467,7 +416,7 @@ export function MeasureLessonView({
                     <Input
                       inputMode="decimal"
                       autoComplete="off"
-                      placeholder={ruler ? "0,0" : "0,00"}
+                      placeholder={kit.placeholder}
                       value={uncertainty}
                       onChange={(event) => setUncertainty(event.target.value)}
                       className="font-mono"
@@ -485,13 +434,7 @@ export function MeasureLessonView({
               </form>
               <div aria-live="polite">
                 {check && piece !== null && (
-                  <Feedback
-                    check={check}
-                    ruler={ruler}
-                    piece={piece}
-                    value={value}
-                    vernier={vernier}
-                  />
+                  <Feedback check={check} kit={kit} piece={piece} value={value} />
                 )}
               </div>
             </>
@@ -514,23 +457,20 @@ export function MeasureLessonView({
 /**
  * Verdict on a practice answer.
  * @param props.check - Result of the checker.
- * @param props.ruler - Whether the instrument is the ruler.
- * @param props.piece - Simulated length (mm) or opening (hundredths).
+ * @param props.kit - Instrument of the lesson.
+ * @param props.piece - Simulated position, in the kit unit.
  * @param props.value - Value typed by the student.
- * @param props.vernier - Vernier of a caliper.
  */
 function Feedback({
   check,
-  ruler,
+  kit,
   piece,
   value,
-  vernier,
 }: {
   check: MeasureCheck;
-  ruler: boolean;
+  kit: InstrumentKit;
   piece: number;
   value: string;
-  vernier: Vernier;
 }) {
   if (!check.correct)
     return (
@@ -541,26 +481,11 @@ function Feedback({
         ))}
       </div>
     );
-  if (ruler)
-    return (
-      <div className="flex flex-col gap-1 rounded-md bg-[#e2f2e9] px-3 py-2 leading-5 text-success">
-        <strong>Certo: L = ({formatMm(parseDecimal(value), 1)} ± 0,5) mm</strong>
-        <p className="text-foreground">
-          A peça simulada mede {formatMm(piece, 1)} mm, dentro da sua incerteza.
-        </p>
-      </div>
-    );
-  const { mm, line, coincidentMm, value: reading } = caliperReading(piece, vernier);
-  const r = formatMm(vernier.resolution, 2);
+  const { title, detail } = kit.success(piece, value);
   return (
     <div className="flex flex-col gap-1 rounded-md bg-[#e2f2e9] px-3 py-2 leading-5 text-success">
-      <strong>
-        Certo: L = ({formatMm(reading, 2)} ± {formatMm(vernier.uncertainty, 2)}) mm
-      </strong>
-      <p className="text-foreground">
-        {mm} mm + {line} × {r} mm. O traço {line} do nônio coincide com o traço {coincidentMm} da
-        escala.
-      </p>
+      <strong>{title}</strong>
+      <p className="text-foreground">{detail}</p>
     </div>
   );
 }

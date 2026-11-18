@@ -6,7 +6,12 @@
 import { useId } from "react";
 import { ArrowRight, Clock } from "lucide-react";
 import type { Lesson, UpcomingLesson } from "./lesson";
-import { CaliperScene, InstrumentDefs, RulerScene } from "./measure/InstrumentScenes";
+import {
+  CaliperScene,
+  InstrumentDefs,
+  MicrometerScene,
+  RulerScene,
+} from "./measure/InstrumentScenes";
 import type { MeasureLesson } from "./measure/measure-lesson";
 
 /**
@@ -15,24 +20,32 @@ import type { MeasureLesson } from "./measure/measure-lesson";
  */
 function MeasureCover({ lesson }: { lesson: MeasureLesson }) {
   const id = `c${useId().replace(/[^\w-]/g, "")}`;
-  const ruler = lesson.instrument === "ruler";
+  const { instrument } = lesson;
   return (
     <svg
-      viewBox={ruler ? "20 36 420 130" : "0 40 640 260"}
+      viewBox={
+        instrument === "ruler"
+          ? "20 36 420 130"
+          : instrument === "caliper"
+            ? "0 40 640 260"
+            : "560 70 620 220"
+      }
       preserveAspectRatio="xMidYMid slice"
       aria-hidden="true"
       className="h-28 w-full border-b border-border bg-[#f0f3ee]"
     >
       <InstrumentDefs id={id} />
-      {ruler ? (
+      {instrument === "ruler" ? (
         <RulerScene id={id} length={23.4} />
-      ) : (
+      ) : instrument === "caliper" ? (
         <CaliperScene
           id={id}
           hundredths={Math.round(lesson.example * 100)}
           piece
           vernier={lesson.vernier}
         />
+      ) : (
+        <MicrometerScene id={id} micrometres={Math.round(lesson.example * 1000)} piece />
       )}
     </svg>
   );

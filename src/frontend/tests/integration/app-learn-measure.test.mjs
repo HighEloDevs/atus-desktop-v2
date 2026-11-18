@@ -57,7 +57,8 @@ it("opens the ruler and the caliper from the Aprender tab and returns", async ()
   await act(async () => root.render(createElement(App)));
   await click(nav("Aprender"));
   expect(node.textContent).toContain("Como medir");
-  expect(node.textContent).toContain("Micrômetro");
+  // Only the two experiments are still announced; the micrometer is a lesson now.
+  expect(node.querySelectorAll('li[aria-disabled="true"]')).toHaveLength(2);
   // Each card draws its own instrument.
   expect(node.querySelectorAll('[data-instrument="ruler"]')).toHaveLength(1);
 
@@ -73,6 +74,10 @@ it("opens the ruler and the caliper from the Aprender tab and returns", async ()
   await click(buttons().find((b) => b.textContent.trim() === "Aprender"));
   await click(buttons().find((b) => b.textContent.includes("Paquímetro de 0,05 mm")));
   expect(node.querySelector("h1").textContent).toBe("Paquímetro de 0,05 mm");
+  await click(buttons().find((b) => b.textContent.trim() === "Aprender"));
+  expect(node.querySelectorAll('[data-instrument="micrometer"]')).toHaveLength(1);
+  await click(buttons().find((b) => b.textContent.includes("Micrômetro")));
+  expect(node.querySelector("h1").textContent).toBe("Micrômetro");
   // Leaving through the sidebar closes the lesson, so coming back shows the tab.
   await click(nav("Início"));
   await click(nav("Aprender"));

@@ -7,8 +7,12 @@ import { describe, expect, it } from "vitest";
 import {
   VERNIER_002,
   VERNIER_005,
+  MICROMETER_MAX_UM,
   caliperReading,
   checkCaliper,
+  checkMicrometer,
+  drawMicrometerPosition,
+  micrometerReading,
   checkRuler,
   decimalPlaces,
   drawCaliperOpening,
@@ -30,6 +34,7 @@ import { measureLessons, upcomingMeasureLessons } from "../../src/features/learn
 import { rulerLesson } from "../../src/features/learn/lessons/ruler";
 import { caliperLesson } from "../../src/features/learn/lessons/caliper";
 import { caliper002Lesson } from "../../src/features/learn/lessons/caliper-002";
+import { micrometerLesson } from "../../src/features/learn/lessons/micrometer";
 
 /** Deterministic uniform source (linear congruential generator). */
 function seeded(seed) {
@@ -192,6 +197,86 @@ describe("0,02 mm caliper checker", () => {
   });
 });
 
+describe("micrometer", () => {
+  it("reads sleeve millimetres, the half millimetre and the thimble", () => {
+    expect(micrometerReading(7872)).toEqual({ mm: 7, half: true, thimble: 37.2, value: 7.872 });
+    expect(micrometerReading(5280)).toEqual({ mm: 5, half: false, thimble: 28, value: 5.28 });
+    expect(micrometerReading(MICROMETER_MAX_UM).mm).toBe(25);
+    for (const bad of [-1, 25001, 7.5]) expect(() => micrometerReading(bad)).toThrow(RangeError);
+  });
+
+  it("adds back every part of the reading at any position", () => {
+    for (let um = 0; um <= MICROMETER_MAX_UM; um += 7) {
+      const { mm, half, thimble, value } = micrometerReading(um);
+      expect(mm + (half ? 0.5 : 0) + thimble * 0.01).toBeCloseTo(value, 9);
+      expect(thimble).toBeGreaterThanOrEqual(0);
+      expect(thimble).toBeLessThan(50);
+    }
+  });
+
+  const verdict = (value, uncertainty) => checkMicrometer(value, uncertainty, 7872);
+
+  it("accepts any thousandth within the reading uncertainty", () => {
+    for (const value of ["7,872", "7,870", "7,876", "7.868"])
+      expect(verdict(value, "0,005")).toEqual({ correct: true, messages: [] });
+  });
+
+  it.each([
+    ["", "0,005", "Escreva o comprimento"],
+    ["7,87", "0,005", "Falta o dígito duvidoso"],
+    ["7,8720", "0,005", "Algarismos demais"],
+    ["7,372", "0,005", "Faltou o meio milímetro"],
+    ["6,872", "0,005", "milímetros inteiros estão errados"],
+    ["7,885", "0,005", "Quase"],
+    ["9,000", "0,005", "Leia em três partes"],
+    ["7,872", "", "Falta a incerteza"],
+    ["7,872", "0,0050", "um só algarismo significativo: 0,005 mm"],
+    ["7,872", "0,01", "0,01 mm ÷ 2 = 0,005 mm"],
+    ["7,872", "0,5", "metade da menor divisão do tambor: 0,005 mm"],
+  ])("explains %s ± %s", (value, uncertainty, message) => {
+    const result = verdict(value, uncertainty);
+    expect(result.correct).toBe(false);
+    expect(result.messages.join(" ")).toContain(message);
+  });
+
+  it("tells who adds a half millimetre that has not shown yet", () => {
+    expect(checkMicrometer("5,780", "0,005", 5280).messages[0]).toContain("Sobrou meio milímetro");
+  });
+
+  it("draws positions inside the travel, away from the previous one", () => {
+    const random = seeded(5);
+    let previous;
+    for (let i = 0; i < 500; i++) {
+      const position = drawMicrometerPosition(random, previous);
+      expect(Number.isInteger(position)).toBe(true);
+      expect(position).toBeGreaterThanOrEqual(1000);
+      expect(position).toBeLessThanOrEqual(24000);
+      if (previous !== undefined) expect(Math.abs(position - previous)).toBeGreaterThanOrEqual(300);
+      previous = position;
+    }
+    expect(drawMicrometerPosition(() => 0.5, 12500)).toBe(7500);
+    expect(drawMicrometerPosition(() => 0, 1000)).toBe(6000);
+  });
+
+  it("fills the lesson texts and points the loupe at sleeve and thimble", () => {
+    expect(templateValues("micrometer", 7.872)).toMatchObject({
+      L: "7,872",
+      M: "7",
+      B: "0,5",
+      T: "37,2",
+      t: "37",
+      t1: "38",
+    });
+    expect(templateValues("micrometer", 5.28)).toMatchObject({ B: "0", t1: "29" });
+    expect(templateValues("micrometer", 5.28).half).toContain("ainda não apareceu");
+    expect(templateValues("micrometer", 5.495).t1).toBe("0");
+    expect(focusMm("micrometer", "zero", 7.872)).toBe(0.4);
+    expect(focusMm("micrometer", "sleeve", 7.872)).toBeCloseTo(6.672, 9);
+    expect(focusMm("micrometer", "thimble", 7.872)).toBeCloseTo(8.472, 9);
+    expect(lensRect("micrometer", 1)).toEqual({ x: 712 + 24 - 48, y: 108, width: 96, height: 64 });
+  });
+});
+
 describe("practice draws", () => {
   it("draws ruler pieces in tenths, inside the scale and away from the previous one", () => {
     const random = seeded(7);
@@ -244,8 +329,13 @@ describe("practice draws", () => {
 
 describe("lesson manifests", () => {
   it("lists the ruler and the caliper, with the micrometer announced", () => {
-    expect(measureLessons.map((lesson) => lesson.id)).toEqual(["ruler", "caliper", "caliper-002"]);
-    expect(upcomingMeasureLessons.map((item) => item.title)).toEqual(["Micrômetro"]);
+    expect(measureLessons.map((lesson) => lesson.id)).toEqual([
+      "ruler",
+      "caliper",
+      "caliper-002",
+      "micrometer",
+    ]);
+    expect(upcomingMeasureLessons).toEqual([]);
   });
 
   it("fills placeholders from the reading of the example", () => {
@@ -281,7 +371,7 @@ describe("lesson manifests", () => {
     expect(toHundredths(23.65)).toBe(2365);
   });
 
-  it.each([rulerLesson, caliperLesson, caliper002Lesson])(
+  it.each([rulerLesson, caliperLesson, caliper002Lesson, micrometerLesson])(
     "leaves no placeholder in the $title texts",
     (lesson) => {
       const values = templateValues(lesson.instrument, lesson.example, lesson.vernier);
@@ -302,6 +392,8 @@ describe("lesson manifests", () => {
     expect(checkRuler("42,3", "0,5", rulerLesson.example).correct).toBe(true);
     expect(checkCaliper("23,65", "0,03", toHundredths(caliperLesson.example)).correct).toBe(true);
     expect(result(caliper002Lesson)).toBe("L = (23,64 ± 0,01) mm");
+    expect(result(micrometerLesson)).toBe("L = (7,872 ± 0,005) mm");
+    expect(checkMicrometer("7,872", "0,005", 7872).correct).toBe(true);
     expect(
       checkCaliper("23,64", "0,01", toHundredths(caliper002Lesson.example), VERNIER_002).correct,
     ).toBe(true);

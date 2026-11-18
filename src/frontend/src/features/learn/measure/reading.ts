@@ -1,7 +1,7 @@
 /**
  * @module
- * Pure logic of the Como medir track: how a ruler and a vernier caliper are read, how the
- * student's written answer is checked and how practice pieces are drawn.
+ * Pure logic of the Como medir track: how a ruler, a vernier caliper and a micrometer are
+ * read, how the student's written answer is checked and how practice pieces are drawn.
  *
  * Conventions follow the didactic laboratory of IFUSP: the reading uncertainty is half of
  * the smallest division, an estimated uncertainty is written with one significant figure,
@@ -319,5 +319,128 @@ export function drawCaliperOpening(
     if (previous === undefined || Math.abs(opening - previous) >= 300) return opening;
     // A source stuck on one value would never leave the previous piece.
     if (attempt === 50) return opening > 3000 ? opening - 1000 : opening + 1000;
+  }
+}
+
+/** Travel of the simulated micrometer, in micrometres (0 to 25 mm). */
+export const MICROMETER_MAX_UM = 25000;
+/** Divisions of the micrometer thimble; one turn moves the spindle 0,5 mm. */
+export const THIMBLE_DIVISIONS = 50;
+
+/** Reading of a micrometer. */
+export type MicrometerReading = {
+  /** Whole millimetres shown on the sleeve, above the reference line. */
+  mm: number;
+  /** Whether the half-millimetre line below the reference line is showing after `mm`. */
+  half: boolean;
+  /** Thimble position at the reference line, in divisions of 0,01 mm (0 to 50, fractional). */
+  thimble: number;
+  /** Reading in millimetres. */
+  value: number;
+};
+
+/**
+ * Reads a micrometer whose spindle is at a given position.
+ *
+ * The sleeve gives whole millimetres above the reference line and half millimetres below
+ * it; the thimble, 50 divisions per 0,5 mm turn, gives hundredths, and the fraction of a
+ * thimble division is the estimated (doubtful) thousandth.
+ * @param micrometres - Spindle position in micrometres; an integer from 0 to 25000.
+ * @returns The sleeve millimetres, the half-millimetre flag, the thimble position and the
+ * reading.
+ * @throws RangeError for a position outside the travel or not in whole micrometres.
+ * @example micrometerReading(7872) // { mm: 7, half: true, thimble: 37.2, value: 7.872 }
+ */
+export function micrometerReading(micrometres: number): MicrometerReading {
+  if (!Number.isInteger(micrometres) || micrometres < 0 || micrometres > MICROMETER_MAX_UM)
+    throw new RangeError(`Invalid micrometer position: ${micrometres}`);
+  const withinMm = micrometres % 1000;
+  return {
+    mm: Math.floor(micrometres / 1000),
+    half: withinMm >= 500,
+    thimble: (withinMm % 500) / 10,
+    value: micrometres / 1000,
+  };
+}
+
+/**
+ * Checks a micrometer reading written as value and uncertainty.
+ *
+ * The value keeps the estimated thousandth and must lie within the reading uncertainty,
+ * 0,005 mm (half of the 0,01 mm thimble division). Wrong values are matched against the
+ * usual mistakes: the half millimetre forgotten or added, the wrong whole millimetres and
+ * the thimble line read off by one.
+ * @param valueText - Length typed by the student, in millimetres.
+ * @param uncertaintyText - Uncertainty typed by the student, in millimetres.
+ * @param micrometres - Simulated spindle position, in micrometres.
+ * @returns The verdict and what to fix.
+ */
+export function checkMicrometer(
+  valueText: string,
+  uncertaintyText: string,
+  micrometres: number,
+): MeasureCheck {
+  const { mm, half, value: reading } = micrometerReading(micrometres);
+  const value = parseDecimal(valueText);
+  const uncertainty = parseDecimal(uncertaintyText);
+  if (Number.isNaN(value))
+    return { correct: false, messages: ["Escreva o comprimento em milímetros."] };
+  const messages: string[] = [];
+  const difference = value - reading;
+  const within = (target: number, tolerance: number) =>
+    Math.abs(difference - target) <= tolerance + 1e-9;
+  if (within(0, 0.005)) {
+    if (decimalPlaces(valueText) < 3)
+      messages.push(
+        "Falta o dígito duvidoso. Estime em que fração da divisão do tambor a linha de referência cai: com ± 0,005 mm, o valor tem três casas decimais.",
+      );
+    else if (decimalPlaces(valueText) > 3)
+      messages.push(
+        "Algarismos demais no valor. Com incerteza de 0,005 mm, ele termina na terceira casa decimal.",
+      );
+  } else if (half && within(-0.5, 0.01))
+    messages.push(
+      `Faltou o meio milímetro. Embaixo da linha de referência, o traço de meio milímetro depois do ${mm} já apareceu: some 0,5 mm.`,
+    );
+  else if (!half && within(0.5, 0.01))
+    messages.push(
+      `Sobrou meio milímetro. O traço de baixo depois do ${mm} ainda está escondido pelo tambor: não some 0,5 mm.`,
+    );
+  else if (within(1, 0.01) || within(-1, 0.01))
+    messages.push(
+      `Os milímetros inteiros estão errados. A borda do tambor passou do traço ${mm} da escala de cima.`,
+    );
+  else if (within(0, 0.02))
+    messages.push(
+      "Quase. Use a lupa: confira qual traço do tambor está logo abaixo da linha de referência.",
+    );
+  else
+    messages.push(
+      "Leia em três partes: os milímetros de cima da bainha, o meio milímetro de baixo e o tambor na linha de referência.",
+    );
+  if (Number.isNaN(uncertainty)) messages.push(MISSING_UNCERTAINTY);
+  else if (near(uncertainty, 0.005) && significantFigures(uncertaintyText) > 1)
+    messages.push("A incerteza leva um só algarismo significativo: 0,005 mm.");
+  else if (!near(uncertainty, 0.005))
+    messages.push(
+      near(uncertainty, 0.01)
+        ? "A incerteza de leitura é metade da menor divisão do tambor: 0,01 mm ÷ 2 = 0,005 mm."
+        : "A incerteza de leitura do micrômetro é metade da menor divisão do tambor: 0,005 mm.",
+    );
+  return { correct: messages.length === 0, messages };
+}
+
+/**
+ * Draws the spindle position of a new micrometer piece, away from the previous one.
+ * @param random - Uniform source in [0, 1).
+ * @param previous - Previous position, in micrometres.
+ * @returns A position from 1 to 24 mm, in micrometres.
+ */
+export function drawMicrometerPosition(random: () => number, previous?: number): number {
+  for (let attempt = 0; ; attempt++) {
+    const position = Math.round(1000 + random() * 23000);
+    if (previous === undefined || Math.abs(position - previous) >= 300) return position;
+    // A source stuck on one value would never leave the previous piece.
+    if (attempt === 50) return position > 12000 ? position - 5000 : position + 5000;
   }
 }

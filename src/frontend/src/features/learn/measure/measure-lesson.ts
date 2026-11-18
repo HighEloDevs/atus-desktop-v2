@@ -8,10 +8,10 @@
  * the drawing.
  */
 
-import { caliperReading, formatMm, VERNIER_005, type Vernier } from "./reading";
+import { caliperReading, formatMm, micrometerReading, VERNIER_005, type Vernier } from "./reading";
 
 /** Simulated instrument of a lesson. */
-export type Instrument = "ruler" | "caliper";
+export type Instrument = "ruler" | "caliper" | "micrometer";
 
 /**
  * Point of the instrument a step looks at; the loupe centres on it.
@@ -20,12 +20,24 @@ export type Instrument = "ruler" | "caliper";
  * - `end`: the end of the piece on the ruler.
  * - `vernierZero`: the vernier zero over the main scale.
  * - `coincident`: the vernier line that meets a main-scale line.
+ * - `sleeve`: the micrometer sleeve just before the thimble edge.
+ * - `thimble`: the micrometer thimble at the reference line.
  */
-export type MeasureFocus = "zero" | "division" | "end" | "vernierZero" | "coincident";
+export type MeasureFocus =
+  "zero" | "division" | "end" | "vernierZero" | "coincident" | "sleeve" | "thimble";
 
 /** Mark drawn over the instrument, in the analysis colour. */
 export type MeasureHighlight =
-  "zero" | "division" | "end" | "endInterval" | "uncertainty" | "vernierZero" | "coincident";
+  | "zero"
+  | "division"
+  | "end"
+  | "endInterval"
+  | "uncertainty"
+  | "vernierZero"
+  | "coincident"
+  | "sleeveMm"
+  | "half"
+  | "thimbleLine";
 
 /** One guided step of an instrument lesson. */
 export type MeasureStep = {
@@ -86,6 +98,9 @@ export const toHundredths = (mm: number) => Math.round(mm * 100);
  * Ruler: `{L}` length with one decimal, `{a}` and `{b}` the millimetres around the end.
  * Caliper: `{L}` reading with two decimals, `{M}` whole millimetres, `{n}` coinciding line,
  * `{C}` main-scale line it meets, `{labels}` where that line sits among the vernier numbers.
+ * Micrometer: `{L}` reading with three decimals, `{M}` sleeve millimetres, `{B}` the half
+ * millimetre added (`0,5` or `0`), `{half}` a sentence about the half-millimetre line, `{T}`
+ * the thimble position with the estimated tenth, `{t}` and `{t1}` the lines around it.
  * @param instrument - Instrument of the lesson.
  * @param value - Length or reading, in millimetres.
  * @param vernier - Vernier of a caliper; the 0,05 mm one by default.
@@ -99,6 +114,21 @@ export function templateValues(
   if (instrument === "ruler") {
     const whole = Math.floor(value);
     return { L: formatMm(value, 1), a: String(whole), b: String(whole + 1) };
+  }
+  if (instrument === "micrometer") {
+    const { mm, half, thimble } = micrometerReading(Math.round(value * 1000));
+    const below = Math.floor(thimble);
+    return {
+      L: formatMm(value, 3),
+      M: String(mm),
+      B: half ? "0,5" : "0",
+      half: half
+        ? "O traço de meio milímetro, embaixo da linha, também já apareceu: some <b>0,5 mm</b>."
+        : "O traço de meio milímetro, embaixo da linha, ainda não apareceu: não some nada.",
+      T: formatMm(thimble, 1),
+      t: String(below),
+      t1: String((below + 1) % 50),
+    };
   }
   const { mm, line, coincidentMm } = caliperReading(toHundredths(value), vernier);
   const every = vernier.labelEvery;
@@ -136,9 +166,12 @@ export function focusMm(
   value: number,
   vernier = VERNIER_005,
 ): number {
-  if (focus === "zero") return instrument === "ruler" ? 0.5 : 0;
+  if (focus === "zero") return instrument === "ruler" ? 0.5 : instrument === "micrometer" ? 0.4 : 0;
   if (focus === "division") return 10.5;
   if (focus === "end") return value;
+  // The thimble edge sits at the reading; the sleeve lies left of it, the thimble right.
+  if (focus === "sleeve") return value - 1.2;
+  if (focus === "thimble") return value + 0.6;
   const reading = caliperReading(toHundredths(value), vernier);
   // The vernier zero sits a little right of centre, so the whole millimetre passed shows.
   if (focus === "vernierZero") return reading.value - 1;

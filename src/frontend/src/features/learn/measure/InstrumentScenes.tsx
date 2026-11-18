@@ -8,11 +8,13 @@
  * through `<use>`.
  */
 
-import { CALIPER, caliperX, RULER, rulerX } from "./geometry";
+import { CALIPER, caliperX, MICROMETER, micrometerX, RULER, rulerX } from "./geometry";
 import type { MeasureHighlight } from "./measure-lesson";
 import {
   caliperReading,
   formatMm,
+  micrometerReading,
+  THIMBLE_DIVISIONS,
   RULER_MAX_MM,
   VERNIER_005,
   vernierDivision,
@@ -353,6 +355,216 @@ export function CaliperScene({
       )}
       {highlights.includes("coincident") && (
         <Mark x={caliperX(coincidentMm)} y1={base - 20} y2={base + 18} width={2.4} />
+      )}
+    </g>
+  );
+}
+
+/**
+ * Outside micrometer of 0 to 25 mm and 0,01 mm, optionally holding a brass piece.
+ *
+ * The thimble is a cylinder seen from the side: each of its 50 lines sits at
+ * `axis − R sin θ`, so the lines crowd towards the edges and the ones behind are hidden.
+ * @param props.id - Prefix of {@link InstrumentDefs}.
+ * @param props.sceneId - Id of the group, for the loupe.
+ * @param props.micrometres - Spindle position in micrometres.
+ * @param props.piece - Draws the piece between anvil and spindle.
+ * @param props.highlights - Marks to draw.
+ */
+export function MicrometerScene({
+  id,
+  sceneId,
+  micrometres,
+  piece = false,
+  highlights = [],
+}: {
+  id: string;
+  sceneId?: string;
+  micrometres: number;
+  piece?: boolean;
+  highlights?: MeasureHighlight[];
+}) {
+  const { axis, scale, anvil, x0, radius } = MICROMETER;
+  const { mm, half, thimble, value } = micrometerReading(micrometres);
+  const xt = micrometerX(value);
+  const face = anvil + value * scale;
+  // The sleeve runs under the thimble; only the part left of the thimble edge shows.
+  const sleeveEnd = xt + 4;
+  const sleeve = [];
+  for (let m = 0; micrometerX(m) <= xt; m++) {
+    const x = micrometerX(m);
+    sleeve.push(
+      <line
+        key={m}
+        x1={x}
+        y1={axis}
+        x2={x}
+        y2={axis - (m % 5 === 0 ? 14 : 10)}
+        stroke={ENGRAVED}
+        strokeWidth={0.9}
+      />,
+    );
+    if (m % 5 === 0)
+      sleeve.push(
+        <text
+          key={`n${m}`}
+          x={x}
+          y={axis - 17}
+          textAnchor="middle"
+          fontFamily={MONO}
+          fontSize={9}
+          fill={ENGRAVED}
+        >
+          {m}
+        </text>,
+      );
+    if (micrometerX(m + 0.5) <= xt)
+      sleeve.push(
+        <line
+          key={`h${m}`}
+          x1={micrometerX(m + 0.5)}
+          y1={axis}
+          x2={micrometerX(m + 0.5)}
+          y2={axis + 9}
+          stroke={ENGRAVED}
+          strokeWidth={0.9}
+        />,
+      );
+  }
+  const drum = [];
+  for (let k = 0; k < THIMBLE_DIVISIONS; k++) {
+    let turn = (k - thimble) / THIMBLE_DIVISIONS;
+    turn -= Math.round(turn);
+    const angle = 2 * Math.PI * turn;
+    const facing = Math.cos(angle);
+    if (facing <= 0.08) continue;
+    const y = axis - radius * Math.sin(angle);
+    drum.push(
+      <line
+        key={k}
+        x1={xt}
+        y1={y}
+        x2={xt + (k % 5 === 0 ? 18 : 11)}
+        y2={y}
+        stroke={ENGRAVED}
+        strokeWidth={0.3 + 0.6 * facing}
+      />,
+    );
+    if (k % 5 === 0 && facing > 0.45)
+      drum.push(
+        <text
+          key={`n${k}`}
+          x={xt + 22}
+          y={y + 3 * facing}
+          fontFamily={MONO}
+          fontSize={8.5 * facing}
+          fill={ENGRAVED}
+        >
+          {k}
+        </text>,
+      );
+  }
+  const knurl = [];
+  for (let x = xt + 160; x < xt + 300; x += 4)
+    if (x < xt + 246 || x > xt + 254)
+      knurl.push(
+        <line
+          key={x}
+          x1={x}
+          y1={axis - (x > xt + 250 ? 22 : radius) + 2}
+          x2={x}
+          y2={axis + (x > xt + 250 ? 22 : radius) - 2}
+          stroke="#6b7278"
+          strokeOpacity={0.45}
+          strokeWidth={1}
+        />,
+      );
+  return (
+    <g id={sceneId} data-instrument="micrometer">
+      <path
+        d="M20 112 H60 V168 Q60 206 98 210 H602 Q640 206 640 168 V112 H700 V170 Q700 270 600 272 H100 Q20 270 20 170 Z"
+        fill="#2b3237"
+        stroke="#161b1f"
+      />
+      <text x={330} y={248} textAnchor="middle" fontSize={11} fill="#e9ece7">
+        0–25 mm · 0,01 mm
+      </text>
+      <rect
+        x={34}
+        y={124}
+        width={26}
+        height={32}
+        fill={`url(#${id}-steel-dark)`}
+        stroke="#7d848a"
+      />
+      {piece && (
+        <rect
+          data-piece=""
+          x={anvil}
+          y={axis - 34}
+          width={value * scale}
+          height={68}
+          fill={`url(#${id}-brass)`}
+          stroke="#7a5a1c"
+          strokeWidth={0.8}
+        />
+      )}
+      <rect
+        x={face}
+        y={axis - 10}
+        width={700 - face}
+        height={20}
+        fill={`url(#${id}-steel)`}
+        stroke="#8d9397"
+      />
+      <rect
+        x={700}
+        y={axis - 22}
+        width={sleeveEnd - 700}
+        height={44}
+        fill={`url(#${id}-steel)`}
+        stroke="#8d9397"
+      />
+      <rect x={700} y={axis - 22} width={sleeveEnd - 700} height={44} fill={`url(#${id}-brush)`} />
+      <line x1={x0 - 8} y1={axis} x2={sleeveEnd} y2={axis} stroke={ENGRAVED} strokeWidth={1} />
+      {sleeve}
+      <rect
+        x={xt}
+        y={axis - radius}
+        width={250}
+        height={radius * 2}
+        rx={4}
+        fill={`url(#${id}-steel)`}
+        stroke="#8d9397"
+      />
+      <rect
+        x={xt + 250}
+        y={axis - 22}
+        width={50}
+        height={44}
+        rx={4}
+        fill={`url(#${id}-steel-dark)`}
+        stroke="#7d848a"
+      />
+      {knurl}
+      {drum}
+      {highlights.includes("zero") && <Mark x={x0} y1={axis - 22} y2={axis + 22} />}
+      {highlights.includes("sleeveMm") && (
+        <Band x={micrometerX(mm) - 3} y={axis - 16} width={xt - micrometerX(mm) + 3} height={16} />
+      )}
+      {highlights.includes("half") && half && (
+        <Mark x={micrometerX(mm + 0.5)} y1={axis} y2={axis + 13} width={2.4} />
+      )}
+      {highlights.includes("thimbleLine") && (
+        <line
+          data-highlight=""
+          x1={xt - 16}
+          y1={axis}
+          x2={xt + 36}
+          y2={axis}
+          stroke={COBALT}
+          strokeWidth={2}
+        />
       )}
     </g>
   );
