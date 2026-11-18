@@ -122,9 +122,7 @@ async function copyFromSheet() {
   const event = new Event("copy", { bubbles: true, cancelable: true });
   event.clipboardData = { setData: vi.fn() };
   await act(async () => document.dispatchEvent(event));
-  expect(canContinue()).toBe(true);
-  expect(step().popover.nextBtnText).toBe("Voltar ao ATUS");
-  await next();
+  // Copying moves on by itself to the analysis screen.
 }
 
 async function pasteAndFit() {
@@ -133,32 +131,34 @@ async function pasteAndFit() {
   readText.mockResolvedValue(rangeToTsv(columns, rows, { r0: 0, c0: 0, r1: 17, c1: 2 }));
   await key({ code: "KeyB", ctrlKey: true });
   expect(node.querySelector('[data-testid="chart"]').textContent).toBe("17:0");
-  expect(canContinue()).toBe(true);
-  await next();
 
-  expect(target()).toBe('[data-tour="analysis-panel"]');
+  // Writing the model and running the fit are two steps; each moves on by itself.
+  expect(target()).toBe('[data-tour="fit-equation"]');
+  expect(document.querySelector(target()).querySelector("input")).not.toBeNull();
   const input = node.querySelector('input[aria-label^="Função de ajuste"]');
   const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
-  await act(async () => {
-    set.call(input, "a*x + b");
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  const type = (text) =>
+    act(async () => {
+      set.call(input, text);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  await type("a*x + b");
+  expect(target()).toBe('[data-tour="fit-equation"]');
   await click(button("Executar ajustes Ctrl ↵"));
   expect(notify.error).toHaveBeenCalledWith(
     expect.stringContaining("Falha no ajuste"),
     expect.objectContaining({ description: "Nesta lição, use o modelo v0 + a*x." }),
   );
+  expect(target()).toBe('[data-tour="fit-equation"]');
+  // Any form of the same model counts.
+  await type("a*x + v0");
+  expect(target()).toBe('[data-tour="fit-run"]');
+  expect(document.querySelector(target()).textContent).toContain("Executar ajustes");
   expect(canContinue()).toBe(false);
-  await act(async () => {
-    set.call(input, "a*x + v0");
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
   await key({ code: "Enter", ctrlKey: true });
   expect(node.querySelector('[data-testid="chart"]').textContent).toBe("17:81");
   expect(node.textContent).toContain("9,78 ± 0,03");
   expect(node.textContent).toContain("Lição · Queda livre com faiscador");
-  expect(canContinue()).toBe(true);
-  await next();
 }
 
 it("runs the free-fall lesson from the Aprender tab to the end", async () => {
@@ -166,37 +166,45 @@ it("runs the free-fall lesson from the Aprender tab to the end", async () => {
   await copyFromSheet();
   await pasteAndFit();
 
+  // Ver detalhes sits on the result card: clicking it completes the step.
   expect(target()).toBe('[data-tour="analysis-results"]');
-  expect(canContinue()).toBe(true);
-  await next();
-  expect(target()).toBe('[data-tour="analysis-chart"]');
-  await next();
-
-  expect(target()).toBe('[data-tour="fit-details"]');
   expect(canContinue()).toBe(false);
-  // Inside the modal dialog the balloon has no button: the steps move on by themselves.
   await click(document.querySelector('[data-tour="fit-details"]'));
   expect(target()).toBe('[data-tour="copy-parameters"]');
   expect(canContinue()).toBe(false);
   // Closing the dialog before copying goes back to opening it.
   await key({ key: "Escape" }, document.querySelector('[role="dialog"]'));
-  expect(target()).toBe('[data-tour="fit-details"]');
-  expect(canContinue()).toBe(false);
+  expect(target()).toBe('[data-tour="analysis-results"]');
   await click(document.querySelector('[data-tour="fit-details"]'));
+  expect(target()).toBe('[data-tour="copy-parameters"]');
+  // The balloon sits outside the dialog: using it must not close the report.
+  const balloon = document.createElement("div");
+  balloon.className = "driver-popover";
+  document.body.append(balloon);
+  await act(async () => {
+    balloon.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    balloon.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+  });
+  balloon.remove();
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   expect(target()).toBe('[data-tour="copy-parameters"]');
 
   await click(document.querySelector('[data-tour="copy-parameters"]'));
   expect(writeText).toHaveBeenCalledWith(expect.stringContaining("9.783"));
-  expect(target()).toBe('[data-tour="chart-export"]');
+  expect(target()).toBe('[data-tour="fit-details-dialog"]');
   expect(canContinue()).toBe(false);
-  // The dialog is open: Esc closes it and does not pause the lesson.
+  // The dialog is open: Esc closes it, which completes the step, and does not pause.
   await key({ key: "Escape" }, document.querySelector('[role="dialog"]'));
   expect(document.querySelector('[role="dialog"]')).toBeNull();
-  expect(node.textContent).not.toContain("Pausada");
-  await click(button("Copiar imagem"));
-  expect(exporter.copyImage).toHaveBeenCalledOnce();
+  expect(node.textContent).not.toContain("Lição pausada");
+
+  // A read-only step continues with Próximo.
+  expect(target()).toBe('[data-tour="analysis-chart"]');
   expect(canContinue()).toBe(true);
   await next();
+  expect(target()).toBe('[data-tour="chart-export"]');
+  await click(button("Copiar imagem"));
+  expect(exporter.copyImage).toHaveBeenCalledOnce();
 
   expect(step().popover.title).toBe("Lição concluída");
   expect(step().popover.nextBtnText).toBe("Concluir");
@@ -229,12 +237,27 @@ it("keeps the script rigid and pauses with Esc", async () => {
   await key({ key: "Escape" });
   balloon.remove();
   expect(destroyed).toHaveBeenCalled();
-  expect(node.textContent).toContain("Pausada");
+  expect(node.textContent).toContain("Lição pausada");
   await click(button("Continuar"));
   expect(target()).toBe('[data-tour="analysis-canvas"]');
+  // The controls ride on the balloon while the lesson runs, never over the highlight.
+  expect(node.querySelector(".lesson-controls")).toBeNull();
+  const footer = document.createElement("div");
+  const balloonButton = () => document.createElement("button");
+  await act(async () =>
+    step().popover.onPopoverRender({
+      footer,
+      previousButton: balloonButton(),
+      nextButton: balloonButton(),
+    }),
+  );
+  const [pause, exit] = footer.querySelectorAll("button");
+  await click(pause);
+  expect(node.textContent).toContain("Lição pausada");
+  await click(button("Continuar"));
 
   // Leaving never depends on pausing first.
-  await click(button("Sair da lição"));
+  await click(exit);
   expect(node.querySelector("h1").textContent).toBe("Aprender");
 });
 

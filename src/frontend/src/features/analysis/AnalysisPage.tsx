@@ -504,6 +504,7 @@ export function AnalysisPage({
   }
 
   function updateFit(id: string, changes: Partial<FitConfig>) {
+    if (changes.equation !== undefined) reportLessonEvent("equation.changed", changes.equation);
     setDatasets((items) =>
       items.map((item) =>
         item.id === id
@@ -920,6 +921,7 @@ export function AnalysisPage({
           <div className="border-t border-[#d8ded7] p-4">
             <button
               type="button"
+              data-tour="fit-run"
               disabled={!datasets.some((item) => item.equation.trim())}
               onClick={() => void runFits()}
               className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-45"

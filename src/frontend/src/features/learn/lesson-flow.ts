@@ -2,8 +2,9 @@
  * @module
  * Pure state machine of a running lesson.
  *
- * The script is rigid: the student moves forward only after the current step is done,
- * cannot jump ahead, may go back to steps already reached, and Esc pauses the lesson.
+ * The script is rigid: a step that waits for an event moves on by itself as soon as the event
+ * happens and a read-only step moves on with **Próximo**. The student cannot jump ahead, may
+ * go back to steps already reached, and Esc pauses the lesson.
  */
 
 import type { Lesson, LessonEvent, LessonStep } from "./lesson";
@@ -71,12 +72,34 @@ export function canGoTo(lesson: Lesson, state: LessonState, index: number): bool
 }
 
 /**
+ * Finds the step an event completes.
+ * @param lesson - Lesson being run.
+ * @param state - Current progress.
+ * @param event - Event reported by the app.
+ * @returns Index of the first step, from the current one on, that waits for `event` and is
+ *   reachable without passing a step that still waits for something else or a change of
+ *   screen; -1 when there is none.
+ */
+export function findWaitingStep(lesson: Lesson, state: LessonState, event: LessonEvent): number {
+  const view = lesson.steps[state.index].view;
+  for (let i = state.index; i < lesson.steps.length; i++) {
+    const step = lesson.steps[i];
+    if (step.view !== view) return -1;
+    if (!step.waitFor || state.completed.includes(step.id)) continue;
+    return step.waitFor === event ? i : -1;
+  }
+  return -1;
+}
+
+/**
  * Applies an action to the lesson progress.
  *
- * - `event` completes the current step when it is the event that step waits for, and
- *   moves on at once for a step with `advance: "auto"`; events for other steps are ignored,
- *   so acting ahead of the script does not count. The step's `revertOn` event, before the
- *   step is done, returns to the previous step and undoes it.
+ * - `event` completes the step that waits for it and moves on at once: the current step, or
+ *   a later step on the same screen when only read-only steps (without `waitFor`) sit in
+ *   between, so acting a little ahead of the balloon still counts. Events for a step behind
+ *   another step that still waits are ignored. On the last step the event only completes it.
+ *   The current step's `revertOn` event, before the step is done, returns to the previous
+ *   step and undoes it.
  * - `next` moves forward only when the current step is done; on the last step it finishes
  *   the lesson.
  * - `go` moves to a step already reached on the same screen (see {@link canGoTo}).
@@ -113,13 +136,11 @@ export function lessonReducer(
           completed: state.completed.filter((id) => id !== previous),
         };
       }
-      if (step.waitFor !== action.event || state.completed.includes(step.id)) return state;
-      const completed = [...state.completed, step.id];
-      if (step.advance === "auto" && state.index < lesson.steps.length - 1) {
-        const index = state.index + 1;
-        return { ...state, completed, index, reached: Math.max(state.reached, index) };
-      }
-      return { ...state, completed };
+      const target = findWaitingStep(lesson, state, action.event);
+      if (target === -1) return state;
+      const completed = [...state.completed, lesson.steps[target].id];
+      const index = Math.min(target + 1, lesson.steps.length - 1);
+      return { ...state, completed, index, reached: Math.max(state.reached, index) };
     }
     case "next": {
       if (!isStepDone(step, state) || state.finished) return state;

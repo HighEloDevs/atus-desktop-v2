@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canGoTo,
+  findWaitingStep,
   initialLessonState,
   isStepDone,
   lessonReducer,
@@ -19,15 +20,9 @@ const lesson = {
 };
 const dialogLesson = {
   steps: [
-    { id: "open", view: "analysis", waitFor: "details.opened", advance: "auto" },
-    {
-      id: "copy",
-      view: "analysis",
-      waitFor: "params.copied",
-      advance: "auto",
-      revertOn: "details.closed",
-    },
-    { id: "export", view: "analysis", waitFor: "chart.exported", advance: "auto" },
+    { id: "open", view: "analysis", waitFor: "details.opened" },
+    { id: "copy", view: "analysis", waitFor: "params.copied", revertOn: "details.closed" },
+    { id: "export", view: "analysis", waitFor: "chart.exported" },
   ],
 };
 const runDialog = (actions, state = initialLessonState) =>
@@ -42,19 +37,34 @@ describe("lessonReducer", () => {
     expect(isStepDone(lesson.steps[1], state)).toBe(false);
   });
 
-  it("completes the current step only with the event it waits for", () => {
+  it("moves on by itself as soon as the step's event happens", () => {
     let state = run([{ type: "next" }, { type: "event", event: "dataset.created" }]);
-    expect(state.completed).toEqual([]);
+    expect(state).toMatchObject({ index: 1, completed: [] });
     state = run([{ type: "event", event: "sheet.copied" }], state);
-    expect(state.completed).toEqual(["copy"]);
+    expect(state).toMatchObject({ index: 2, reached: 2, completed: ["copy"] });
     expect(run([{ type: "event", event: "sheet.copied" }], state)).toBe(state);
-    state = run([{ type: "next" }], state);
-    expect(state).toMatchObject({ index: 2, reached: 2 });
   });
 
-  it("ignores an event that arrives before its step", () => {
+  it("ignores an event whose step sits behind another step that still waits", () => {
     const state = run([{ type: "next" }, { type: "event", event: "fit.succeeded" }]);
-    expect(state.completed).toEqual([]);
+    expect(state).toMatchObject({ index: 1, completed: [] });
+  });
+
+  it("completes a later step when only read-only steps sit in between", () => {
+    const reading = run([
+      { type: "next" },
+      { type: "event", event: "sheet.copied" },
+      { type: "event", event: "dataset.created" },
+    ]);
+    expect(reading.index).toBe(3);
+    expect(findWaitingStep(lesson, reading, "fit.succeeded")).toBe(4);
+    const fitted = run([{ type: "event", event: "fit.succeeded" }], reading);
+    expect(fitted).toMatchObject({ index: 4, reached: 4 });
+    expect(fitted.completed).toContain("fit");
+  });
+
+  it("never completes a step on another screen", () => {
+    expect(findWaitingStep(lesson, initialLessonState, "sheet.copied")).toBe(-1);
   });
 
   it("finishes after the last step instead of moving past it", () => {
@@ -68,9 +78,7 @@ describe("lessonReducer", () => {
     const state = run([
       { type: "next" },
       { type: "event", event: "sheet.copied" },
-      { type: "next" },
       { type: "event", event: "dataset.created" },
-      { type: "next" },
     ]);
     expect(state.index).toBe(3);
     expect(canGoTo(lesson, state, 2)).toBe(true);

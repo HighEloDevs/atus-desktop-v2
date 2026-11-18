@@ -314,6 +314,35 @@ a:focus-visible {
   font-family: ui-monospace, Menlo, monospace;
   font-size: 11px;
 }
+.lesson-popover .driver-popover-footer {
+  align-items: center;
+}
+.lesson-popover .lesson-balloon-controls {
+  display: flex;
+  gap: 2px;
+  order: -1;
+  margin-right: auto;
+  margin-left: -6px;
+}
+.lesson-popover .lesson-balloon-controls button {
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  padding: 5px 6px;
+  font: inherit;
+  font-size: 11.5px;
+  color: #66716e;
+  text-shadow: none;
+  cursor: pointer;
+}
+.lesson-popover .lesson-balloon-controls button:hover {
+  background: #eff2ed;
+  color: #20272c;
+}
+.lesson-popover .lesson-balloon-controls button:focus-visible {
+  outline: 3px solid #f25a3c;
+  outline-offset: 1px;
+}
 .lesson-popover .driver-popover-next-btn {
   border: 0;
   border-radius: 6px;
@@ -341,6 +370,10 @@ html.lesson-active .lesson-controls {
 /* driver.js turns off pointer events on everything but the highlight (`.driver-active *`);
    the lesson controls and the toasts must stay clickable so the student can always pause,
    leave or retry. */
+/* Set for one synchronous lookup by `scrollUnderOverlay` (lesson-tour.ts), never painted. */
+html.lesson-probe * {
+  pointer-events: auto !important;
+}
 html.lesson-active [data-sonner-toaster],
 html.lesson-active [data-sonner-toaster] *,
 html.lesson-active .lesson-controls,

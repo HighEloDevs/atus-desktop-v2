@@ -46,7 +46,7 @@ export function FitControls({
         <p className={description}>
           Define a função ajustada aos pontos deste conjunto. Deixe vazio para não ajustar.
         </p>
-        <div className="mt-2">
+        <div className="mt-2" data-tour="fit-equation">
           <EquationField
             id={equationId}
             label={`Função de ajuste de ${name}`}

@@ -211,7 +211,7 @@ describe("free-fall guide page", () => {
     const { C } = linearFit(rows, LINE);
     const correlation = comma(C[0][1] / Math.sqrt(C[0][0] * C[1][1]), 2).replace("-", "−");
     expect(text).toContain(`(${correlation})`);
-    expect(step("details").body).toContain(correlation);
+    expect(step("copy-params").body).toContain(correlation);
   });
 
   it("quotes the scale errors of the ruler and the mains", () => {
@@ -325,6 +325,13 @@ describe("free-fall fit fixture", () => {
     expect(step("interpret").body).toContain(`χ²/NGL = ${comma(fit.chiSquared / ngl, 2)}`);
     expect(step("interpret").body).toContain(`NGL = ${ngl} (1 ± ${comma(Math.sqrt(2 / ngl), 2)})`);
     expect(step("copy").body).toContain(`<b>C${gravityLesson.dataset.rows.length + 1}</b>`);
+  });
+
+  it("asks for the lesson's model, so typing what the step shows completes it", () => {
+    const typed = step("equation").body.match(/<code>(.+?)<\/code>/)[1];
+    expect(isEquivalentModel(typed, fit.equation)).toBe(true);
+    expect(step("equation").waitFor).toBe("equation.matched");
+    expect(step("fit")).toMatchObject({ target: "fit-run", waitFor: "fit.succeeded" });
   });
 
   it("states the reading-uncertainty rule of the lessons", () => {

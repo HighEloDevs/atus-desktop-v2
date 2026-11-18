@@ -7,10 +7,17 @@
  * experiment needs a new manifest, not new interface code.
  */
 
-/** Events the app reports to a running lesson; a step waits for one of them. */
+/**
+ * Events the app reports to a running lesson; a step waits for one of them.
+ *
+ * `equation.changed` carries the typed text as detail; the lesson runner turns it into
+ * `equation.matched` when the text is the lesson's model, and steps wait for the latter.
+ */
 export type LessonEvent =
   | "sheet.copied"
   | "dataset.created"
+  | "equation.changed"
+  | "equation.matched"
   | "fit.succeeded"
   | "details.opened"
   | "details.closed"
@@ -24,9 +31,9 @@ export type LessonView = "intro" | "sheet" | "analysis";
  * One step of a lesson.
  *
  * `target` is the value of a `data-tour` attribute on a real component; the runner
- * highlights it and blocks the rest of the screen. A step with `waitFor` only lets the
- * student continue after the app reports that event; a step without it is read and
- * continued with **Próximo**.
+ * highlights it and blocks the rest of the screen. A step with `waitFor` moves on by itself
+ * as soon as the app reports that event; a step without it is read and continued with
+ * **Próximo**.
  */
 export type LessonStep = {
   /** Stable identifier, used to save progress. */
@@ -44,10 +51,10 @@ export type LessonStep = {
   /** Event that completes the step. */
   waitFor?: LessonEvent;
   /**
-   * Moves on as soon as `waitFor` happens, without **Próximo**. Used when the event leaves a
-   * modal dialog open: the balloon's button would sit outside it and closing the dialog.
+   * `data-tour` value of the control that gets the keyboard focus while the step waits, when
+   * it is not the first control of the highlight.
    */
-  advance?: "auto";
+  focus?: string;
   /** Event that undoes the previous step, as closing a dialog the step needs open. */
   revertOn?: LessonEvent;
 };

@@ -4,14 +4,14 @@
  * the guided overlay on top.
  */
 
-import { useCallback, useEffect, useMemo, useReducer } from "react";
-import { Pause, Play, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import { Play, X } from "lucide-react";
 import { AnalysisPage } from "@/features/analysis/AnalysisPage";
 import { Button } from "@/components/ui/button";
 import { notify } from "@/lib/notify";
 import type { Lesson, LessonEvent } from "./lesson";
 import { LessonEventContext } from "./lesson-events";
-import { createLessonFitService } from "./lesson-fit-service";
+import { createLessonFitService, isEquivalentModel } from "./lesson-fit-service";
 import { initialLessonState, isStepDone, lessonReducer, withModifier } from "./lesson-flow";
 import { createLessonTour } from "./lesson-tour";
 import { LessonGuide } from "./LessonGuide";
@@ -42,12 +42,27 @@ export function LessonWorkspace({ lesson, onExit }: { lesson: Lesson; onExit: ()
   const last = state.index === lesson.steps.length - 1;
   const modifier = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl";
   const fitService = useMemo(() => createLessonFitService(lesson), [lesson]);
-  const report = useCallback((event: LessonEvent) => dispatch({ type: "event", event }), []);
+  const report = useCallback(
+    (event: LessonEvent, detail?: string) => {
+      // The app reports every edit of the equation; the step waits for the lesson's model.
+      if (event === "equation.changed") {
+        if (isEquivalentModel(detail ?? "", lesson.fit.equation))
+          dispatch({ type: "event", event: "equation.matched" });
+        return;
+      }
+      dispatch({ type: "event", event });
+    },
+    [lesson],
+  );
 
+  // The balloon is created once, so its exit button only raises a flag the effect below reads.
+  const [leaving, setLeaving] = useState(false);
   const tour = useMemo(
     () =>
       createLessonTour({
         onNext: () => dispatch({ type: "next" }),
+        onPause: () => dispatch({ type: "pause" }),
+        onExit: () => setLeaving(true),
         onBlocked: () =>
           notify.info("Conclua este passo para continuar", {
             description: "Esc pausa a lição e libera o ATUS.",
@@ -58,8 +73,8 @@ export function LessonWorkspace({ lesson, onExit }: { lesson: Lesson; onExit: ()
   );
 
   useEffect(() => {
-    if (state.finished) onExit();
-  }, [state.finished, onExit]);
+    if (state.finished || leaving) onExit();
+  }, [state.finished, leaving, onExit]);
 
   useEffect(() => {
     document.documentElement.classList.add(LESSON_ACTIVE_CLASS);
@@ -81,7 +96,8 @@ export function LessonWorkspace({ lesson, onExit }: { lesson: Lesson; onExit: ()
       why: step.why && withModifier(step.why, modifier),
       progress: `${state.index} de ${lesson.steps.length - 1}`,
       done,
-      nextLabel: last ? "Concluir" : step.view === "sheet" ? "Voltar ao ATUS" : "Próximo",
+      nextLabel: last ? "Concluir" : "Próximo",
+      focus: step.focus,
     });
   }, [tour, step, state.paused, state.index, done, last, modifier, lesson.steps.length]);
 
@@ -123,24 +139,18 @@ export function LessonWorkspace({ lesson, onExit }: { lesson: Lesson; onExit: ()
           />
         </LessonEventContext.Provider>
       )}
-      {state.index > 0 && (
+      {state.paused && (
         <div
           role="region"
           aria-label="Controles da lição"
-          className="lesson-controls fixed bottom-4 left-4 flex items-center gap-2 rounded-md border border-border bg-white py-1.5 pr-1.5 pl-3 text-[12px] shadow-lg"
+          className="lesson-controls fixed bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-white py-1.5 pr-1.5 pl-3 text-[12px] shadow-lg"
         >
-          <span className="font-medium">{lesson.title}</span>
+          <span className="font-medium">Lição pausada</span>
           <span className="text-muted-foreground">
-            {state.paused ? "Pausada" : `Passo ${state.index} de ${lesson.steps.length - 1}`}
+            Passo {state.index} de {lesson.steps.length - 1}
           </span>
-          <Button
-            type="button"
-            size="sm"
-            variant={state.paused ? "default" : "outline"}
-            onClick={() => dispatch({ type: state.paused ? "resume" : "pause" })}
-          >
-            {state.paused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />}
-            {state.paused ? "Continuar" : "Pausar"}
+          <Button type="button" size="sm" onClick={() => dispatch({ type: "resume" })}>
+            <Play aria-hidden="true" /> Continuar
           </Button>
           <Button type="button" size="sm" variant="ghost" onClick={onExit}>
             <X aria-hidden="true" /> Sair da lição

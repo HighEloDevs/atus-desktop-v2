@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Dialog } from "radix-ui";
 import { Copy } from "lucide-react";
 import { notify } from "@/lib/notify";
-import { useLessonEvent } from "@/features/learn/lesson-events";
+import { keepOpenForLesson, useLessonEvent } from "@/features/learn/lesson-events";
 import { equationToLatex } from "./equation-to-latex";
 import { MatrixTable } from "./MatrixTable";
 import { ResidualChart } from "./ResidualChart";
@@ -79,6 +79,8 @@ export function FitDetailsDialog({ item, onClose }: { item: ResultItem; onClose:
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
         <Dialog.Content
+          data-tour="fit-details-dialog"
+          onInteractOutside={keepOpenForLesson}
           aria-describedby={undefined}
           className="fixed left-1/2 top-1/2 z-50 flex max-h-[88vh] w-[min(94vw,700px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg bg-white shadow-xl"
         >
