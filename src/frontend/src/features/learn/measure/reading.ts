@@ -39,19 +39,9 @@ export const VERNIER_005: Vernier = {
   uncertainty: 0.03,
 };
 
-/** Vernier of 50 divisions over 49 mm: reads 0,02 mm, with 0,01 mm of uncertainty. */
-export const VERNIER_002: Vernier = {
-  lines: 50,
-  spanMm: 49,
-  resolution: 0.02,
-  labelEvery: 5,
-  maxHundredths: 5000,
-  uncertainty: 0.01,
-};
-
-/** Spacing between two vernier lines, in millimetres (1,95 or 0,98). */
+/** Spacing between two vernier lines, in millimetres (1,95 on the 0,05 mm vernier). */
 export const vernierDivision = (vernier: Vernier) => vernier.spanMm / vernier.lines;
-/** Step of the opening in hundredths of millimetre (5 or 2). */
+/** Step of the opening in hundredths of millimetre (5 on the 0,05 mm vernier). */
 export const vernierStep = (vernier: Vernier) => Math.round(vernier.resolution * 100);
 
 /** Reading of a vernier caliper. */
@@ -71,14 +61,13 @@ export type CaliperReading = {
  *
  * Vernier line `k` sits at `value + d k`, with `d` the vernier division. With
  * `value = mm + r n` it falls on the main-scale line `mm + (d + r) n` exactly when `k = n`;
- * `d + r` is 2 mm on the 0,05 vernier and 1 mm on the 0,02 one.
+ * `d + r` is 2 mm on the 0,05 mm vernier.
  * @param hundredths - Opening in hundredths of millimetre; a non-negative multiple of the
  * vernier step.
  * @param vernier - Vernier of the caliper; the 0,05 mm one by default.
  * @returns The whole millimetres, the coinciding line and the reading.
  * @throws RangeError when the opening is not a reachable vernier position.
  * @example caliperReading(2365) // { mm: 23, line: 13, coincidentMm: 49, value: 23.65 }
- * @example caliperReading(2364, VERNIER_002) // { mm: 23, line: 32, coincidentMm: 55, ... }
  */
 export function caliperReading(hundredths: number, vernier = VERNIER_005): CaliperReading {
   const step = vernierStep(vernier);
@@ -198,7 +187,7 @@ export function checkRuler(
  *
  * The value must be the exact vernier reading, written to the hundredth; the uncertainty is
  * half the resolution with one significant figure, rounded up (`0,03` on the 0,05 mm
- * vernier, `0,01` on the 0,02 mm one). Wrong values are matched against the usual mistakes:
+ * vernier). Wrong values are matched against the usual mistakes:
  * counting each line as 0,1 mm or with another caliper's resolution, the wrong whole
  * millimetres and a neighbouring line.
  * @param valueText - Length typed by the student, in millimetres.

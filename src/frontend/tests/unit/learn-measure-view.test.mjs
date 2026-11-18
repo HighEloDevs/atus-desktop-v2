@@ -9,7 +9,6 @@ import { createRoot } from "react-dom/client";
 import { MeasureLessonView } from "../../src/features/learn/measure/MeasureLessonView";
 import { rulerLesson } from "../../src/features/learn/lessons/ruler";
 import { caliperLesson } from "../../src/features/learn/lessons/caliper";
-import { caliper002Lesson } from "../../src/features/learn/lessons/caliper-002";
 import { micrometerLesson } from "../../src/features/learn/lessons/micrometer";
 
 let root;
@@ -204,39 +203,6 @@ describe("caliper lesson", () => {
     await answer("19,35", "0,03");
     expect(panel()).toContain("Certo: L = (19,35 ± 0,03) mm");
     expect(panel()).toContain("19 mm + 7 × 0,05 mm. O traço 7 do nônio coincide com o traço 33");
-  });
-});
-
-describe("0,02 mm caliper lesson", () => {
-  it("reads 23,64 mm on the 50-line vernier and moves in steps of 0,02 mm", async () => {
-    await render(caliper002Lesson, { random: () => 0.5 });
-    expect(node.querySelector("h1").textContent).toBe("Paquímetro de 0,02 mm");
-    // 50 lines after the zero, numbered every 5.
-    expect(instrument().querySelectorAll("text")).not.toHaveLength(0);
-    await click(button("Próximo"));
-    await click(button("Próximo"));
-    expect(panel()).toContain("o traço 32, entre os números 6 e 7");
-    expect(loupe()).toBe(`${70 + 55 * 10 - 48} 88 96 64`);
-    await click(button("Próximo"));
-    expect(panel()).toContain("23 + 32 × 0,02 = 23,64 mm");
-    await click(button("Próximo"));
-    expect(panel()).toContain("L = (23,64 ± 0,01) mm");
-
-    await click(button("Explorar"));
-    const svg = instrument();
-    expect(svg.getAttribute("aria-valuemax")).toBe("50");
-    await act(() =>
-      svg.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" })),
-    );
-    expect(node.querySelector("output").textContent).toBe("12 mm + 21 × 0,02 mm = 12,42 mm");
-    await click(button("+ 0,02 mm"));
-    expect(svg.getAttribute("aria-valuenow")).toBe("12.44");
-
-    await click(button("Praticar"));
-    // 800 + 0,5 × 3400 = 2500, a whole millimetre, nudged to 25,14 mm.
-    await answer("25,14", "0,01");
-    expect(panel()).toContain("Certo: L = (25,14 ± 0,01) mm");
-    expect(panel()).toContain("25 mm + 7 × 0,02 mm. O traço 7 do nônio coincide com o traço 32");
   });
 });
 

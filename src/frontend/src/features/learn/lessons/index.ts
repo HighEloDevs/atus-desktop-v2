@@ -6,7 +6,6 @@
 import type { Lesson, UpcomingLesson } from "../lesson";
 import type { MeasureLesson } from "../measure/measure-lesson";
 import { caliperLesson } from "./caliper";
-import { caliper002Lesson } from "./caliper-002";
 import { gravityLesson } from "./gravity";
 import { micrometerLesson } from "./micrometer";
 import { rulerLesson } from "./ruler";
@@ -21,12 +20,7 @@ export const upcomingLessons: UpcomingLesson[] = [
 ];
 
 /** Lessons of the Como medir track, in display order. */
-export const measureLessons: MeasureLesson[] = [
-  rulerLesson,
-  caliperLesson,
-  caliper002Lesson,
-  micrometerLesson,
-];
+export const measureLessons: MeasureLesson[] = [rulerLesson, caliperLesson, micrometerLesson];
 
 /** Instruments announced as "Em breve" in the Como medir track. */
 export const upcomingMeasureLessons: UpcomingLesson[] = [];

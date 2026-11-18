@@ -68,10 +68,7 @@ it("opens the ruler and the caliper from the Aprender tab and returns", async ()
   await click(buttons().find((b) => b.textContent.trim() === "Aprender"));
   expect(node.querySelector("h1").textContent).toBe("Aprender");
 
-  expect(node.querySelectorAll('[data-instrument="caliper"]')).toHaveLength(2);
-  await click(buttons().find((b) => b.textContent.includes("Paquímetro de 0,02 mm")));
-  expect(node.querySelector("h1").textContent).toBe("Paquímetro de 0,02 mm");
-  await click(buttons().find((b) => b.textContent.trim() === "Aprender"));
+  expect(node.querySelectorAll('[data-instrument="caliper"]')).toHaveLength(1);
   await click(buttons().find((b) => b.textContent.includes("Paquímetro de 0,05 mm")));
   expect(node.querySelector("h1").textContent).toBe("Paquímetro de 0,05 mm");
   await click(buttons().find((b) => b.textContent.trim() === "Aprender"));

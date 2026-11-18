@@ -5,7 +5,6 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  VERNIER_002,
   VERNIER_005,
   MICROMETER_MAX_UM,
   caliperReading,
@@ -33,7 +32,6 @@ import { lensRect } from "../../src/features/learn/measure/geometry";
 import { measureLessons, upcomingMeasureLessons } from "../../src/features/learn/lessons";
 import { rulerLesson } from "../../src/features/learn/lessons/ruler";
 import { caliperLesson } from "../../src/features/learn/lessons/caliper";
-import { caliper002Lesson } from "../../src/features/learn/lessons/caliper-002";
 import { micrometerLesson } from "../../src/features/learn/lessons/micrometer";
 
 /** Deterministic uniform source (linear congruential generator). */
@@ -55,20 +53,7 @@ describe("caliper reading", () => {
     for (const bad of [-5, 12.5, 2366]) expect(() => caliperReading(bad)).toThrow(RangeError);
   });
 
-  it("reads the 0,02 mm vernier: line n meets the main-scale line mm + n", () => {
-    expect(caliperReading(2364, VERNIER_002)).toEqual({
-      mm: 23,
-      line: 32,
-      coincidentMm: 55,
-      value: 23.64,
-    });
-    expect(() => caliperReading(2365, VERNIER_002)).toThrow(RangeError);
-  });
-
-  it.each([
-    ["0,05", VERNIER_005, 1.95, 5],
-    ["0,02", VERNIER_002, 0.98, 2],
-  ])(
+  it.each([["0,05", VERNIER_005, 1.95, 5]])(
     "matches the drawn %s mm scale: only the reported line falls on a main-scale line",
     (_, vernier, division, step) => {
       expect(vernierDivision(vernier)).toBeCloseTo(division, 12);
@@ -171,27 +156,7 @@ describe("caliper checker", () => {
   });
 });
 
-describe("0,02 mm caliper checker", () => {
-  const verdict = (value, uncertainty) => checkCaliper(value, uncertainty, 2364, VERNIER_002);
-
-  it("accepts the reading with 0,01 mm, already one significant figure", () => {
-    expect(verdict("23,64", "0,01")).toEqual({ correct: true, messages: [] });
-  });
-
-  it.each([
-    ["26,20", "0,01", "vale 0,02 mm, não 0,1 mm. Os números marcam décimos, mas há 5 traços"],
-    ["24,60", "0,01", "vale 0,02 mm, não 0,05 mm"],
-    ["23,66", "0,01", "é o vizinho"],
-    ["23,640", "0,01", "Com incerteza de 0,01 mm"],
-    ["23,64", "0,02", "0,02 mm ÷ 2 = 0,01 mm."],
-    ["23,64", "0,010", "um só algarismo significativo: 0,01 mm"],
-    ["23,64", "0,005", "metade da menor divisão, 0,01 mm."],
-  ])("explains %s ± %s", (value, uncertainty, message) => {
-    const result = verdict(value, uncertainty);
-    expect(result.correct).toBe(false);
-    expect(result.messages.join(" ")).toContain(message);
-  });
-
+describe("caliper checker, other resolution", () => {
   it("tells a 0,05 mm reader that counted 0,02 mm per line", () => {
     expect(checkCaliper("23,26", "0,03", 2365).messages[0]).toContain("não 0,02 mm");
   });
@@ -305,20 +270,6 @@ describe("practice draws", () => {
     }
   });
 
-  it("draws 0,02 mm openings on even hundredths that fit the shorter scale", () => {
-    const random = seeded(3);
-    let previous;
-    for (let i = 0; i < 500; i++) {
-      const opening = drawCaliperOpening(random, previous, VERNIER_002);
-      expect(opening % 2).toBe(0);
-      expect(opening % 100).not.toBe(0);
-      expect(opening).toBeGreaterThanOrEqual(800);
-      expect(opening).toBeLessThanOrEqual(4214);
-      if (previous !== undefined) expect(Math.abs(opening - previous)).toBeGreaterThanOrEqual(300);
-      previous = opening;
-    }
-  });
-
   it("leaves the previous piece even with a stuck source", () => {
     expect(drawRulerLength(() => 0.5, 34)).toBe(44);
     expect(drawRulerLength(() => 0.9, 51.6)).toBe(41.6);
@@ -328,13 +279,8 @@ describe("practice draws", () => {
 });
 
 describe("lesson manifests", () => {
-  it("lists the ruler and the caliper, with the micrometer announced", () => {
-    expect(measureLessons.map((lesson) => lesson.id)).toEqual([
-      "ruler",
-      "caliper",
-      "caliper-002",
-      "micrometer",
-    ]);
+  it("lists the ruler, the caliper and the micrometer", () => {
+    expect(measureLessons.map((lesson) => lesson.id)).toEqual(["ruler", "caliper", "micrometer"]);
     expect(upcomingMeasureLessons).toEqual([]);
   });
 
@@ -348,15 +294,6 @@ describe("lesson manifests", () => {
       labels: "entre os números 6 e 7",
     });
     expect(templateValues("caliper", 23.6).labels).toBe("o número 6");
-    expect(templateValues("caliper", 23.64, VERNIER_002)).toEqual({
-      L: "23,64",
-      M: "23",
-      n: "32",
-      C: "55",
-      labels: "entre os números 6 e 7",
-    });
-    expect(templateValues("caliper", 23.5, VERNIER_002).labels).toBe("o número 5");
-    expect(focusMm("caliper", "coincident", 23.64, VERNIER_002)).toBe(55);
     expect(fillTemplate("{M} + {n} = {x}", { M: "1", n: "2" })).toBe("1 + 2 = {x}");
   });
 
@@ -371,7 +308,7 @@ describe("lesson manifests", () => {
     expect(toHundredths(23.65)).toBe(2365);
   });
 
-  it.each([rulerLesson, caliperLesson, caliper002Lesson, micrometerLesson])(
+  it.each([rulerLesson, caliperLesson, micrometerLesson])(
     "leaves no placeholder in the $title texts",
     (lesson) => {
       const values = templateValues(lesson.instrument, lesson.example, lesson.vernier);
@@ -391,11 +328,7 @@ describe("lesson manifests", () => {
     expect(result(caliperLesson)).toBe("L = (23,65 ± 0,03) mm");
     expect(checkRuler("42,3", "0,5", rulerLesson.example).correct).toBe(true);
     expect(checkCaliper("23,65", "0,03", toHundredths(caliperLesson.example)).correct).toBe(true);
-    expect(result(caliper002Lesson)).toBe("L = (23,64 ± 0,01) mm");
     expect(result(micrometerLesson)).toBe("L = (7,872 ± 0,005) mm");
     expect(checkMicrometer("7,872", "0,005", 7872).correct).toBe(true);
-    expect(
-      checkCaliper("23,64", "0,01", toHundredths(caliper002Lesson.example), VERNIER_002).correct,
-    ).toBe(true);
   });
 });
