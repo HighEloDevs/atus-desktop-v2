@@ -4,7 +4,10 @@
  */
 
 import type { Lesson, UpcomingLesson } from "../lesson";
+import type { MeasureLesson } from "../measure/measure-lesson";
+import { caliperLesson } from "./caliper";
 import { gravityLesson } from "./gravity";
+import { rulerLesson } from "./ruler";
 
 /** Lessons available now, in display order. */
 export const lessons: Lesson[] = [gravityLesson];
@@ -13,4 +16,12 @@ export const lessons: Lesson[] = [gravityLesson];
 export const upcomingLessons: UpcomingLesson[] = [
   { title: "Pêndulo simples", topics: ["período", "linearização"] },
   { title: "Lei de Hooke", topics: ["ajuste linear"] },
+];
+
+/** Lessons of the Como medir track, in display order. */
+export const measureLessons: MeasureLesson[] = [rulerLesson, caliperLesson];
+
+/** Instruments announced as "Em breve" in the Como medir track. */
+export const upcomingMeasureLessons: UpcomingLesson[] = [
+  { title: "Micrômetro", topics: ["0,01 mm", "± 0,005 mm"] },
 ];

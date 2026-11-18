@@ -42,8 +42,15 @@ import {
 import { useUpdateSeen } from "@/features/news/use-update-seen";
 import { LearnPage } from "@/features/learn/LearnPage";
 import { LessonWorkspace } from "@/features/learn/LessonWorkspace";
-import { lessons, upcomingLessons } from "@/features/learn/lessons";
+import {
+  lessons,
+  measureLessons,
+  upcomingLessons,
+  upcomingMeasureLessons,
+} from "@/features/learn/lessons";
 import type { Lesson } from "@/features/learn/lesson";
+import { MeasureLessonView } from "@/features/learn/measure/MeasureLessonView";
+import type { MeasureLesson } from "@/features/learn/measure/measure-lesson";
 
 type Page = "home" | "learn" | "news" | "about" | "analysis";
 
@@ -212,6 +219,7 @@ function App() {
 
   const [project, setProject] = useState<OpenProject | null>(null);
   const [lesson, setLesson] = useState<Lesson | null>(null);
+  const [measureLesson, setMeasureLesson] = useState<MeasureLesson | null>(null);
   const opening = useRef(false);
   const [finderPath, setFinderPath] = useState<string | null>(null);
   const [quickRequest, setQuickRequest] = useState<QuickAnalysis | null>(null);
@@ -389,7 +397,11 @@ function App() {
     <div className="app-shell bg-[#f7f7f3] text-[#20272c]">
       <Sidebar
         page={page}
-        onNavigate={(next) => (next === "news" ? openNews() : setPage(next))}
+        onNavigate={(next) => {
+          setMeasureLesson(null);
+          if (next === "news") openNews();
+          else setPage(next);
+        }}
         unseenNews={unseenNews}
       />
       <main className="flex min-h-0 min-w-0 flex-col">
@@ -420,7 +432,13 @@ function App() {
         ) : (
           <div className="min-h-0 flex-1 overflow-auto">
             <div className="mx-auto max-w-[1120px] p-6 sm:p-8">
-              {page === "learn" ? (
+              {page === "learn" && measureLesson ? (
+                <MeasureLessonView
+                  key={measureLesson.id}
+                  lesson={measureLesson}
+                  onExit={() => setMeasureLesson(null)}
+                />
+              ) : page === "learn" ? (
                 <LearnPage
                   lessons={lessons}
                   upcoming={upcomingLessons}
@@ -428,6 +446,9 @@ function App() {
                     setLesson(next);
                     setPage("analysis");
                   }}
+                  measureLessons={measureLessons}
+                  upcomingMeasure={upcomingMeasureLessons}
+                  onOpenMeasure={setMeasureLesson}
                 />
               ) : page === "home" ? (
                 <>
