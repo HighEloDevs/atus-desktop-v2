@@ -17,6 +17,7 @@ import {
   canScroll,
   createLessonTour,
   focusStep,
+  markTargetLayer,
   scrollUnderOverlay,
   waitForTarget,
 } from "../../src/features/learn/lesson-tour";
@@ -134,6 +135,43 @@ it("keeps the lesson controls and toasts clickable under driver.js's pointer loc
     "html.lesson-active [data-sonner-toaster] *",
   ])
     expect(rule).toContain(selector);
+});
+
+describe("highlights inside dialogs and full-screen targets", () => {
+  const css = () => readFileSync(`${process.cwd()}/src/styles/globals.css`, "utf8");
+  const root = document.documentElement;
+
+  it("drops the dialog lift while the highlight is inside a dialog, so the cut-out shows", () => {
+    const dialog = document.createElement("div");
+    dialog.className = "fixed z-50";
+    const button = anchor("copy-parameters");
+    dialog.append(button);
+    document.body.append(dialog);
+    const tour = createLessonTour({ onNext: vi.fn(), onBlocked: vi.fn() });
+    tour.show({ ...view, target: "copy-parameters" });
+    expect(root.classList.contains("lesson-target-in-layer")).toBe(true);
+    tour.show(view);
+    expect(root.classList.contains("lesson-target-in-layer")).toBe(false);
+    markTargetLayer(dialog);
+    expect(root.classList.contains("lesson-target-in-layer")).toBe(true);
+    tour.hide();
+    expect(root.classList.contains("lesson-target-in-layer")).toBe(false);
+    // The lift only applies while the target is outside every lifted layer.
+    expect(css()).toContain("html.lesson-active:not(.lesson-target-in-layer) .z-50 {");
+    expect(css()).not.toMatch(/html\.lesson-active \.z-50 \{/);
+  });
+
+  it("puts the balloon of a full-screen target in the corner", () => {
+    const tour = createLessonTour({ onNext: vi.fn(), onBlocked: vi.fn() });
+    tour.show(view);
+    tour.show({ ...view, aside: true });
+    const [first, second] = instances[0].highlight.mock.calls.map(([step]) => step.popover);
+    expect(first.popoverClass).toBe("lesson-popover");
+    expect(second.popoverClass).toBe("lesson-popover lesson-popover-aside");
+    expect(css()).toMatch(
+      /\.lesson-popover\.lesson-popover-aside\.driver-popover \{[^}]*right: 24px !important/,
+    );
+  });
 });
 
 describe("balloon controls", () => {

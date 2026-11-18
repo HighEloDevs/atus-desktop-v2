@@ -98,6 +98,7 @@ export function LessonWorkspace({ lesson, onExit }: { lesson: Lesson; onExit: ()
       done,
       nextLabel: last ? "Concluir" : "Próximo",
       focus: step.focus,
+      aside: step.aside,
     });
   }, [tour, step, state.paused, state.index, done, last, modifier, lesson.steps.length]);
 

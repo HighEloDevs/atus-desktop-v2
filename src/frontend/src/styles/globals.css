@@ -357,11 +357,23 @@ a:focus-visible {
   outline: 3px solid #f25a3c;
   outline-offset: 2px;
 }
-html.lesson-active .z-40 {
+/* Dialogs and menus opened during a step stay above the overlay, unless the highlight is
+   inside one: then it must stay under the overlay to show the cut-out (lesson-tour.ts). */
+html.lesson-active:not(.lesson-target-in-layer) .z-40 {
   z-index: 10001;
 }
-html.lesson-active .z-50 {
+html.lesson-active:not(.lesson-target-in-layer) .z-50 {
   z-index: 10002;
+}
+/* A target that fills the screen (the spreadsheet) keeps the balloon in the free corner. */
+.lesson-popover.lesson-popover-aside.driver-popover {
+  top: 96px !important;
+  right: 24px !important;
+  bottom: auto !important;
+  left: auto !important;
+}
+.lesson-popover-aside .driver-popover-arrow {
+  display: none;
 }
 html.lesson-active [data-sonner-toaster],
 html.lesson-active .lesson-controls {

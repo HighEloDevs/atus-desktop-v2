@@ -327,6 +327,10 @@ describe("free-fall fit fixture", () => {
     expect(step("copy").body).toContain(`<b>C${gravityLesson.dataset.rows.length + 1}</b>`);
   });
 
+  it("keeps the balloon of the full-screen spreadsheet off the sheet", () => {
+    expect(step("copy")).toMatchObject({ target: "lesson-sheet", aside: true });
+  });
+
   it("asks for the lesson's model, so typing what the step shows completes it", () => {
     const typed = step("equation").body.match(/<code>(.+?)<\/code>/)[1];
     expect(isEquivalentModel(typed, fit.equation)).toBe(true);

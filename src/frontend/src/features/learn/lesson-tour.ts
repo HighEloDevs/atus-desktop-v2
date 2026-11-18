@@ -28,7 +28,28 @@ export type TourView = {
   nextLabel: string;
   /** `data-tour` value of the control to focus inside the highlight, when not its first one. */
   focus?: string;
+  /** Puts the balloon in the top-right corner, for a target that fills the screen. */
+  aside?: boolean;
 };
+
+/** Layers the lesson lifts above the driver.js overlay (`globals.css`): dialogs and menus. */
+export const LIFTED_LAYERS = ".z-40, .z-50";
+
+/**
+ * Class on `<html>` while the highlight sits inside a lifted layer. The layers then stay
+ * under the overlay, which cuts the highlight out of it; lifted above it, the dialog would
+ * hide the cut-out and nothing would look highlighted.
+ */
+export const TARGET_IN_LAYER_CLASS = "lesson-target-in-layer";
+
+/**
+ * Marks whether the highlighted element lives in a dialog or menu.
+ * @param element - Highlighted element, or `undefined` for a centred balloon.
+ */
+export function markTargetLayer(element: Element | undefined): void {
+  const inLayer = Boolean(element?.closest(LIFTED_LAYERS));
+  document.documentElement.classList.toggle(TARGET_IN_LAYER_CLASS, inLayer);
+}
 
 /** Class on `<html>` that briefly turns pointer events back on to find what is under the cursor. */
 const PROBE_CLASS = "lesson-probe";
@@ -255,10 +276,12 @@ export function createLessonTour(handlers: {
     show(view) {
       cancelWait();
       const body = view.why ? `${view.body}<span class="lesson-why">${view.why}</span>` : view.body;
-      const draw = (element: Element | undefined) =>
+      const draw = (element: Element | undefined) => {
+        markTargetLayer(element);
         ensure().highlight({
           element,
           popover: {
+            popoverClass: view.aside ? "lesson-popover lesson-popover-aside" : "lesson-popover",
             title: view.title,
             description: `${body}<span class="lesson-progress">${view.progress} · Esc pausa</span>`,
             showButtons: view.done ? ["next"] : [],
@@ -271,6 +294,7 @@ export function createLessonTour(handlers: {
             },
           },
         });
+      };
       stopWaiting = waitForTarget(view.target, draw);
       window.addEventListener("wheel", onWheel, { passive: true });
     },
@@ -280,6 +304,7 @@ export function createLessonTour(handlers: {
     hide() {
       cancelWait();
       window.removeEventListener("wheel", onWheel);
+      markTargetLayer(undefined);
       instance?.destroy();
       instance = null;
     },

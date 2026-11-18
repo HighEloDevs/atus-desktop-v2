@@ -511,6 +511,7 @@ export const gravityLesson: Lesson = {
       body: "Arraste de <b>A2</b> até <b>C18</b> (o cabeçalho pode entrar junto) e copie com <kbd>{mod}</kbd>+<kbd>C</kbd>.",
       why: "A terceira coluna é a incerteza de v: duas leituras de 0,5 mm divididas por 2/60 s. O ATUS lê as colunas na ordem x, y, σy.",
       waitFor: "sheet.copied",
+      aside: true,
     },
     {
       id: "paste",

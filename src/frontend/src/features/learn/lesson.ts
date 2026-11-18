@@ -55,6 +55,11 @@ export type LessonStep = {
    * it is not the first control of the highlight.
    */
   focus?: string;
+  /**
+   * Puts the balloon in the top-right corner instead of next to the target, for a target that
+   * fills the screen (driver.js would otherwise lay the balloon over it).
+   */
+  aside?: boolean;
   /** Event that undoes the previous step, as closing a dialog the step needs open. */
   revertOn?: LessonEvent;
 };
