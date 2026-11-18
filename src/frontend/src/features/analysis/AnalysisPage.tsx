@@ -17,7 +17,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type SetStateAction } fro
 import { notify } from "@/lib/notify";
 import { FitControls } from "./fit/FitControls";
 import { defaultFitConfig, validateFitConfig, type FitConfig } from "./fit/fit-config";
-import { mockFitService, type FitResponse } from "./fit/fit-service";
+import { mockFitService, type FitResponse, type FitService } from "./fit/fit-service";
+import { useLessonEvent } from "@/features/learn/lesson-events";
 import { type SeparatorType } from "./data-import/text-data-parser";
 import { DataValidationError, parseValidPoints } from "./data-import/parse-valid-points";
 import { SeparatorDialog } from "./data-import/SeparatorDialog";
@@ -100,7 +101,8 @@ type AnalysisState = {
 /**
  * Renders the analysis workspace and coordinates project editing.
  * @param props - Current project, navigation callback, Finder and quick analysis requests with
- * their callbacks, and whether to run the fits once the project opens.
+ * their callbacks, whether to run the fits once the project opens, and, inside a lesson, the
+ * fit service and title to use.
  * @returns The rendered React element.
  */
 export function AnalysisPage({
@@ -113,6 +115,8 @@ export function AnalysisPage({
   onStartQuick,
   onCancelQuick,
   runFitsOnOpen = false,
+  fitService = mockFitService,
+  title,
 }: {
   onBack: () => void;
   project?: OpenProject | null;
@@ -127,7 +131,12 @@ export function AnalysisPage({
   onCancelQuick?: () => void;
   /** Runs the configured fits once after mounting, as for a project made by a quick analysis. */
   runFitsOnOpen?: boolean;
+  /** Service that runs the fits; lessons pass one with a ready result. */
+  fitService?: FitService;
+  /** Title shown instead of the project name, as in a lesson. */
+  title?: string;
 }) {
+  const reportLessonEvent = useLessonEvent();
   const [initialAnalysis] = useState(() =>
     project
       ? (project.snapshot.analyses[0] ?? {
@@ -406,6 +415,7 @@ export function AnalysisPage({
           ? `Dados do conjunto ${shortcut.kind === "replace" ? shortcut.index : ""} ("${replaced.name}") substituídos com sucesso.`
           : "Dados colados importados com sucesso.",
       );
+      if (!replaced) reportLessonEvent("dataset.created");
     } else if (failure.validation) {
       notify.error("Dados inválidos", { description: `${CLIPBOARD_NAME}: ${failure.message}` });
     } else {
@@ -440,7 +450,7 @@ export function AnalysisPage({
         try {
           const validationError = validateFitConfig(item);
           if (validationError) throw new Error(validationError);
-          const response = await mockFitService.fit({
+          const response = await fitService.fit({
             version: 1,
             points: item.points,
             equation: item.equation,
@@ -468,8 +478,10 @@ export function AnalysisPage({
           description: error,
           id: `fit-error-${item.id}`,
         });
-    if (results.every(({ error }) => !error))
+    if (results.every(({ error }) => !error)) {
       notify.success("Ajuste executado com sucesso", { id: "fit-success" });
+      reportLessonEvent("fit.succeeded");
+    }
     setDatasets((items) =>
       items.map((current) => {
         const result = results.find(
@@ -496,6 +508,7 @@ export function AnalysisPage({
   }
 
   function updateFit(id: string, changes: Partial<FitConfig>) {
+    if (changes.equation !== undefined) reportLessonEvent("equation.changed", changes.equation);
     setDatasets((items) =>
       items.map((item) =>
         item.id === id
@@ -737,7 +750,10 @@ export function AnalysisPage({
       />
       <DataTableDialog dataset={table ?? null} onClose={() => setTableId(null)} />
       {panelOpen && (
-        <aside className="analysis-panel flex h-full w-[360px] shrink-0 flex-col border-r border-[#d8ded7] bg-[#f7f8f5]">
+        <aside
+          data-tour="analysis-panel"
+          className="analysis-panel flex h-full w-[360px] shrink-0 flex-col border-r border-[#d8ded7] bg-[#f7f8f5]"
+        >
           <header className="flex h-[66px] shrink-0 flex-col justify-center border-b border-border bg-white px-3">
             <div className="flex items-center gap-2">
               <Button
@@ -755,7 +771,7 @@ export function AnalysisPage({
               </Button>
               <div className="min-w-0 flex-1">
                 <ProjectTitle
-                  name={saving.project?.snapshot.name ?? "Projeto sem título"}
+                  name={title ?? saving.project?.snapshot.name ?? "Projeto sem título"}
                   editable={Boolean(saving.project)}
                   onRename={async (name) => {
                     await saving.rename(name);
@@ -909,6 +925,7 @@ export function AnalysisPage({
           <div className="border-t border-[#d8ded7] p-4">
             <button
               type="button"
+              data-tour="fit-run"
               disabled={!datasets.some((item) => item.equation.trim())}
               onClick={() => void runFits()}
               className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-45"
@@ -971,12 +988,16 @@ export function AnalysisPage({
           <UpdateButton compact className="ml-auto" />
         </div>
         <div
+          data-tour="analysis-canvas"
           className={`analysis-canvas relative flex min-h-0 flex-1 ${data ? "overflow-hidden p-0" : "items-center justify-center overflow-auto px-6 py-8"}`}
         >
           {!data ? (
             <EmptyState modifier={modifier} />
           ) : (
-            <div className="relative flex h-full min-h-0 w-full flex-col bg-white p-5">
+            <div
+              data-tour="analysis-chart"
+              className="relative flex h-full min-h-0 w-full flex-col bg-white p-5"
+            >
               <Chart
                 graphicRef={graphicRef}
                 settings={chartSettings}

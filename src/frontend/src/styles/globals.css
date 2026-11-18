@@ -272,3 +272,123 @@ a:focus-visible {
     animation-timing-function: steps(10, end);
   }
 }
+
+/* Lessons (features/learn): the driver.js balloon and the layers that must stay above its overlay. */
+.lesson-popover.driver-popover {
+  max-width: 320px;
+  border-radius: 8px;
+  padding: 14px 16px 12px;
+  color: #20272c;
+  font-family: "Inter Variable", Inter, sans-serif;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.25);
+}
+.lesson-popover .driver-popover-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.lesson-popover .driver-popover-description {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #3a4448;
+}
+.lesson-popover .lesson-why {
+  display: block;
+  margin-top: 8px;
+  border-radius: 5px;
+  background: #f0f3ee;
+  padding: 7px 9px;
+}
+.lesson-popover .lesson-progress {
+  display: block;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #66716e;
+}
+.lesson-popover kbd,
+.lesson-popover code {
+  border: 1px solid #cbd4ca;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+}
+.lesson-popover .driver-popover-footer {
+  align-items: center;
+}
+.lesson-popover .lesson-balloon-controls {
+  display: flex;
+  gap: 2px;
+  order: -1;
+  margin-right: auto;
+  margin-left: -6px;
+}
+.lesson-popover .lesson-balloon-controls button {
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  padding: 5px 6px;
+  font: inherit;
+  font-size: 11.5px;
+  color: #66716e;
+  text-shadow: none;
+  cursor: pointer;
+}
+.lesson-popover .lesson-balloon-controls button:hover {
+  background: #eff2ed;
+  color: #20272c;
+}
+.lesson-popover .lesson-balloon-controls button:focus-visible {
+  outline: 3px solid #f25a3c;
+  outline-offset: 1px;
+}
+.lesson-popover .driver-popover-next-btn {
+  border: 0;
+  border-radius: 6px;
+  background: #20272c;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  text-shadow: none;
+}
+.lesson-popover .driver-popover-next-btn:focus-visible {
+  outline: 3px solid #f25a3c;
+  outline-offset: 2px;
+}
+/* Dialogs and menus opened during a step stay above the overlay, unless the highlight is
+   inside one: then it must stay under the overlay to show the cut-out (lesson-tour.ts). */
+html.lesson-active:not(.lesson-target-in-layer) .z-40 {
+  z-index: 10001;
+}
+html.lesson-active:not(.lesson-target-in-layer) .z-50 {
+  z-index: 10002;
+}
+/* A target that fills the screen (the spreadsheet) keeps the balloon in the free corner. */
+.lesson-popover.lesson-popover-aside.driver-popover {
+  top: 96px !important;
+  right: 24px !important;
+  bottom: auto !important;
+  left: auto !important;
+}
+.lesson-popover-aside .driver-popover-arrow {
+  display: none;
+}
+html.lesson-active [data-sonner-toaster],
+html.lesson-active .lesson-controls {
+  z-index: 1000001 !important;
+}
+/* driver.js turns off pointer events on everything but the highlight (`.driver-active *`);
+   the lesson controls and the toasts must stay clickable so the student can always pause,
+   leave or retry. */
+/* Set for one synchronous lookup by `scrollUnderOverlay` (lesson-tour.ts), never painted. */
+html.lesson-probe * {
+  pointer-events: auto !important;
+}
+html.lesson-active [data-sonner-toaster],
+html.lesson-active [data-sonner-toaster] *,
+html.lesson-active .lesson-controls,
+html.lesson-active .lesson-controls * {
+  pointer-events: auto;
+}
