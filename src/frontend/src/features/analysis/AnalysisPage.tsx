@@ -16,16 +16,16 @@ import type { OpenProject } from "@/features/projects/project-client";
 import { useEffect, useLayoutEffect, useRef, useState, type SetStateAction } from "react";
 import { notify } from "@/lib/notify";
 import { FitList } from "./fit/FitList";
+import { FitLineSettings } from "./fit/FitLineSettings";
 import { FitLineSample } from "./fit/FitLineSample";
 import { validateFitConfig, type FitConfig } from "./fit/fit-config";
 import {
   createFit,
   describeRange,
   duplicateFit,
-  fitColor,
+  fitLook,
   fitDisplayName,
   fitLetter,
-  fitLinePattern,
   groupParametersByEquation,
   restoreDatasetFits,
   serializeDatasetFits,
@@ -240,25 +240,28 @@ export function AnalysisPage({
   // fits are curves of their own, listed in the legend only once they have a curve.
   const chartSeries: ChartSeries[] = datasets.flatMap((item) => {
     const residualFit = residualFitId(item);
-    return item.fits.map((fit, index) => ({
-      id: fitSeriesId(item.id, fit, index),
-      name: fitDisplayName(item.name, fit, item.fits.length > 1),
-      points: index === 0 ? item.points : [],
-      linePoints: fit.visible ? fit.linePoints : [],
-      color: index === 0 ? item.color : fitColor(item.color, fit.letter),
-      lineColor: fitColor(item.color, fit.letter),
-      radius: item.radius,
-      symbol: item.symbol,
-      lineStyle: fitLinePattern(item.lineStyle, fit.letter),
-      lineWidth: item.lineWidth,
-      visible: item.visible && (index === 0 || (fit.visible && fit.linePoints.length > 0)),
-      lineOnly: index > 0,
-      residuals: fit.id === residualFit ? fit.result?.residuals : undefined,
-      legendEquation:
-        fit.visible && fit.result
-          ? (fittedEquationLatex(fit.result.equation, fit.result.parameters) ?? undefined)
-          : undefined,
-    }));
+    return item.fits.map((fit, index) => {
+      const look = fitLook(item, fit);
+      return {
+        id: fitSeriesId(item.id, fit, index),
+        name: fitDisplayName(item.name, fit, item.fits.length > 1),
+        points: index === 0 ? item.points : [],
+        linePoints: fit.visible ? fit.linePoints : [],
+        color: index === 0 ? item.color : look.color,
+        lineColor: look.color,
+        radius: item.radius,
+        symbol: item.symbol,
+        lineStyle: look.pattern,
+        lineWidth: look.width,
+        visible: item.visible && (index === 0 || (fit.visible && fit.linePoints.length > 0)),
+        lineOnly: index > 0,
+        residuals: fit.id === residualFit ? fit.result?.residuals : undefined,
+        legendEquation:
+          fit.visible && fit.result
+            ? (fittedEquationLatex(fit.result.equation, fit.result.parameters) ?? undefined)
+            : undefined,
+      };
+    });
   });
   const residualsAvailable = hasResiduals(chartSeries);
   // With several fitted fits, the residuals panel draws one of them, chosen by letter.
@@ -883,7 +886,18 @@ export function AnalysisPage({
                 </div>
               ) : (
                 <div className={flat ? "pb-3" : "px-3 pb-3"}>
-                  <ChartSettingsPanel settings={seriesSettings(item)} section="series" />
+                  <ChartSettingsPanel
+                    settings={seriesSettings(item)}
+                    section="series"
+                    lineSection={
+                      item.fits.length > 1 || item.fits.some((fit) => fitLook(item, fit).custom) ? (
+                        <FitLineSettings
+                          dataset={item}
+                          onPatch={(fitId, patch) => patchFit(item.id, fitId, patch)}
+                        />
+                      ) : undefined
+                    }
+                  />
                 </div>
               ))}
           </div>
@@ -898,8 +912,8 @@ export function AnalysisPage({
       const base = {
         id: fitSeriesId(item.id, fit, index),
         name: fitDisplayName(item.name, fit, item.fits.length > 1),
-        color: fitColor(item.color, fit.letter),
-        pattern: item.fits.length > 1 ? fitLinePattern(item.lineStyle, fit.letter) : undefined,
+        color: fitLook(item, fit).color,
+        pattern: item.fits.length > 1 ? fitLook(item, fit).pattern : undefined,
       };
       return fit.result
         ? [{ ...base, result: fit.result }]
@@ -919,8 +933,8 @@ export function AnalysisPage({
         seriesId: fitSeriesId(item.id, fit, index),
         letter: fit.letter,
         label: fit.label.trim(),
-        color: fitColor(item.color, fit.letter),
-        pattern: fitLinePattern(item.lineStyle, fit.letter),
+        color: fitLook(item, fit).color,
+        pattern: fitLook(item, fit).pattern,
         equation: fit.equation,
         range: describeRange(fit),
         result: fit.result,
@@ -938,7 +952,7 @@ export function AnalysisPage({
     (markingDataset.fits.length === 1 || openFits[markingDataset.id] === rangeFit.id)
       ? {
           pointsSeriesId: markingDataset.id,
-          color: fitColor(markingDataset.color, rangeFit.letter),
+          color: fitLook(markingDataset, rangeFit).color,
           label: markingDataset.fits.length > 1 ? rangeFit.label.trim() || rangeFit.letter : "",
           min: rangeFit.minX === "" ? undefined : Number(rangeFit.minX),
           max: rangeFit.maxX === "" ? undefined : Number(rangeFit.maxX),
@@ -1032,8 +1046,8 @@ export function AnalysisPage({
             letter: fit.letter,
             label: fit.label,
             equation: fit.equation,
-            color: fitColor(removing.color, fit.letter),
-            pattern: fitLinePattern(removing.lineStyle, fit.letter),
+            color: fitLook(removing, fit).color,
+            pattern: fitLook(removing, fit).pattern,
           }))}
           onCancel={() => setRemovingId(null)}
           onConfirm={() => {
@@ -1293,8 +1307,8 @@ export function AnalysisPage({
                   className={`flex h-full items-center gap-1.5 border-l border-[#d8ded7] px-2.5 font-mono text-[11px] font-semibold first:border-l-0 ${fit.id === residualChoice.current ? "bg-[#eff2ed] text-foreground" : "text-[#66716e] hover:bg-[#f4f6f3]"}`}
                 >
                   <FitLineSample
-                    color={fitColor(residualChoice.dataset.color, fit.letter)}
-                    pattern={fitLinePattern(residualChoice.dataset.lineStyle, fit.letter)}
+                    color={fitLook(residualChoice.dataset, fit).color}
+                    pattern={fitLook(residualChoice.dataset, fit).pattern}
                   />
                   {fit.letter}
                 </button>

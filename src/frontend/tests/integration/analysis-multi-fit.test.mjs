@@ -256,19 +256,19 @@ it("lets every fit row be closed and picks the residuals by letter", async () =>
   expect(button("duplica").textContent).toBe("Novo ajusteduplica A");
 });
 
-it("keeps the points in the dataset colour after fit A is removed", async () => {
+it("draws a lone fit B in the dataset look after fit A is removed", async () => {
   await render();
   await click(button("Novo ajuste com estes dados"));
   await click(button("Executar ajustes"));
-  const bLine = series()[1].lineColor;
   await click(node.querySelector('button[aria-label="Ajuste A"]'));
   await click(button("Remover ajuste"));
   expect(series()).toHaveLength(1);
+  // Alone, B follows the dataset's own "Linha de ajuste" controls instead of its letter shade.
   expect(series()[0]).toMatchObject({
     name: "Queda",
     color: "#364cff",
-    lineColor: bLine,
-    lineStyle: "dashed",
+    lineColor: "#364cff",
+    lineStyle: "solid",
     points: expect.any(Array),
   });
   expect(series()[0].points).toHaveLength(4);
@@ -303,4 +303,63 @@ it("replacing the data keeps every fit and clears every result", async () => {
     ["Queda · B", 0, 0],
   ]);
   expect(savedDataset().fits.every((fit) => fit.fitState === "idle")).toBe(true);
+});
+
+it("styles each fit curve in Personalização and restores the derived look", async () => {
+  await render();
+  await click(button("Novo ajuste com estes dados"));
+  await click(button("Executar ajustes"));
+  const derived = series()[1].lineColor;
+  await click(button("Personalização"));
+  expect(node.textContent).toContain("Linhas de ajuste");
+  expect(node.textContent).not.toContain("Linha de ajusteAparência");
+  const group = node.querySelector('[aria-label="Linha do ajuste B"]');
+  await type(group.querySelector('input[aria-label="Cor da linha do ajuste B"]'), "#16835d");
+  const select = group.querySelector('select[aria-label="Estilo da linha do ajuste B"]');
+  await act(async () => {
+    select.value = "dotted";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await type(group.querySelector('input[aria-label="Espessura da linha do ajuste B (px)"]'), "4");
+  // Only B changes; the points and fit A keep the dataset look, and the result stays.
+  expect(series()[1]).toMatchObject({ lineColor: "#16835d", lineStyle: "dotted", lineWidth: 4 });
+  expect(series()[1].linePoints.length).toBeGreaterThan(0);
+  expect(series()[0]).toMatchObject({ color: "#364cff", lineStyle: "solid", lineWidth: 2 });
+  expect(savedDataset().fits[1]).toMatchObject({
+    curveColor: "#16835d",
+    curveStyle: "dotted",
+    curveWidth: 4,
+  });
+  await click(button("Restaurar", group));
+  expect(series()[1]).toMatchObject({ lineColor: derived, lineStyle: "dashed", lineWidth: 2 });
+  expect(savedDataset().fits[1].curveColor).toBeUndefined();
+  expect(button("Restaurar", group)).toBeUndefined();
+});
+
+it("keeps a styled fit editable after the other fits are removed", async () => {
+  await render();
+  await click(button("Novo ajuste com estes dados"));
+  await click(button("Personalização"));
+  const select = node.querySelector('select[aria-label="Estilo da linha do ajuste B"]');
+  await act(async () => {
+    select.value = "dotted";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await click(button("Análise"));
+  await click(node.querySelector('button[aria-label="Ajuste A"]'));
+  await click(button("Remover ajuste"));
+  await click(button("Personalização"));
+  // The lone fit keeps its own look, so its controls stay instead of the dataset's.
+  expect(series()[0].lineStyle).toBe("dotted");
+  expect(node.querySelector('[aria-label="Linha do ajuste B"]')).not.toBeNull();
+  await click(button("Restaurar"));
+  expect(node.querySelector('[aria-label="Linha do ajuste B"]')).toBeNull();
+  const datasetStyle = [...node.querySelectorAll("select")].find((el) =>
+    el.closest("label")?.textContent.startsWith("Estilo"),
+  );
+  await act(async () => {
+    datasetStyle.value = "dashdot";
+    datasetStyle.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(series()[0].lineStyle).toBe("dashdot");
 });

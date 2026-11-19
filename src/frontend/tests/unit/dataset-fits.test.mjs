@@ -8,6 +8,7 @@ import {
   fitDisplayName,
   fitLetter,
   fitLinePattern,
+  fitLook,
   groupParametersByEquation,
   restoreDatasetFits,
   serializeDatasetFits,
@@ -198,4 +199,46 @@ it("summarises a closed fit row: Chi², sum of squares, failure or nothing", asy
   const result = { chiSquared: 12.345, hasUncertainty: true };
   expect(fitStatus({ ...fit, result }).text).toBe("χ² 12,3");
   expect(fitStatus({ ...fit, result: { ...result, hasUncertainty: false } }).text).toBe("Σr² 12,3");
+});
+
+it("lets a fit choose its curve look, and derives the rest from the dataset", () => {
+  const dataset = { color: "#364cff", lineStyle: "solid", lineWidth: 2, fits: [{}, {}] };
+  expect(fitLook(dataset, { letter: "B" })).toEqual({
+    color: fitColor("#364cff", "B"),
+    pattern: "dashed",
+    width: 2,
+    custom: false,
+  });
+  expect(fitLook(dataset, { letter: "B", curveStyle: "dotted", curveWidth: 4 })).toEqual({
+    color: fitColor("#364cff", "B"),
+    pattern: "dotted",
+    width: 4,
+    custom: true,
+  });
+  // Alone in its dataset, any fit takes the dataset colour and pattern.
+  expect(fitLook({ ...dataset, fits: [{}] }, { letter: "C" })).toMatchObject({
+    color: "#364cff",
+    pattern: "solid",
+  });
+  expect(fitLook({ ...dataset, fits: [{}] }, { letter: "C", curveColor: "#16835d" }).color).toBe(
+    "#16835d",
+  );
+});
+
+it("restores only valid curve choices and drops them from a duplicate", () => {
+  const { fits } = restoreDatasetFits({
+    fits: [
+      { id: "a", letter: "A", curveColor: "#16835d", curveStyle: "dotted", curveWidth: 4 },
+      { id: "b", letter: "B", curveColor: "red", curveStyle: "wavy", curveWidth: 40 },
+    ],
+  });
+  expect(fits[0]).toMatchObject({ curveColor: "#16835d", curveStyle: "dotted", curveWidth: 4 });
+  expect(fits[1]).not.toHaveProperty("curveColor");
+  expect(fits[1]).not.toHaveProperty("curveStyle");
+  expect(fits[1]).not.toHaveProperty("curveWidth");
+  const copy = duplicateFit(fits[0], "c", "C");
+  expect(copy).not.toHaveProperty("curveColor");
+  expect(copy).not.toHaveProperty("curveStyle");
+  expect(copy).not.toHaveProperty("curveWidth");
+  expect(fits[0].curveColor).toBe("#16835d");
 });

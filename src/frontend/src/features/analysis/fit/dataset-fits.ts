@@ -24,6 +24,12 @@ export type FitEntry = FitConfig & {
   label: string;
   /** Whether the curve is drawn. The points belong to the dataset and stay visible. */
   visible: boolean;
+  /** Curve colour chosen for this fit (#rrggbb); absent, it is derived from the dataset colour. */
+  curveColor?: string;
+  /** Curve pattern chosen for this fit; absent, it is derived from the dataset pattern. */
+  curveStyle?: LinePattern;
+  /** Curve width in pixels (1–10) chosen for this fit; absent, the dataset width is used. */
+  curveWidth?: number;
   linePoints: ChartPoint[];
   fitState: "idle" | "mock" | "error";
   fitError?: string;
@@ -97,6 +103,12 @@ function restoreFit(raw: unknown, index: number): FitEntry | null {
   );
   if (typeof saved.label === "string") fit.label = saved.label;
   if (typeof saved.visible === "boolean") fit.visible = saved.visible;
+  if (typeof saved.curveColor === "string" && parseHex(saved.curveColor))
+    fit.curveColor = saved.curveColor;
+  if (LINE_PATTERNS.includes(saved.curveStyle as LinePattern))
+    fit.curveStyle = saved.curveStyle as LinePattern;
+  if (typeof saved.curveWidth === "number" && saved.curveWidth >= 1 && saved.curveWidth <= 10)
+    fit.curveWidth = saved.curveWidth;
   if (Array.isArray(saved.linePoints)) fit.linePoints = saved.linePoints as ChartPoint[];
   if (saved.fitState === "mock" || saved.fitState === "error") fit.fitState = saved.fitState;
   if (typeof saved.fitError === "string") fit.fitError = saved.fitError;
@@ -168,15 +180,19 @@ export function serializeDatasetFits({ fits, activeFitId, fitCounter }: DatasetF
 
 /**
  * Copies a fit with a new id and letter. The configuration, visibility and, since the
- * configuration is identical, the result are kept; the label is not, so the copy shows its
- * letter.
+ * configuration is identical, the result are kept; the label and a curve look chosen for the
+ * source are not, so the copy shows its letter and its own colour and pattern.
  * @param source - Fit to copy.
  * @param id - Identifier of the copy.
  * @param letter - Letter of the copy.
  * @returns The copy.
  */
 export function duplicateFit(source: FitEntry, id: string, letter: string): FitEntry {
-  return { ...source, id, letter, label: "", visible: true };
+  const copy: FitEntry = { ...source, id, letter, label: "", visible: true };
+  delete copy.curveColor;
+  delete copy.curveStyle;
+  delete copy.curveWidth;
+  return copy;
 }
 
 /**
@@ -233,6 +249,41 @@ function parseHex(color: string): number[] | null {
   if (!hex) return null;
   const full = hex.length === 3 ? [...hex].map((c) => c + c).join("") : hex;
   return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+}
+
+/** How a fit curve is drawn. */
+export type FitLook = {
+  color: string;
+  pattern: LinePattern;
+  width: number;
+  /** Whether any of the three was chosen for this fit instead of derived from the dataset. */
+  custom: boolean;
+};
+
+/**
+ * Colour, pattern and width of a fit curve: what was chosen for the fit, or else what
+ * {@link fitColor} and {@link fitLinePattern} derive from the dataset, with the dataset width.
+ * A fit left alone in its dataset (whatever its letter) derives the dataset colour and pattern,
+ * so the dataset's own "Linha de ajuste" controls apply to it.
+ * @param dataset - Colour, line pattern and line width of the dataset and, when known, its fits.
+ * @param fit - The fit, with its letter and optional choices.
+ * @returns The look of the curve.
+ * @example
+ * fitLook({ color: "#364cff", lineStyle: "solid", lineWidth: 2 }, { letter: "B", curveWidth: 4 });
+ * // { color: "#8794ff", pattern: "dashed", width: 4, custom: true }
+ */
+export function fitLook(
+  dataset: { color: string; lineStyle: LinePattern; lineWidth: number; fits?: unknown[] },
+  fit: Pick<FitEntry, "letter" | "curveColor" | "curveStyle" | "curveWidth">,
+): FitLook {
+  const letter = dataset.fits?.length === 1 ? "A" : fit.letter;
+  return {
+    color: fit.curveColor ?? fitColor(dataset.color, letter),
+    pattern: fit.curveStyle ?? fitLinePattern(dataset.lineStyle, letter),
+    width: fit.curveWidth ?? dataset.lineWidth,
+    custom:
+      fit.curveColor !== undefined || fit.curveStyle !== undefined || fit.curveWidth !== undefined,
+  };
 }
 
 /**

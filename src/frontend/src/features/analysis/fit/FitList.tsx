@@ -21,14 +21,7 @@ import { FitControls } from "./FitControls";
 import { FitLineSample } from "./FitLineSample";
 import { equationToLatex } from "./equation-to-latex";
 import type { FitConfig } from "./fit-config";
-import {
-  describeRange,
-  fitColor,
-  fitStatus,
-  fitLinePattern,
-  type FitEntry,
-  type LinePattern,
-} from "./dataset-fits";
+import { describeRange, fitLook, fitStatus, type FitEntry, type LinePattern } from "./dataset-fits";
 import { Tex } from "./Tex";
 
 /** What the list needs from the dataset. */
@@ -37,6 +30,7 @@ export type FitListDataset = {
   name: string;
   color: string;
   lineStyle: LinePattern;
+  lineWidth: number;
   fits: FitEntry[];
   /** Fit in focus: the source of "Novo ajuste" and the fit whose residuals are drawn. */
   activeFitId: string;
@@ -98,8 +92,7 @@ export function FitList({
       <ul className="border-t border-border" aria-label={`Ajustes de ${dataset.name}`}>
         {fits.map((fit) => {
           const open = fit.id === openFitId;
-          const color = fitColor(dataset.color, fit.letter);
-          const pattern = fitLinePattern(dataset.lineStyle, fit.letter);
+          const { color, pattern } = fitLook(dataset, fit);
           const latex = fit.equation.trim() ? equationToLatex(fit.equation) : null;
           const range = describeRange(fit);
           const status = fitStatus(fit);
