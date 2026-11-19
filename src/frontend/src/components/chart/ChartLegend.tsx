@@ -38,6 +38,10 @@ export type LegendSeries = {
   lineWidth: number;
   /** Fitted equation with its values, in LaTeX; absent before a successful fit. */
   legendEquation?: string;
+  /** Another fit of a dataset: no marker of its own, and its line is always shown. */
+  lineOnly?: boolean;
+  /** Colour of the fitted curve when it differs from the marker colour. */
+  lineColor?: string;
 };
 
 type Tab = "content" | "position" | "look";
@@ -425,15 +429,17 @@ export function ChartLegend({
           )}
           {series.map((item) => (
             <span key={item.id} className="flex items-center gap-1.5 whitespace-nowrap">
-              <LegendMarker symbol={item.symbol} color={item.color} size={style.markerSize} />
-              {style.fitLine && (
+              {!item.lineOnly && (
+                <LegendMarker symbol={item.symbol} color={item.color} size={style.markerSize} />
+              )}
+              {(style.fitLine || item.lineOnly) && (
                 <svg width="18" height="8" viewBox="0 0 18 8" aria-hidden="true">
                   <line
                     x1="0"
                     x2="18"
                     y1="4"
                     y2="4"
-                    stroke={item.color}
+                    stroke={item.lineColor ?? item.color}
                     strokeWidth={Math.min(item.lineWidth, 3)}
                     strokeDasharray={chartLinePatterns[item.lineStyle]}
                   />

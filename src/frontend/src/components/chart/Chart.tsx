@@ -48,6 +48,7 @@ import {
 } from "./axisSettings";
 import { AxisGrid, TickMarks, XTickLabels, YTickLabels } from "./AxisMarks";
 import { AxisSettingsPopover } from "./AxisSettingsPopover";
+import { moveRangeEdge, snapRangeValue, type RangeEdges } from "./rangeBand";
 import {
   describeTooltip,
   groupNearbyPoints,
@@ -71,6 +72,26 @@ export type ChartSeries = {
   residuals?: ChartResidual[];
   /** Fitted equation with its parameter values, in LaTeX, for the legend. */
   legendEquation?: string;
+  /** A curve without points of its own (another fit of a dataset); the legend shows its line. */
+  lineOnly?: boolean;
+  /** Colour of the fitted curve when it differs from the points (`color`). */
+  lineColor?: string;
+};
+/**
+ * The X range of the fit being edited, drawn as a band with two draggable edges.
+ * Dragging previews locally and calls `onChange` once, on release; arrow keys on a focused
+ * edge call it on every step.
+ */
+export type ChartRangeEditor = {
+  /** Series whose points the range filters; points outside it are faded. */
+  pointsSeriesId: string;
+  /** Curve colour of the fit. */
+  color: string;
+  /** Short text above the band, such as "B". */
+  label: string;
+  min?: number;
+  max?: number;
+  onChange: (edges: RangeEdges) => void;
 };
 type ChartProps = {
   series: ChartSeries[];
@@ -80,6 +101,8 @@ type ChartProps = {
   highlightedSeriesId?: string | null;
   /** Keys that run the fits, shown in the notice about missing residuals (e.g. "⌘ ↵"). */
   fitShortcut?: string;
+  /** Range of the fit being edited, shown as a draggable band; absent hides the band. */
+  rangeEditor?: ChartRangeEditor | null;
 };
 const finite = (p: ChartPoint) => Number.isFinite(p.x) && Number.isFinite(p.y);
 /** Points drawn per curve segment when an axis is logarithmic. */
@@ -105,7 +128,11 @@ function domain(values: number[], log: boolean): [number, number] {
  * When the settings request residuals and a visible series has them, a residuals panel
  * shares the X scale below the plot. Without residuals a quiet notice explains why the
  * panel is unavailable.
- * @param props - Series, labels, chart settings, export ref, highlighted series, and fit shortcut.
+ *
+ * With a `rangeEditor`, the X range of the fit being edited is drawn as a band whose edges
+ * can be dragged (or moved with the arrow keys); pressing an edge never starts a pan.
+ * @param props - Series, labels, chart settings, export ref, highlighted series, fit shortcut
+ * and the optional range editor.
  * @returns The rendered React element.
  */
 export function Chart({
@@ -115,6 +142,7 @@ export function Chart({
   graphicRef,
   highlightedSeriesId,
   fitShortcut,
+  rangeEditor = null,
 }: ChartProps) {
   const container = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -160,6 +188,8 @@ export function Chart({
   const [active, setActive] = useState<{ seriesId: string; row: number } | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const zoomRef = useRef<ReturnType<typeof zoom<SVGSVGElement, unknown>> | null>(null);
+  /** Edge being dragged and the edges previewed while dragging. */
+  const [drag, setDrag] = useState<{ side: "min" | "max"; edges: RangeEdges } | null>(null);
   useEffect(() => {
     const el = container.current;
     if (!el) return;
@@ -174,6 +204,13 @@ export function Chart({
     if (!el) return;
     const behavior = zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.25, 32])
+      // Pressing an edge of the fit range drags the edge instead of panning the chart.
+      .filter(
+        (event: Event & { ctrlKey?: boolean; button?: number }) =>
+          !(event.target instanceof Element && event.target.closest("[data-range-handle]")) &&
+          (!event.ctrlKey || event.type === "wheel") &&
+          !event.button,
+      )
       .on("start", () => {
         setActive(null);
         setAnnouncement("");
@@ -280,6 +317,28 @@ export function Chart({
   const reset = () => {
     if (svgRef.current && zoomRef.current)
       select(svgRef.current).call(zoomRef.current.transform, zoomIdentity);
+  };
+  const rangeSeries = rangeEditor
+    ? series.find((item) => item.id === rangeEditor.pointsSeriesId)
+    : undefined;
+  const rangeBounds = domain(
+    (rangeSeries?.points ?? []).filter(finite).map((p) => p.x),
+    false,
+  );
+  const shownEdges: RangeEdges = drag?.edges ?? { min: rangeEditor?.min, max: rangeEditor?.max };
+  const rangeMin = shownEdges.min ?? rangeBounds[0];
+  const rangeMax = shownEdges.max ?? rangeBounds[1];
+  const outsideRange = (seriesId: string, value: number) =>
+    rangeEditor !== null &&
+    seriesId === rangeEditor.pointsSeriesId &&
+    (value < rangeMin || value > rangeMax);
+  /** Value of X under a pointer, rounded to a readable step. */
+  const pointerValue = (clientX: number, svg: SVGSVGElement | null) => {
+    const box = svg?.getBoundingClientRect();
+    const [a, b] = visibleDomain(x);
+    // Kept inside the visible plot, so the edge being dragged never leaves the view.
+    const value = x.invert(Math.min(w, Math.max(0, clientX - (box?.left ?? 0) - margin.left)));
+    return Math.min(b, Math.max(a, snapRangeValue(value, b - a)));
   };
   const plotted: TooltipPoint[] = visibleSeries.flatMap((item) =>
     item.points.flatMap((p, index) =>
@@ -562,9 +621,32 @@ export function Chart({
                     at={axes.x}
                     settings={yAxis}
                   />
+                  {rangeEditor && (
+                    <g clipPath={`url(#${clipId})`} pointerEvents="none">
+                      <rect
+                        data-testid="fit-range-band"
+                        x={Math.min(x(rangeMin), x(rangeMax))}
+                        y={0}
+                        width={Math.abs(x(rangeMax) - x(rangeMin))}
+                        height={h}
+                        fill={rangeEditor.color}
+                        fillOpacity={0.08}
+                      />
+                    </g>
+                  )}
                   <g clipPath={`url(#${clipId})`}>
                     {visibleSeries.map(
-                      ({ id, points, linePoints, color, radius, symbol, lineStyle, lineWidth }) => {
+                      ({
+                        id,
+                        points,
+                        linePoints,
+                        color,
+                        lineColor,
+                        radius,
+                        symbol,
+                        lineStyle,
+                        lineWidth,
+                      }) => {
                         const valid = points
                           .map((p, index) => ({ ...p, row: index + 1 }))
                           .filter(finite);
@@ -584,7 +666,7 @@ export function Chart({
                               <path
                                 d={path}
                                 fill="none"
-                                stroke={color}
+                                stroke={lineColor ?? color}
                                 strokeWidth={lineWidth}
                                 strokeDasharray={chartLinePatterns[lineStyle]}
                               />
@@ -594,6 +676,7 @@ export function Chart({
                               .map((p) => (
                                 <g
                                   key={p.row}
+                                  opacity={outsideRange(id, p.x) ? 0.3 : undefined}
                                   onMouseEnter={() => {
                                     setActive({ seriesId: id, row: p.row });
                                     setAnnouncement("");
@@ -673,6 +756,111 @@ export function Chart({
                       </g>
                     )}
                   </g>
+                  {rangeEditor &&
+                    (["min", "max"] as const).map((side) => {
+                      const value = side === "min" ? rangeMin : rangeMax;
+                      const px = x(value);
+                      if (!Number.isFinite(px) || px < -1 || px > w + 1) return null;
+                      const step = () => {
+                        const [a, b] = visibleDomain(x);
+                        return snapRangeValue((b - a) / 50, b - a) || (b - a) / 50;
+                      };
+                      return (
+                        <g
+                          key={side}
+                          data-range-handle={side}
+                          role="slider"
+                          tabIndex={0}
+                          aria-label={`${side === "min" ? "Início" : "Fim"} do intervalo do ajuste ${rangeEditor.label}`}
+                          aria-valuenow={value}
+                          aria-valuetext={String(value).replace(".", ",")}
+                          transform={`translate(${px},0)`}
+                          className="cursor-ew-resize outline-none [&:focus-visible_.grip]:stroke-[#364cff] [&:focus-visible_.grip]:stroke-[2.5]"
+                          onPointerDown={(event) => {
+                            event.stopPropagation();
+                            event.currentTarget.setPointerCapture?.(event.pointerId);
+                            setDrag({
+                              side,
+                              edges: { min: rangeEditor.min, max: rangeEditor.max },
+                            });
+                            dismissTooltip();
+                          }}
+                          onPointerMove={(event) => {
+                            if (!drag) return;
+                            const next = pointerValue(
+                              event.clientX,
+                              event.currentTarget.ownerSVGElement,
+                            );
+                            setDrag({
+                              side: drag.side,
+                              edges: moveRangeEdge(drag.edges, drag.side, next, rangeBounds),
+                            });
+                          }}
+                          onPointerUp={() => {
+                            if (drag) rangeEditor.onChange(drag.edges);
+                            setDrag(null);
+                          }}
+                          onPointerCancel={() => setDrag(null)}
+                          onKeyDown={(event) => {
+                            const direction =
+                              event.key === "ArrowRight" || event.key === "ArrowUp"
+                                ? 1
+                                : event.key === "ArrowLeft" || event.key === "ArrowDown"
+                                  ? -1
+                                  : 0;
+                            if (!direction) return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            const [a, b] = visibleDomain(x);
+                            rangeEditor.onChange(
+                              moveRangeEdge(
+                                { min: rangeEditor.min, max: rangeEditor.max },
+                                side,
+                                snapRangeValue(value + direction * step(), b - a),
+                                rangeBounds,
+                              ),
+                            );
+                          }}
+                        >
+                          <rect x={-8} y={0} width={16} height={h} fill="transparent" />
+                          <line
+                            y1={0}
+                            y2={h}
+                            stroke={rangeEditor.color}
+                            strokeWidth={1.5}
+                            strokeOpacity={
+                              (side === "min" ? shownEdges.min : shownEdges.max) === undefined
+                                ? 0.45
+                                : 0.9
+                            }
+                          />
+                          <rect
+                            className="grip"
+                            x={-4.5}
+                            y={h / 2 - 13}
+                            width={9}
+                            height={26}
+                            rx={4.5}
+                            fill="#ffffff"
+                            stroke={rangeEditor.color}
+                            strokeWidth={1.5}
+                          />
+                        </g>
+                      );
+                    })}
+                  {rangeEditor && (
+                    <text
+                      x={(Math.max(0, x(rangeMin)) + Math.min(w, x(rangeMax))) / 2}
+                      y={11}
+                      textAnchor="middle"
+                      fontSize={10.5}
+                      fontWeight={600}
+                      fill={rangeEditor.color}
+                      pointerEvents="none"
+                    >
+                      {rangeEditor.label}
+                    </text>
+                  )}
                 </g>
               </svg>
             )}

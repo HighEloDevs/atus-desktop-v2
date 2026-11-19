@@ -15,9 +15,26 @@ import { ProjectTitle } from "@/features/projects/ProjectTitle";
 import type { OpenProject } from "@/features/projects/project-client";
 import { useEffect, useLayoutEffect, useRef, useState, type SetStateAction } from "react";
 import { notify } from "@/lib/notify";
-import { FitControls } from "./fit/FitControls";
-import { defaultFitConfig, validateFitConfig, type FitConfig } from "./fit/fit-config";
-import { mockFitService, type FitResponse, type FitService } from "./fit/fit-service";
+import { FitList } from "./fit/FitList";
+import { validateFitConfig, type FitConfig } from "./fit/fit-config";
+import {
+  createFit,
+  describeRange,
+  duplicateFit,
+  fitColor,
+  fitDisplayName,
+  fitLetter,
+  fitLinePattern,
+  groupParametersByEquation,
+  restoreDatasetFits,
+  serializeDatasetFits,
+  type DatasetFits,
+  type FitEntry,
+} from "./fit/dataset-fits";
+import type { FitComparisonData } from "./fit/FitComparison";
+import { RemoveDatasetDialog } from "./RemoveDatasetDialog";
+import { rangeFieldText } from "@/components/chart/rangeBand";
+import { mockFitService, type FitService } from "./fit/fit-service";
 import { useLessonEvent } from "@/features/learn/lesson-events";
 import { type SeparatorType } from "./data-import/text-data-parser";
 import { DataValidationError, parseValidPoints } from "./data-import/parse-valid-points";
@@ -27,7 +44,7 @@ import { readClipboardText, ClipboardReadError } from "./clipboard/read-clipboar
 import { ResultsPanel, type ResultItem } from "./fit/ResultsPanel";
 import { EmptyState } from "./EmptyState";
 import { useClipboardShortcuts, type ClipboardShortcut } from "./clipboard/clipboard-shortcuts";
-import { Chart, type ChartSeries } from "@/components/chart/Chart";
+import { Chart, type ChartRangeEditor, type ChartSeries } from "@/components/chart/Chart";
 import { DataTableDialog } from "./DataTableDialog";
 import {
   DropdownMenu,
@@ -60,20 +77,44 @@ import {
   Pencil,
   RefreshCw,
   TrendingUp,
+  Copy,
 } from "lucide-react";
 
-type Dataset = Omit<ChartSeries, "residuals"> & {
-  data: MockAnalysis | null;
-  equation: string;
-  parameters: string;
-  minX: string;
-  maxX: string;
-  useSx: boolean;
-  useSy: boolean;
-  fitState: "idle" | "mock" | "error";
-  fitError?: string;
-  result?: FitResponse;
-};
+/** Points, their look, and the fits made over them (decision 0016). */
+type Dataset = Omit<ChartSeries, "residuals" | "linePoints" | "legendEquation" | "lineOnly"> &
+  DatasetFits & {
+    data: MockAnalysis | null;
+  };
+
+/** A fit to run, with the dataset points it was configured for. */
+type FitJob = { datasetId: string; points: Dataset["points"]; fit: FitEntry };
+
+/** Chart series id of a fit: fit A shares the dataset id, the others get their own. */
+const fitSeriesId = (datasetId: string, fit: FitEntry, index: number) =>
+  index === 0 ? datasetId : `${datasetId}:${fit.id}`;
+
+const sameFitConfig = (a: FitConfig, b: FitConfig) =>
+  a.equation === b.equation &&
+  a.parameters === b.parameters &&
+  a.minX === b.minX &&
+  a.maxX === b.maxX &&
+  a.useSx === b.useSx &&
+  a.useSy === b.useSy;
+
+/** A fit with its output cleared, as after any change to its configuration or data. */
+const clearFitOutput = (fit: FitEntry): FitEntry => ({
+  ...fit,
+  linePoints: [],
+  fitState: "idle",
+  fitError: undefined,
+  result: undefined,
+});
+
+/** Fit whose residuals are drawn: the active one when it has a result, else the first that has. */
+function residualFitId(dataset: Dataset) {
+  const active = dataset.fits.find((fit) => fit.id === dataset.activeFitId);
+  return active?.result ? active.id : dataset.fits.find((fit) => fit.result && fit.visible)?.id;
+}
 
 type MockAnalysis = {
   slope: number;
@@ -168,38 +209,56 @@ export function AnalysisPage({
   const modifier = isMac ? "⌘" : "Ctrl";
   const [datasets, setDatasets] = useState<Dataset[]>(
     () =>
-      initialAnalysis?.datasets.map(({ id, name, points, state }) => ({
-        ...defaultFitConfig,
-        data: null,
-        linePoints: [],
-        color: "#f25a3c",
-        radius: 5,
-        symbol: "circle",
-        lineStyle: "solid",
-        lineWidth: 2,
-        visible: true,
-        fitState: "idle",
-        ...(state as Partial<Omit<Dataset, "id" | "name" | "points">>),
-        id,
-        name,
-        points: points.map(({ x, y, sx, sy }) => ({
-          x,
-          y,
-          sx: sx ?? undefined,
-          sy: sy ?? undefined,
-        })),
-      })) ?? [],
+      initialAnalysis?.datasets.map(({ id, name, points, state }) => {
+        const saved = (state ?? {}) as Partial<Dataset>;
+        return {
+          data: null,
+          color: saved.color ?? "#f25a3c",
+          radius: saved.radius ?? 5,
+          symbol: saved.symbol ?? "circle",
+          lineStyle: saved.lineStyle ?? "solid",
+          lineWidth: saved.lineWidth ?? 2,
+          visible: saved.visible ?? true,
+          // Projects saved before decision 0016 keep one fit in the dataset state: it becomes A.
+          ...restoreDatasetFits(state),
+          id,
+          name,
+          points: points.map(({ x, y, sx, sy }) => ({
+            x,
+            y,
+            sx: sx ?? undefined,
+            sy: sy ?? undefined,
+          })),
+        };
+      }) ?? [],
   );
   const [selectedId, setSelectedId] = useState<string | null>(initial?.selectedId ?? null);
   const selected = datasets.find((item) => item.id === selectedId) ?? datasets[0];
   const data = selected;
-  const chartSeries: ChartSeries[] = datasets.map((item) => ({
-    ...item,
-    residuals: item.result?.residuals,
-    legendEquation: item.result
-      ? (fittedEquationLatex(item.result.equation, item.result.parameters) ?? undefined)
-      : undefined,
-  }));
+  // Points are drawn once, by the first fit's series, always in the dataset colour; the other
+  // fits are curves of their own, listed in the legend only once they have a curve.
+  const chartSeries: ChartSeries[] = datasets.flatMap((item) => {
+    const residualFit = residualFitId(item);
+    return item.fits.map((fit, index) => ({
+      id: fitSeriesId(item.id, fit, index),
+      name: fitDisplayName(item.name, fit, item.fits.length > 1),
+      points: index === 0 ? item.points : [],
+      linePoints: fit.visible ? fit.linePoints : [],
+      color: index === 0 ? item.color : fitColor(item.color, fit.letter),
+      lineColor: fitColor(item.color, fit.letter),
+      radius: item.radius,
+      symbol: item.symbol,
+      lineStyle: fitLinePattern(item.lineStyle, fit.letter),
+      lineWidth: item.lineWidth,
+      visible: item.visible && (index === 0 || (fit.visible && fit.linePoints.length > 0)),
+      lineOnly: index > 0,
+      residuals: fit.id === residualFit ? fit.result?.residuals : undefined,
+      legendEquation:
+        fit.visible && fit.result
+          ? (fittedEquationLatex(fit.result.equation, fit.result.parameters) ?? undefined)
+          : undefined,
+    }));
+  });
   const residualsAvailable = hasResiduals(chartSeries);
   const residualsOn = chartSettings.residuals && residualsAvailable;
   const saving = useProjectSave(
@@ -210,12 +269,14 @@ export function AnalysisPage({
             {
               ...initialAnalysis,
               state: { chart: chartSettings, selectedId, tableId, separator },
-              datasets: datasets.map(({ id, name, points, ...state }) => ({
-                id,
-                name,
-                points,
-                state,
-              })),
+              datasets: datasets.map(
+                ({ id, name, points, fits, activeFitId, fitCounter, ...state }) => ({
+                  id,
+                  name,
+                  points,
+                  state: { ...state, ...serializeDatasetFits({ fits, activeFitId, fitCounter }) },
+                }),
+              ),
             },
             ...(project?.snapshot.analyses.slice(1) ?? []),
           ]
@@ -231,10 +292,10 @@ export function AnalysisPage({
         id: "save-error",
       });
   }, [saving.error]);
-  function updateSeries(id: string, updates: Partial<ChartSeries>) {
+  function updateSeries(id: string, updates: Partial<Dataset>) {
     setDatasets((items) => items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
   }
-  const seriesSettings = (selected: ChartSeries) => ({
+  const seriesSettings = (selected: Dataset) => ({
     ...chartSettings,
     color: selected.color,
     radius: selected.radius,
@@ -270,6 +331,7 @@ export function AnalysisPage({
   const [panelOpen, setPanelOpen] = useState(true);
   const [mode, setMode] = useState<"analysis" | "visual">("analysis");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     if (sidebarContent.current) sidebarContent.current.scrollTop = scrollPositions.current[mode];
@@ -286,15 +348,7 @@ export function AnalysisPage({
       setDatasets((items) =>
         items.map((item) =>
           item.id === target.id
-            ? {
-                ...item,
-                points,
-                linePoints: [],
-                data: null,
-                fitState: "idle",
-                fitError: undefined,
-                result: undefined,
-              }
+            ? { ...item, points, data: null, fits: item.fits.map(clearFitOutput) }
             : item,
         ),
       );
@@ -307,10 +361,10 @@ export function AnalysisPage({
         id,
         name,
         data: null,
-        ...defaultFitConfig,
-        fitState: "idle",
+        fits: [createFit("fit-0", fitLetter(0))],
+        activeFitId: "fit-0",
+        fitCounter: 1,
         points,
-        linePoints: [],
         color: ["#f25a3c", "#364cff", "#16835d", "#a04cb0"][items.length % 4],
         radius: 5,
         symbol: "circle",
@@ -388,7 +442,7 @@ export function AnalysisPage({
       return;
     }
     let target: ImportTarget = { kind: "create" };
-    let replaced: ChartSeries | undefined;
+    let replaced: Dataset | undefined;
     if (shortcut.kind === "replace") {
       replaced = datasets[shortcut.index - 1];
       if (!replaced) {
@@ -442,87 +496,185 @@ export function AnalysisPage({
     }
   }
 
-  async function runFits() {
-    const configured = datasets.filter((item) => item.equation.trim());
-    if (configured.length === 0) return;
+  /** Every fit with a function, of every dataset, as `runFits` expects them. */
+  function allFitJobs(): FitJob[] {
+    return datasets.flatMap((item) =>
+      item.fits
+        .filter((fit) => fit.equation.trim())
+        .map((fit) => ({ datasetId: item.id, points: item.points, fit })),
+    );
+  }
+
+  /**
+   * Runs fits and stores each result in its fit, unless the fit or the data changed meanwhile.
+   * @param jobs - Fits to run; all configured fits by default.
+   * @param quiet - Skips the success toast (used when dragging the range on the chart).
+   */
+  async function runFits(jobs: FitJob[] = allFitJobs(), quiet = false) {
+    if (jobs.length === 0) return;
     const results = await Promise.all(
-      configured.map(async (item) => {
+      jobs.map(async (job) => {
+        const { fit } = job;
         try {
-          const validationError = validateFitConfig(item);
+          const validationError = validateFitConfig(fit);
           if (validationError) throw new Error(validationError);
           const response = await fitService.fit({
             version: 1,
-            points: item.points,
-            equation: item.equation,
-            parameters: item.parameters,
+            points: job.points,
+            equation: fit.equation,
+            parameters: fit.parameters,
             range: {
-              min: item.minX === "" ? undefined : Number(item.minX),
-              max: item.maxX === "" ? undefined : Number(item.maxX),
+              min: fit.minX === "" ? undefined : Number(fit.minX),
+              max: fit.maxX === "" ? undefined : Number(fit.maxX),
             },
-            useSx: item.useSx,
-            useSy: item.useSy,
+            useSx: fit.useSx,
+            useSy: fit.useSy,
           });
-          return { item, response, error: undefined };
+          return { job, response, error: undefined };
         } catch (error) {
           return {
-            item,
+            job,
             response: undefined,
             error: error instanceof Error ? error.message : "Falha ao executar o ajuste.",
           };
         }
       }),
     );
-    for (const { item, error } of results)
-      if (error)
-        notify.error(`Falha no ajuste de ${item.name}`, {
-          description: error,
-          id: `fit-error-${item.id}`,
-        });
-    if (results.every(({ error }) => !error)) {
+    for (const { job, error } of results) {
+      if (!error) continue;
+      const dataset = datasets.find((item) => item.id === job.datasetId);
+      const index = dataset?.fits.findIndex((fit) => fit.id === job.fit.id) ?? 0;
+      const name = dataset
+        ? fitDisplayName(dataset.name, job.fit, dataset.fits.length > 1)
+        : job.datasetId;
+      notify.error(`Falha no ajuste de ${name}`, {
+        description: error,
+        id: `fit-error-${fitSeriesId(job.datasetId, job.fit, Math.max(0, index))}`,
+      });
+    }
+    if (!quiet && results.every(({ error }) => !error)) {
       notify.success("Ajuste executado com sucesso", { id: "fit-success" });
       reportLessonEvent("fit.succeeded");
     }
     setDatasets((items) =>
-      items.map((current) => {
-        const result = results.find(
-          ({ item }) =>
-            item.id === current.id &&
-            item.points === current.points &&
-            item.equation === current.equation &&
-            item.parameters === current.parameters &&
-            item.minX === current.minX &&
-            item.maxX === current.maxX &&
-            item.useSx === current.useSx &&
-            item.useSy === current.useSy,
-        );
-        if (!result) return current;
+      items.map((current) => ({
+        ...current,
+        fits: current.fits.map((fit) => {
+          const outcome = results.find(
+            ({ job }) =>
+              job.datasetId === current.id &&
+              job.fit.id === fit.id &&
+              job.points === current.points &&
+              sameFitConfig(job.fit, fit),
+          );
+          if (!outcome) return fit;
+          return {
+            ...fit,
+            linePoints: outcome.response?.curve ?? [],
+            fitState: outcome.response ? "mock" : "error",
+            fitError: outcome.error,
+            result: outcome.response,
+          };
+        }),
+      })),
+    );
+  }
+
+  /** Changes the configuration of a fit and clears its output. */
+  function updateFit(datasetId: string, fitId: string, changes: Partial<FitConfig>) {
+    if (changes.equation !== undefined) reportLessonEvent("equation.changed", changes.equation);
+    setDatasets((items) =>
+      items.map((item) =>
+        item.id === datasetId
+          ? {
+              ...item,
+              fits: item.fits.map((fit) =>
+                fit.id === fitId ? clearFitOutput({ ...fit, ...changes }) : fit,
+              ),
+            }
+          : item,
+      ),
+    );
+  }
+
+  /** Changes how a fit is named or shown, keeping its result. */
+  function patchFit(datasetId: string, fitId: string, patch: Partial<FitEntry>) {
+    setDatasets((items) =>
+      items.map((item) =>
+        item.id === datasetId
+          ? {
+              ...item,
+              fits: item.fits.map((fit) => (fit.id === fitId ? { ...fit, ...patch } : fit)),
+            }
+          : item,
+      ),
+    );
+  }
+
+  /** Opens the controls of a fit; its residuals and range band are shown. */
+  function activateFit(datasetId: string, fitId: string) {
+    setSelectedId(datasetId);
+    setDatasets((items) =>
+      items.map((item) => (item.id === datasetId ? { ...item, activeFitId: fitId } : item)),
+    );
+  }
+
+  /** Adds a fit to a dataset: a copy of the active fit, or a blank one. */
+  function addFit(datasetId: string, mode: "duplicate" | "blank") {
+    const dataset = datasets.find((item) => item.id === datasetId);
+    if (!dataset) return;
+    const source = dataset.fits.find((fit) => fit.id === dataset.activeFitId) ?? dataset.fits[0];
+    const id = crypto.randomUUID();
+    const letter = fitLetter(dataset.fitCounter);
+    const fit = mode === "duplicate" ? duplicateFit(source, id, letter) : createFit(id, letter);
+    setDatasets((items) =>
+      items.map((item) =>
+        item.id === datasetId
+          ? {
+              ...item,
+              fits: [...item.fits, fit],
+              activeFitId: id,
+              fitCounter: item.fitCounter + 1,
+            }
+          : item,
+      ),
+    );
+    setSelectedId(datasetId);
+    setExpanded((old) => ({ ...old, [datasetId]: true }));
+    notify.success(
+      mode === "duplicate"
+        ? `Ajuste ${letter} criado a partir de ${source.letter}`
+        : `Ajuste ${letter} criado`,
+      {
+        id: "fit-added",
+        description:
+          mode === "duplicate"
+            ? "Mude a função ou arraste as bordas da faixa no gráfico para mudar o intervalo."
+            : undefined,
+      },
+    );
+  }
+
+  /** Removes a fit; the last fit of a dataset cannot be removed (remove the dataset instead). */
+  function removeFit(datasetId: string, fitId: string) {
+    setDatasets((items) =>
+      items.map((item) => {
+        if (item.id !== datasetId || item.fits.length < 2) return item;
+        const index = item.fits.findIndex((fit) => fit.id === fitId);
+        const fits = item.fits.filter((fit) => fit.id !== fitId);
         return {
-          ...current,
-          linePoints: result.response?.curve ?? [],
-          fitState: result.response ? "mock" : "error",
-          fitError: result.error,
-          result: result.response,
+          ...item,
+          fits,
+          activeFitId:
+            item.activeFitId === fitId ? fits[Math.max(0, index - 1)].id : item.activeFitId,
         };
       }),
     );
   }
 
-  function updateFit(id: string, changes: Partial<FitConfig>) {
-    if (changes.equation !== undefined) reportLessonEvent("equation.changed", changes.equation);
-    setDatasets((items) =>
-      items.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              ...changes,
-              linePoints: [],
-              fitState: "idle",
-              fitError: undefined,
-              result: undefined,
-            }
-          : item,
-      ),
-    );
+  function removeDataset(id: string) {
+    setDatasets((items) => items.filter((entry) => entry.id !== id));
+    if (selectedId === id) setSelectedId(null);
   }
 
   const cards = (cardMode: "analysis" | "visual") => (
@@ -588,7 +740,10 @@ export function AnalysisPage({
                   <span className="block truncate text-sm font-medium" title={item.name}>
                     {item.name}
                   </span>
-                  <span className="block text-xs text-[#87938a]">{item.points.length} linhas</span>
+                  <span className="block text-xs text-[#87938a]">
+                    {item.points.length} linhas
+                    {item.fits.length > 1 ? ` · ${item.fits.length} ajustes` : ""}
+                  </span>
                 </button>
               )}
               {cardMode === "analysis" && (
@@ -621,6 +776,10 @@ export function AnalysisPage({
                         <Pencil />
                         Renomear
                       </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => addFit(item.id, "duplicate")}>
+                        <Copy />
+                        Novo ajuste com estes dados
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         onSelect={() => document.getElementById(`replace-${item.id}`)?.click()}
                       >
@@ -631,10 +790,9 @@ export function AnalysisPage({
                       <DropdownMenuItem
                         variant="destructive"
                         onSelect={() => {
-                          setDatasets((items) => items.filter((entry) => entry.id !== item.id));
-                          if (selectedId === item.id) {
-                            setSelectedId(null);
-                          }
+                          // Removing a dataset also removes its fits; ask when there are several.
+                          if (item.fits.length > 1) setRemovingId(item.id);
+                          else removeDataset(item.id);
                         }}
                       >
                         <Trash2 />
@@ -669,10 +827,13 @@ export function AnalysisPage({
             {open &&
               (cardMode === "analysis" ? (
                 <div className={`border-t border-[#e0e5df] py-3.5 ${flat ? "px-0" : "px-3.5"}`}>
-                  <FitControls
-                    name={item.name}
-                    config={item}
-                    onChange={(changes) => updateFit(item.id, changes)}
+                  <FitList
+                    dataset={item}
+                    onActivate={(fitId) => activateFit(item.id, fitId)}
+                    onChange={(fitId, changes) => updateFit(item.id, fitId, changes)}
+                    onPatch={(fitId, patch) => patchFit(item.id, fitId, patch)}
+                    onAdd={(addMode) => addFit(item.id, addMode)}
+                    onRemove={(fitId) => removeFit(item.id, fitId)}
                   />
                 </div>
               ) : (
@@ -686,6 +847,73 @@ export function AnalysisPage({
     </div>
   );
   const table = datasets.find((item) => item.id === tableId);
+  const removing = datasets.find((item) => item.id === removingId);
+  const resultItems = datasets.flatMap((item) =>
+    item.fits.flatMap((fit, index): ResultItem[] => {
+      const base = {
+        id: fitSeriesId(item.id, fit, index),
+        name: fitDisplayName(item.name, fit, item.fits.length > 1),
+        color: fitColor(item.color, fit.letter),
+        pattern: item.fits.length > 1 ? fitLinePattern(item.lineStyle, fit.letter) : undefined,
+      };
+      return fit.result
+        ? [{ ...base, result: fit.result }]
+        : fit.fitState === "error" && fit.fitError
+          ? [{ ...base, error: fit.fitError }]
+          : [];
+    }),
+  );
+  const comparisons: FitComparisonData[] = datasets
+    .filter((item) => item.fits.length > 1 && item.fits.some((fit) => fit.result))
+    .map((item) => ({
+      datasetId: item.id,
+      datasetName: item.name,
+      groups: groupParametersByEquation(item.fits),
+      fits: item.fits.map((fit, index) => ({
+        fitId: fit.id,
+        seriesId: fitSeriesId(item.id, fit, index),
+        letter: fit.letter,
+        label: fit.label.trim(),
+        color: fitColor(item.color, fit.letter),
+        pattern: fitLinePattern(item.lineStyle, fit.letter),
+        equation: fit.equation,
+        range: describeRange(fit),
+        result: fit.result,
+        error: fit.fitState === "error" ? fit.fitError : undefined,
+      })),
+    }));
+  // The range band follows the active fit of the selected dataset. A lone fit without a typed
+  // range keeps today's chart, with no band.
+  const rangeFit = selected?.fits.find((fit) => fit.id === selected.activeFitId);
+  const rangeEditor: ChartRangeEditor | null =
+    selected &&
+    rangeFit &&
+    selected.visible &&
+    rangeFit.equation.trim() &&
+    (selected.fits.length > 1 || rangeFit.minX !== "" || rangeFit.maxX !== "")
+      ? {
+          pointsSeriesId: selected.id,
+          color: fitColor(selected.color, rangeFit.letter),
+          label: selected.fits.length > 1 ? rangeFit.label.trim() || rangeFit.letter : "",
+          min: rangeFit.minX === "" ? undefined : Number(rangeFit.minX),
+          max: rangeFit.maxX === "" ? undefined : Number(rangeFit.maxX),
+          onChange: (edges) => {
+            const changes = { minX: rangeFieldText(edges.min), maxX: rangeFieldText(edges.max) };
+            updateFit(selected.id, rangeFit.id, changes);
+            void runFits(
+              [
+                {
+                  datasetId: selected.id,
+                  points: selected.points,
+                  fit: { ...rangeFit, ...changes },
+                },
+              ],
+              true,
+            );
+          },
+        }
+      : null;
+
   useClipboardShortcuts(
     (shortcut) => void importFromClipboard(shortcut),
     isMac,
@@ -749,6 +977,24 @@ export function AnalysisPage({
         }}
       />
       <DataTableDialog dataset={table ?? null} onClose={() => setTableId(null)} />
+      {removing && (
+        <RemoveDatasetDialog
+          name={removing.name}
+          fits={removing.fits.map((fit) => ({
+            id: fit.id,
+            letter: fit.letter,
+            label: fit.label,
+            equation: fit.equation,
+            color: fitColor(removing.color, fit.letter),
+            pattern: fitLinePattern(removing.lineStyle, fit.letter),
+          }))}
+          onCancel={() => setRemovingId(null)}
+          onConfirm={() => {
+            removeDataset(removing.id);
+            setRemovingId(null);
+          }}
+        />
+      )}
       {panelOpen && (
         <aside
           data-tour="analysis-panel"
@@ -926,7 +1172,7 @@ export function AnalysisPage({
             <button
               type="button"
               data-tour="fit-run"
-              disabled={!datasets.some((item) => item.equation.trim())}
+              disabled={!datasets.some((item) => item.fits.some((fit) => fit.equation.trim()))}
               onClick={() => void runFits()}
               className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-45"
             >
@@ -1005,15 +1251,11 @@ export function AnalysisPage({
                 series={chartSeries}
                 highlightedSeriesId={highlightedSeriesId}
                 fitShortcut={`${modifier} ↵`}
+                rangeEditor={rangeEditor}
               />
               <ResultsPanel
-                results={datasets.flatMap((item): ResultItem[] =>
-                  item.result
-                    ? [{ id: item.id, name: item.name, color: item.color, result: item.result }]
-                    : item.fitState === "error" && item.fitError
-                      ? [{ id: item.id, name: item.name, color: item.color, error: item.fitError }]
-                      : [],
-                )}
+                results={resultItems}
+                comparisons={comparisons}
                 onHighlight={setHighlightedSeriesId}
               />
             </div>
