@@ -3,7 +3,7 @@
  * Controls for chart and series presentation.
  */
 
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { Circle, Diamond, Square } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -22,15 +22,18 @@ const markerOptions = [
  *
  * The axis fields here edit the same state as the axis popovers on the chart. Divisões
  * and Linhas de grade apply to both axes.
- * @param props - Chart settings and the section to display.
+ * @param props - Chart settings, the section to display and, optionally, controls that replace
+ * the single "Linha de ajuste" section (a dataset with several fits styles each curve).
  * @returns The rendered React element.
  */
 export function ChartSettingsPanel({
   settings,
   section = "all",
+  lineSection,
 }: {
   settings: ChartSettings;
   section?: "all" | "series" | "chart";
+  lineSection?: ReactNode;
 }) {
   const markerGroup = useId();
   const {
@@ -129,42 +132,46 @@ export function ChartSettingsPanel({
             </fieldset>
           </section>
 
-          <section className="space-y-3 border-t border-border pt-4">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <h3 className="font-semibold">Linha de ajuste</h3>
-                <span className="mt-1 block font-normal leading-relaxed text-muted-foreground">
-                  Aparência da curva exibida sobre os pontos.
-                </span>
+          {lineSection ?? (
+            <section className="space-y-3 border-t border-border pt-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-semibold">Linha de ajuste</h3>
+                  <span className="mt-1 block font-normal leading-relaxed text-muted-foreground">
+                    Aparência da curva exibida sobre os pontos.
+                  </span>
+                </div>
               </div>
-            </div>
-            <div className="space-y-3">
-              <label className="block">
-                <span className="font-medium">Estilo</span>
-                <NativeSelect
-                  className="mt-1 h-8 w-full text-xs"
-                  value={lineStyle}
-                  onChange={(e) => setLineStyle(e.target.value as typeof lineStyle)}
-                >
-                  <NativeSelectOption value="solid">Contínua</NativeSelectOption>
-                  <NativeSelectOption value="dashed">Tracejada</NativeSelectOption>
-                  <NativeSelectOption value="dotted">Pontilhada</NativeSelectOption>
-                  <NativeSelectOption value="dashdot">Traço-ponto</NativeSelectOption>
-                </NativeSelect>
-              </label>
-              <label className="block">
-                <span className="font-medium">Espessura (px)</span>
-                <Input
-                  className="mt-1 h-8 w-full text-xs"
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={lineWidth}
-                  onChange={(e) => setLineWidth(Math.max(1, Math.min(10, Number(e.target.value))))}
-                />
-              </label>
-            </div>
-          </section>
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="font-medium">Estilo</span>
+                  <NativeSelect
+                    className="mt-1 h-8 w-full text-xs"
+                    value={lineStyle}
+                    onChange={(e) => setLineStyle(e.target.value as typeof lineStyle)}
+                  >
+                    <NativeSelectOption value="solid">Contínua</NativeSelectOption>
+                    <NativeSelectOption value="dashed">Tracejada</NativeSelectOption>
+                    <NativeSelectOption value="dotted">Pontilhada</NativeSelectOption>
+                    <NativeSelectOption value="dashdot">Traço-ponto</NativeSelectOption>
+                  </NativeSelect>
+                </label>
+                <label className="block">
+                  <span className="font-medium">Espessura (px)</span>
+                  <Input
+                    className="mt-1 h-8 w-full text-xs"
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={lineWidth}
+                    onChange={(e) =>
+                      setLineWidth(Math.max(1, Math.min(10, Number(e.target.value))))
+                    }
+                  />
+                </label>
+              </div>
+            </section>
+          )}
         </>
       )}
       {section !== "series" && (

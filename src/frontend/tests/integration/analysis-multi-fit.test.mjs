@@ -1,0 +1,365 @@
+// @vitest-environment jsdom
+/** Several fits over one dataset (decision 0016): sidebar, chart series, results and saving. */
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { act, createElement, Fragment } from "react";
+import { createRoot } from "react-dom/client";
+
+const notify = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+  loading: vi.fn(),
+  dismiss: vi.fn(),
+}));
+const chart = vi.hoisted(() => ({ props: null }));
+const saved = vi.hoisted(() => ({ content: null }));
+vi.mock("@/lib/notify", () => ({ notify }));
+vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => false, invoke: vi.fn() }));
+vi.mock("../../src/features/projects/useProjectSave", () => ({
+  useProjectSave: (_project, content) => {
+    saved.content = content;
+    return {
+      project: null,
+      status: "Salvo",
+      error: "",
+      canLeave: async () => true,
+      flush: async () => true,
+      saveAs: async () => {},
+    };
+  },
+}));
+vi.mock("../../src/components/chart/Chart", () => ({
+  Chart: (props) => {
+    chart.props = props;
+    return createElement("div", { "data-testid": "chart" });
+  },
+}));
+vi.mock("../../src/components/ui/dropdown-menu", () => ({
+  DropdownMenu: ({ children }) => createElement(Fragment, null, children),
+  DropdownMenuTrigger: ({ children }) => children,
+  DropdownMenuContent: ({ children }) => createElement("div", null, children),
+  DropdownMenuItem: ({ children, onSelect }) =>
+    createElement("button", { onClick: onSelect }, children),
+  DropdownMenuSeparator: () => null,
+  DropdownMenuLabel: ({ children }) => createElement("span", null, children),
+}));
+import { AnalysisPage } from "../../src/features/analysis/AnalysisPage";
+
+let root;
+let node;
+beforeEach(() => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  vi.clearAllMocks();
+  node = document.createElement("div");
+  document.body.appendChild(node);
+  root = createRoot(node);
+});
+afterEach(async () => {
+  await act(async () => root.unmount());
+  node.remove();
+  document.body.innerHTML = "";
+});
+
+/** A project saved before multiple fits: the dataset state holds one fit. */
+const legacyProject = () => ({
+  path: "/p.atus",
+  snapshot: {
+    id: "p",
+    name: "P",
+    created_at: "2024",
+    updated_at: "2024",
+    analyses: [
+      {
+        id: "analysis",
+        kind: "analysis",
+        state: { selectedId: "d" },
+        datasets: [
+          {
+            id: "d",
+            name: "Queda",
+            state: { color: "#364cff", equation: "a*x+b", parameters: "a=1; b=0" },
+            points: [
+              { x: 0, y: 1, sy: 0.1 },
+              { x: 1, y: 3, sy: 0.1 },
+              { x: 2, y: 5, sy: 0.1 },
+              { x: 3, y: 8, sy: 0.1 },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+});
+
+async function render(project = legacyProject()) {
+  await act(async () =>
+    root.render(
+      createElement(AnalysisPage, {
+        onBack: vi.fn(),
+        project,
+        finderPath: null,
+        onOpenFinderProject: vi.fn(),
+        onCancelFinderProject: vi.fn(),
+      }),
+    ),
+  );
+}
+const buttons = (root = node) => [...root.querySelectorAll("button")];
+const button = (text, root = node) => buttons(root).find((b) => b.textContent.includes(text));
+const series = () => chart.props.series;
+async function click(element) {
+  await act(async () => element.click());
+}
+async function type(input, value) {
+  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+  await act(async () => {
+    set.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+const savedDataset = () => JSON.parse(saved.content)[0].datasets[0].state;
+/** Row of a fit in the sidebar list, by position. */
+const row = (index) => node.querySelectorAll('[aria-label="Ajustes de Queda"] > li')[index];
+const exact = (text, root = node) => buttons(root).find((b) => b.textContent.trim() === text);
+
+it("opens an old project with its fit as A and keeps today's single-fit layout", async () => {
+  await render();
+  expect(series().map((s) => [s.id, s.name, s.points.length, s.lineOnly])).toEqual([
+    ["d", "Queda", 4, false],
+  ]);
+  expect(node.querySelector('input[aria-label="Função de ajuste de Queda"]').value).toBe("a*x+b");
+  expect(node.querySelector('[aria-label="Ajustes de Queda"]')).toBeNull();
+  expect(chart.props.rangeEditor).toBeNull();
+  // A lone fit can also mark its range on the chart.
+  await click(button("Marcar no gráfico"));
+  expect(chart.props.rangeEditor).toMatchObject({ pointsSeriesId: "d", label: "" });
+  expect(button("Marcando no gráfico").getAttribute("aria-pressed")).toBe("true");
+  await click(button("Marcando no gráfico"));
+  expect(chart.props.rangeEditor).toBeNull();
+  // The range fields stay in view after marking ends.
+  expect(button("Marcar no gráfico").closest("details").open).toBe(true);
+  expect(savedDataset()).toMatchObject({ equation: "a*x+b", fitCounter: 1 });
+  expect(savedDataset().fits).toHaveLength(1);
+});
+
+it("duplicates the fit, draws the points once and compares the fits", async () => {
+  await render();
+  await click(button("Novo ajuste com estes dados"));
+  expect(notify.success).toHaveBeenCalledWith(
+    "Ajuste B criado a partir de A",
+    expect.objectContaining({ id: "fit-added" }),
+  );
+  expect(node.querySelector('[aria-label="Ajustes de Queda"]')).not.toBeNull();
+  expect(node.textContent).toContain("4 linhas · 2 ajustes");
+  // The copy keeps the function and opens its controls.
+  expect(node.querySelector('input[aria-label="Função de ajuste de Queda, ajuste B"]').value).toBe(
+    "a*x+b",
+  );
+  expect(series().map((s) => [s.name, s.points.length, s.lineOnly, s.lineStyle])).toEqual([
+    ["Queda · A", 4, false, "solid"],
+    ["Queda · B", 0, true, "dashed"],
+  ]);
+  expect(series()[1].color).not.toBe(series()[0].color);
+  expect(button("duplica").textContent).toBe("Novo ajusteduplica B");
+  // The range band only appears while the user marks the range on the chart.
+  expect(chart.props.rangeEditor).toBeNull();
+  await click(button("Marcar no gráfico"));
+  expect(chart.props.rangeEditor).toMatchObject({ pointsSeriesId: "d", label: "B" });
+  await act(async () => chart.props.rangeEditor.onDone());
+  expect(chart.props.rangeEditor).toBeNull();
+  expect(button("Marcar no gráfico").closest("details").open).toBe(true);
+
+  await click(button("Executar ajustes"));
+  expect(series().every((s) => s.linePoints.length > 0)).toBe(true);
+  // Only the active fit draws residuals, so two fits of the same points never overlap there.
+  expect(series().map((s) => Boolean(s.residuals))).toEqual([false, true]);
+  const panel = node.querySelector('[aria-label="Resultados da análise"]');
+  expect(panel.textContent).toContain("Queda · A");
+  expect(panel.textContent).toContain("Queda · B");
+  await click(button("Comparar", panel));
+  const table = panel.querySelector('table[aria-label="Comparação dos ajustes de Queda"]');
+  expect(table).not.toBeNull();
+  expect(table.textContent).toContain("mesma função em A, B");
+  expect(table.textContent).toContain("Chi²");
+  expect(table.querySelectorAll('svg[aria-label^="Resíduos do ajuste"]')).toHaveLength(2);
+  expect(table.textContent).not.toMatch(/melhor|R²|reduzido/i);
+});
+
+it("moves the range from the chart band and refits only that fit, quietly", async () => {
+  await render();
+  await click(button("Novo ajuste com estes dados"));
+  await click(button("Executar ajustes"));
+  notify.success.mockClear();
+  await click(button("Marcar no gráfico"));
+  await act(async () => chart.props.rangeEditor.onChange({ min: 1, max: undefined }));
+  expect(node.querySelector('input[aria-label="Mínimo de X para Queda, ajuste B"]').value).toBe(
+    "1",
+  );
+  expect(series()[1].residuals.map((r) => r.x)).toEqual([1, 2, 3]);
+  expect(series()[0].linePoints.length).toBeGreaterThan(0);
+  expect(notify.success).not.toHaveBeenCalled();
+  const fits = savedDataset().fits;
+  expect(fits.map((fit) => [fit.letter, fit.minX])).toEqual([
+    ["A", ""],
+    ["B", "1"],
+  ]);
+});
+
+it("labels, hides, removes and keeps letters stable", async () => {
+  await render();
+  await click(button("Novo ajuste com estes dados"));
+  await click(exact("em branco"));
+  expect(node.textContent).toContain("3 ajustes");
+  // A fit without a curve is not listed in the legend yet.
+  expect(series()[2]).toMatchObject({ name: "Queda · C", visible: false });
+  expect([...node.querySelectorAll('[aria-label="Ajustes de Queda"] > li')]).toHaveLength(3);
+  expect(row(2).textContent).toContain("Sem função");
+  // Remove C, then rename and hide B; the next fit is D, never C again.
+  await click(button("Remover ajuste", row(2)));
+  await click(button("Renomear", row(1)));
+  const label = row(1).querySelector('input[placeholder="Ajuste B"]');
+  await type(label, "Início");
+  await act(async () =>
+    label.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+  );
+  expect(series()[1].name).toBe("Queda · Início");
+  expect(row(1).textContent).toContain("Início");
+  await click(node.querySelector('button[aria-label="Ocultar curva do ajuste B"]'));
+  expect(series()[1].visible).toBe(false);
+  await click(button("Duplicar ajuste A", row(0)));
+  expect(savedDataset().fits.map((fit) => [fit.letter, fit.label, fit.visible])).toEqual([
+    ["A", "", true],
+    ["B", "Início", false],
+    ["D", "", true],
+  ]);
+  expect(savedDataset().fitCounter).toBe(4);
+});
+
+it("lets every fit row be closed and picks the residuals by letter", async () => {
+  await render();
+  await click(button("Novo ajuste com estes dados"));
+  await click(button("Executar ajustes"));
+  const b = node.querySelector('button[aria-label="Ajuste B"]');
+  expect(b.getAttribute("aria-expanded")).toBe("true");
+  await click(button("Marcar no gráfico"));
+  await click(b);
+  // Every row closed: no controls, no band, and the closed rows still show the status.
+  expect(node.querySelector('input[aria-label^="Função de ajuste de Queda"]')).toBeNull();
+  expect(chart.props.rangeEditor).toBeNull();
+  expect(row(0).textContent).toMatch(/χ² /);
+  expect(series().map((s) => Boolean(s.residuals))).toEqual([false, true]);
+  // The residuals panel shows one fit at a time, chosen in the toolbar.
+  await click(node.querySelector('button[role="switch"]'));
+  await click(node.querySelector('button[aria-label="Resíduos do ajuste A"]'));
+  expect(series().map((s) => Boolean(s.residuals))).toEqual([true, false]);
+  expect(button("duplica").textContent).toBe("Novo ajusteduplica A");
+});
+
+it("draws a lone fit B in the dataset look after fit A is removed", async () => {
+  await render();
+  await click(button("Novo ajuste com estes dados"));
+  await click(button("Executar ajustes"));
+  await click(node.querySelector('button[aria-label="Ajuste A"]'));
+  await click(button("Remover ajuste"));
+  expect(series()).toHaveLength(1);
+  // Alone, B follows the dataset's own "Linha de ajuste" controls instead of its letter shade.
+  expect(series()[0]).toMatchObject({
+    name: "Queda",
+    color: "#364cff",
+    lineColor: "#364cff",
+    lineStyle: "solid",
+    points: expect.any(Array),
+  });
+  expect(series()[0].points).toHaveLength(4);
+});
+
+it("asks before removing a dataset with several fits and lists them", async () => {
+  await render();
+  await click(button("Novo ajuste com estes dados"));
+  await click(buttons().find((b) => b.textContent.trim() === "Remover"));
+  const dialog = document.querySelector('[role="dialog"]');
+  expect(dialog.textContent).toContain("Remover “Queda”?");
+  expect(dialog.textContent).toContain("Os pontos e os 2 ajustes abaixo saem do projeto.");
+  await click(button("Cancelar", dialog));
+  expect(series()).toHaveLength(2);
+  await click(buttons().find((b) => b.textContent.trim() === "Remover"));
+  await click(button("Remover conjunto e ajustes", document.querySelector('[role="dialog"]')));
+  expect(node.querySelector('[data-testid="chart"]')).toBeNull();
+});
+
+it("replacing the data keeps every fit and clears every result", async () => {
+  await render();
+  await click(button("Novo ajuste com estes dados"));
+  await click(button("Executar ajustes"));
+  const input = node.querySelector("#replace-d");
+  Object.defineProperty(input, "files", {
+    value: [{ name: "novo.csv", size: 10, text: async () => "0;1\n1;2\n2;3" }],
+    configurable: true,
+  });
+  await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+  expect(series().map((s) => [s.name, s.points.length, s.linePoints.length])).toEqual([
+    ["Queda · A", 3, 0],
+    ["Queda · B", 0, 0],
+  ]);
+  expect(savedDataset().fits.every((fit) => fit.fitState === "idle")).toBe(true);
+});
+
+it("styles each fit curve in Personalização and restores the derived look", async () => {
+  await render();
+  await click(button("Novo ajuste com estes dados"));
+  await click(button("Executar ajustes"));
+  const derived = series()[1].lineColor;
+  await click(button("Personalização"));
+  expect(node.textContent).toContain("Linhas de ajuste");
+  expect(node.textContent).not.toContain("Linha de ajusteAparência");
+  const group = node.querySelector('[aria-label="Linha do ajuste B"]');
+  await type(group.querySelector('input[aria-label="Cor da linha do ajuste B"]'), "#16835d");
+  const select = group.querySelector('select[aria-label="Estilo da linha do ajuste B"]');
+  await act(async () => {
+    select.value = "dotted";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await type(group.querySelector('input[aria-label="Espessura da linha do ajuste B (px)"]'), "4");
+  // Only B changes; the points and fit A keep the dataset look, and the result stays.
+  expect(series()[1]).toMatchObject({ lineColor: "#16835d", lineStyle: "dotted", lineWidth: 4 });
+  expect(series()[1].linePoints.length).toBeGreaterThan(0);
+  expect(series()[0]).toMatchObject({ color: "#364cff", lineStyle: "solid", lineWidth: 2 });
+  expect(savedDataset().fits[1]).toMatchObject({
+    curveColor: "#16835d",
+    curveStyle: "dotted",
+    curveWidth: 4,
+  });
+  await click(button("Restaurar", group));
+  expect(series()[1]).toMatchObject({ lineColor: derived, lineStyle: "dashed", lineWidth: 2 });
+  expect(savedDataset().fits[1].curveColor).toBeUndefined();
+  expect(button("Restaurar", group)).toBeUndefined();
+});
+
+it("keeps a styled fit editable after the other fits are removed", async () => {
+  await render();
+  await click(button("Novo ajuste com estes dados"));
+  await click(button("Personalização"));
+  const select = node.querySelector('select[aria-label="Estilo da linha do ajuste B"]');
+  await act(async () => {
+    select.value = "dotted";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await click(button("Análise"));
+  await click(node.querySelector('button[aria-label="Ajuste A"]'));
+  await click(button("Remover ajuste"));
+  await click(button("Personalização"));
+  // The lone fit keeps its own look, so its controls stay instead of the dataset's.
+  expect(series()[0].lineStyle).toBe("dotted");
+  expect(node.querySelector('[aria-label="Linha do ajuste B"]')).not.toBeNull();
+  await click(button("Restaurar"));
+  expect(node.querySelector('[aria-label="Linha do ajuste B"]')).toBeNull();
+  const datasetStyle = [...node.querySelectorAll("select")].find((el) =>
+    el.closest("label")?.textContent.startsWith("Estilo"),
+  );
+  await act(async () => {
+    datasetStyle.value = "dashdot";
+    datasetStyle.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(series()[0].lineStyle).toBe("dashdot");
+});
