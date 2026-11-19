@@ -5,20 +5,18 @@
 
 import { FileClock } from "lucide-react";
 
+import { Empty } from "@/components/ui/empty";
+
 /**
  * Renders the message shown when no recent projects are available.
  * @returns The rendered React element.
  */
 export function EmptyRecentProjects() {
   return (
-    <div className="flex min-h-40 flex-col items-center justify-center rounded-md border border-border bg-white px-5 py-6 text-center">
-      <span className="mb-3 grid size-10 place-items-center rounded-md bg-muted text-foreground">
-        <FileClock aria-hidden="true" size={19} strokeWidth={1.75} />
-      </span>
-      <p className="text-sm font-semibold">Nenhum projeto recente</p>
-      <p className="mt-1 max-w-64 text-xs leading-relaxed text-muted-foreground">
-        As análises que você criar ou abrir aparecerão aqui para você retomar.
-      </p>
-    </div>
+    <Empty
+      icon={FileClock}
+      title="Nenhum projeto recente"
+      description="As análises que você criar ou abrir aparecerão aqui para você retomar."
+    />
   );
 }

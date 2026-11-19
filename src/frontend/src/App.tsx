@@ -26,7 +26,7 @@ import {
 } from "@/features/quick-analysis/quick-analysis-client";
 import { useQuitRequest } from "@/hooks/use-quit-request";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { ChevronRight, CircleHelp, House, Info, Sparkles } from "lucide-react";
+import { ChevronRight, CircleHelp, GraduationCap, House, Info, Sparkles } from "lucide-react";
 import { APP_VERSION } from "@/lib/app-version";
 import { UpdateBanner } from "@/features/updates/UpdateBanner";
 import { UpdateButton } from "@/features/updates/UpdateButton";
@@ -40,8 +40,24 @@ import {
   writeSeen,
 } from "@/features/news/news-seen";
 import { useUpdateSeen } from "@/features/news/use-update-seen";
+import { LearnPage } from "@/features/learn/LearnPage";
+import { LessonWorkspace } from "@/features/learn/LessonWorkspace";
+import {
+  lessons,
+  measureLessons,
+  upcomingLessons,
+  upcomingMeasureLessons,
+} from "@/features/learn/lessons";
+import type { Lesson } from "@/features/learn/lesson";
+import { MeasureLessonView } from "@/features/learn/measure/MeasureLessonView";
+import type { MeasureLesson } from "@/features/learn/measure/measure-lesson";
 
-type Page = "home" | "news" | "about" | "analysis";
+type Page = "home" | "learn" | "news" | "about" | "analysis";
+
+const workspace = [
+  { label: "Início", icon: House, page: "home" as const },
+  { label: "Aprender", icon: GraduationCap, page: "learn" as const },
+];
 
 const navigation = [
   { label: "Novidades", icon: Sparkles, page: "news" as const },
@@ -74,17 +90,22 @@ function Sidebar({
         <p className="px-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[#7c8880]">
           Área de trabalho
         </p>
-        <div className="mt-2">
-          <button
-            type="button"
-            onClick={() => onNavigate("home")}
-            aria-current={page === "home" ? "page" : undefined}
-            className={`flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-[12px] ${page === "home" ? "bg-[#dfe5dd] font-semibold text-[#20272c]" : "text-[#52625a] hover:bg-[#e6eae4]"}`}
-          >
-            <House size={15} strokeWidth={1.7} />
-            Início
-            {page === "home" && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#f25a3c]" />}
-          </button>
+        <div className="mt-2 space-y-0.5">
+          {workspace.map(({ label, icon: Icon, page: target }) => (
+            <button
+              key={target}
+              type="button"
+              onClick={() => onNavigate(target)}
+              aria-current={page === target ? "page" : undefined}
+              className={`flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-[12px] ${page === target ? "bg-[#dfe5dd] font-semibold text-[#20272c]" : "text-[#52625a] hover:bg-[#e6eae4]"}`}
+            >
+              <Icon size={15} strokeWidth={1.7} />
+              {label}
+              {page === target && (
+                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#f25a3c]" />
+              )}
+            </button>
+          ))}
         </div>
         <p className="mt-6 px-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[#7c8880]">
           Aplicativo
@@ -197,6 +218,8 @@ function App() {
   }, [offeredVersion, markSeen]);
 
   const [project, setProject] = useState<OpenProject | null>(null);
+  const [lesson, setLesson] = useState<Lesson | null>(null);
+  const [measureLesson, setMeasureLesson] = useState<MeasureLesson | null>(null);
   const opening = useRef(false);
   const [finderPath, setFinderPath] = useState<string | null>(null);
   const [quickRequest, setQuickRequest] = useState<QuickAnalysis | null>(null);
@@ -210,6 +233,7 @@ function App() {
         const opened = await action();
         if (!opened) return;
         setProject(opened);
+        setLesson(null);
         setPage("analysis");
         rememberProject(opened.path, replaces);
       } catch (error) {
@@ -222,6 +246,7 @@ function App() {
   );
   const createProject = useCallback(() => {
     if (!isTauri()) {
+      setLesson(null);
       setPage("analysis");
       return;
     }
@@ -284,8 +309,9 @@ function App() {
     [runProjectAction],
   );
 
-  // With no project open there is nothing to save, so a quit request quits at once.
-  useQuitRequest(page !== "analysis", async () => true);
+  // With no project open there is nothing to save, so a quit request quits at once. A lesson
+  // runs without a project, so it quits at once too.
+  useQuitRequest(page !== "analysis" || lesson !== null, async () => true);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -334,6 +360,19 @@ function App() {
     return () => clearTimeout(timer);
   }, [page, finderPath, openFinderProject]);
 
+  // A lesson runs on the analysis branch, so the shortcuts and requests that wait for the
+  // analysis to close also wait for the lesson.
+  if (page === "analysis" && lesson)
+    return (
+      <LessonWorkspace
+        lesson={lesson}
+        onExit={() => {
+          setLesson(null);
+          setPage("learn");
+        }}
+      />
+    );
+
   if (page === "analysis")
     return (
       <AnalysisPage
@@ -358,7 +397,11 @@ function App() {
     <div className="app-shell bg-[#f7f7f3] text-[#20272c]">
       <Sidebar
         page={page}
-        onNavigate={(next) => (next === "news" ? openNews() : setPage(next))}
+        onNavigate={(next) => {
+          setMeasureLesson(null);
+          if (next === "news") openNews();
+          else setPage(next);
+        }}
         unseenNews={unseenNews}
       />
       <main className="flex min-h-0 min-w-0 flex-col">
@@ -367,7 +410,13 @@ function App() {
             <span>Área de trabalho</span>
             <ChevronRight size={13} />
             <span className="font-semibold text-[#20272c]">
-              {page === "home" ? "Início" : page === "news" ? "Novidades" : "Sobre"}
+              {page === "home"
+                ? "Início"
+                : page === "learn"
+                  ? "Aprender"
+                  : page === "news"
+                    ? "Novidades"
+                    : "Sobre"}
             </span>
           </div>
           <UpdateButton />
@@ -383,7 +432,25 @@ function App() {
         ) : (
           <div className="min-h-0 flex-1 overflow-auto">
             <div className="mx-auto max-w-[1120px] p-6 sm:p-8">
-              {page === "home" ? (
+              {page === "learn" && measureLesson ? (
+                <MeasureLessonView
+                  key={measureLesson.id}
+                  lesson={measureLesson}
+                  onExit={() => setMeasureLesson(null)}
+                />
+              ) : page === "learn" ? (
+                <LearnPage
+                  lessons={lessons}
+                  upcoming={upcomingLessons}
+                  onOpen={(next) => {
+                    setLesson(next);
+                    setPage("analysis");
+                  }}
+                  measureLessons={measureLessons}
+                  upcomingMeasure={upcomingMeasureLessons}
+                  onOpenMeasure={setMeasureLesson}
+                />
+              ) : page === "home" ? (
                 <>
                   <div className="border-b border-border pb-5">
                     <h1 className="text-[28px] leading-tight font-semibold tracking-[-.045em]">

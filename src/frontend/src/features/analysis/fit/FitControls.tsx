@@ -3,8 +3,15 @@
  * Controls for entering a model and fit configuration.
  */
 
-import { useId } from "react";
-import { ChevronRight, Lock, MoveHorizontal, MoveVertical, SlidersHorizontal } from "lucide-react";
+import { useId, useState } from "react";
+import {
+  ChevronRight,
+  Lock,
+  MoveHorizontal,
+  MoveVertical,
+  SlidersHorizontal,
+  UnfoldHorizontal,
+} from "lucide-react";
 import { EquationField } from "./EquationField";
 import { resolveFitParameters } from "./parse-fit-parameters";
 import { validateFitConfig, type FitConfig } from "./fit-config";
@@ -16,17 +23,20 @@ const description = "mt-1.5 text-[12px] leading-5 text-muted-foreground";
 
 /**
  * Renders inputs for a series model and fit configuration.
- * @param props - Series name, fit configuration, and update callback.
+ * @param props - Series name, fit configuration, update callback and, optionally, the toggle that
+ * lets the user choose the X range by dragging a band on the chart (decision 0016).
  * @returns The rendered React element.
  */
 export function FitControls({
   name,
   config,
   onChange,
+  rangeOnChart,
 }: {
   name: string;
   config: FitConfig;
   onChange: (changes: Partial<FitConfig>) => void;
+  rangeOnChart?: { active: boolean; onToggle: () => void };
 }) {
   const equationId = useId();
   const parsedParameters = resolveFitParameters(config.parameters, config.equation);
@@ -35,6 +45,8 @@ export function FitControls({
     ? resolveFitParameters("", config.equation)
     : parsedParameters;
   const parametersErrorId = useId();
+  // Controlled so the range section stays open after marking on the chart ends.
+  const [rangeOpen, setRangeOpen] = useState(false);
   const error = config.equation.trim() ? validateFitConfig(config) : null;
   return (
     <div className="text-[12px] text-foreground">
@@ -46,7 +58,7 @@ export function FitControls({
         <p className={description}>
           Define a função ajustada aos pontos deste conjunto. Deixe vazio para não ajustar.
         </p>
-        <div className="mt-2">
+        <div className="mt-2" data-tour="fit-equation">
           <EquationField
             id={equationId}
             label={`Função de ajuste de ${name}`}
@@ -181,7 +193,11 @@ export function FitControls({
               {error}
             </p>
           )}
-          <details className="group border-t border-border py-5">
+          <details
+            className="group border-t border-border py-5"
+            open={rangeOpen || Boolean(rangeOnChart?.active)}
+            onToggle={(event) => setRangeOpen(event.currentTarget.open)}
+          >
             <summary className="flex cursor-pointer list-none items-start gap-2 [&::-webkit-details-marker]:hidden">
               <ChevronRight
                 size={15}
@@ -220,6 +236,20 @@ export function FitControls({
                 />
               </label>
             </div>
+            {rangeOnChart && (
+              <button
+                type="button"
+                aria-pressed={rangeOnChart.active}
+                onClick={() => {
+                  setRangeOpen(true);
+                  rangeOnChart.onToggle();
+                }}
+                className={`mt-3 flex h-8 items-center gap-1.5 rounded-md border px-3 text-[12px] font-medium ${rangeOnChart.active ? "border-foreground bg-foreground text-white" : "border-border bg-white hover:bg-[#eff2ed]"}`}
+              >
+                <UnfoldHorizontal size={14} aria-hidden="true" />
+                {rangeOnChart.active ? "Marcando no gráfico" : "Marcar no gráfico"}
+              </button>
+            )}
           </details>
         </>
       )}

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Activity, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 import { equationToLatex } from "./equation-to-latex";
 import { FitDetailsDialog } from "./FitDetailsDialog";
+import { useLessonEvent } from "@/features/learn/lesson-events";
 import type { FitResponse } from "./fit-service";
 import {
   CARD_PARAMETER_LIMIT,
@@ -15,12 +16,17 @@ import {
   superscript,
 } from "./result-format";
 import { Tex } from "./Tex";
+import { FitComparison, type FitComparisonData } from "./FitComparison";
+import { FitLineSample } from "./FitLineSample";
+import type { LinePattern } from "./dataset-fits";
 
-/** One dataset shown in the panel: a fit result, or the reason its fit failed. */
+/** One fit shown in the panel: a fit result, or the reason the fit failed. */
 export type ResultItem = {
   id: string;
   name: string;
   color: string;
+  /** Line pattern, given when the dataset has several fits; the card then shows a line sample. */
+  pattern?: LinePattern;
   /** Present when the fit succeeded. */
   result?: FitResponse;
   /** Reason shown in a red card when the fit failed. */
@@ -49,21 +55,30 @@ function ParameterValue({ value, uncertainty }: { value: number; uncertainty: nu
  * Renders one card per fit. A successful card shows the equation and the first
  * parameters; the detailed report opens from "Ver detalhes". A failed fit shows a
  * red card with the reason and no action.
- * @param props - Items to show and a callback for highlighting a series in the chart.
+ *
+ * When a dataset has several fits, a "Comparar" tab shows them side by side (decision 0016).
+ * @param props - Items to show, datasets with several fits to compare, and a callback for
+ * highlighting a series in the chart.
  * @returns The rendered React element.
  */
 export function ResultsPanel({
   results,
+  comparisons = [],
   onHighlight,
 }: {
   results: ResultItem[];
+  comparisons?: FitComparisonData[];
   onHighlight: (id: string | null) => void;
 }) {
   const [open, setOpen] = useState(true);
+  const [view, setView] = useState<"cards" | "compare">("cards");
+  const comparing = view === "compare" && comparisons.length > 0;
   const [detailsId, setDetailsId] = useState<string | null>(null);
+  const reportLessonEvent = useLessonEvent();
   const details = results.find((item) => item.id === detailsId && item.result);
   return (
     <section
+      data-tour="analysis-results"
       className={`-mx-5 -mb-5 mt-3 flex shrink-0 flex-col border-t border-border bg-background ${open ? "h-[min(40vh,340px)]" : "h-12"}`}
       aria-label="Resultados da análise"
     >
@@ -85,7 +100,41 @@ export function ResultsPanel({
       </button>
       {open && (
         <div className="min-h-0 flex-1 overflow-auto px-4 pb-4">
-          {results.length === 0 ? (
+          {comparisons.length > 0 && (
+            <div
+              role="tablist"
+              aria-label="Visualização dos resultados"
+              className="mb-3 inline-flex gap-0.5 rounded-md bg-muted p-[3px]"
+            >
+              {(
+                [
+                  ["cards", "Cartões"],
+                  ["compare", "Comparar"],
+                ] as const
+              ).map(([key, text]) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={(key === "compare") === comparing}
+                  onClick={() => {
+                    onHighlight(null);
+                    setView(key);
+                  }}
+                  className={`rounded px-3 py-1 text-[12px] font-medium ${(key === "compare") === comparing ? "bg-white text-foreground shadow-sm" : "text-muted-foreground"}`}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+          )}
+          {comparing ? (
+            <div className="space-y-4">
+              {comparisons.map((data) => (
+                <FitComparison key={data.datasetId} data={data} onHighlight={onHighlight} />
+              ))}
+            </div>
+          ) : results.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-[12px] text-muted-foreground">
               <Activity size={28} />
               <p>Nenhum ajuste calculado.</p>
@@ -109,10 +158,14 @@ export function ResultsPanel({
                     className={`group relative flex min-w-0 flex-col gap-3 rounded-[10px] border p-3.5 transition-[border-color,box-shadow] ${item.error ? "border-destructive bg-destructive/10" : "border-border bg-white hover:border-ring focus-within:border-ring hover:shadow-[0_6px_20px_-10px_rgba(54,76,255,0.55)]"}`}
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <span
-                        className="size-[9px] shrink-0 rounded-full"
-                        style={{ backgroundColor: item.color }}
-                      />
+                      {item.pattern ? (
+                        <FitLineSample color={item.color} pattern={item.pattern} />
+                      ) : (
+                        <span
+                          className="size-[9px] shrink-0 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                      )}
                       <h4
                         className="truncate text-xs font-semibold text-muted-foreground"
                         title={item.name}
@@ -159,7 +212,11 @@ export function ResultsPanel({
                           </div>
                           <button
                             type="button"
-                            onClick={() => setDetailsId(item.id)}
+                            data-tour="fit-details"
+                            onClick={() => {
+                              setDetailsId(item.id);
+                              reportLessonEvent("details.opened");
+                            }}
                             aria-label={`Ver detalhes de ${item.name}`}
                             className="mt-auto flex w-full items-center justify-between rounded-[7px] bg-muted px-2.5 py-1.5 text-xs font-semibold transition-colors after:absolute after:inset-0 after:rounded-[10px] group-hover:bg-ring group-hover:text-white focus-visible:bg-ring focus-visible:text-white"
                           >
@@ -180,7 +237,15 @@ export function ResultsPanel({
           )}
         </div>
       )}
-      {details && <FitDetailsDialog item={details} onClose={() => setDetailsId(null)} />}
+      {details && (
+        <FitDetailsDialog
+          item={details}
+          onClose={() => {
+            setDetailsId(null);
+            reportLessonEvent("details.closed");
+          }}
+        />
+      )}
     </section>
   );
 }

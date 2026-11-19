@@ -13,7 +13,7 @@ import {
   zoomIdentity,
   type ZoomTransform,
 } from "d3";
-import { useEffect, useId, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type RefObject } from "react";
 import "katex/dist/katex.min.css";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,10 +28,27 @@ import {
 } from "lucide-react";
 import { chartLinePatterns, type ChartSettings } from "./useChartSettings";
 import { HISTOGRAM_GUTTER, ResidualPanel } from "./ResidualPanel";
-import { formatTick, hasResiduals, type ChartResidual } from "./residuals";
+import { hasResiduals, residualYDomain, type ChartResidual } from "./residuals";
 import { EditableChartLabel } from "./EditableChartLabel";
+import { ChartLegend } from "./ChartLegend";
 import { ChartTooltip } from "./ChartTooltip";
 import { axisPosition } from "./axisPosition";
+import { densifyCurve } from "./curvePath";
+import {
+  AXIS_COLORS,
+  formatAxisTick,
+  formatResidualTick,
+  majorTicks,
+  minorTicks,
+  xLabelSpace,
+  yLabelGap,
+  yLabelWidth,
+  type AxisKey,
+  type AxisSettings,
+} from "./axisSettings";
+import { AxisGrid, TickMarks, XTickLabels, YTickLabels } from "./AxisMarks";
+import { AxisSettingsPopover } from "./AxisSettingsPopover";
+import { moveRangeEdge, rangeFieldText, snapRangeValue, type RangeEdges } from "./rangeBand";
 import {
   describeTooltip,
   groupNearbyPoints,
@@ -53,6 +70,31 @@ export type ChartSeries = {
   visible: boolean;
   /** Residuals of the latest fit, when there is one. */
   residuals?: ChartResidual[];
+  /** Fitted equation with its parameter values, in LaTeX, for the legend. */
+  legendEquation?: string;
+  /** A curve without points of its own (another fit of a dataset); the legend shows its line. */
+  lineOnly?: boolean;
+  /** Colour of the fitted curve when it differs from the points (`color`). */
+  lineColor?: string;
+};
+/**
+ * The X range of the fit being edited, drawn as a band with two draggable edges while the user
+ * marks it ("Marcar no gráfico"). Dragging previews locally and calls `onChange` once, on
+ * release; arrow keys on a focused edge call it on every step. A banner above the plot shows the
+ * range and a "Concluir" button; it and Escape call `onDone`.
+ */
+export type ChartRangeEditor = {
+  /** Series whose points the range filters; points outside it are faded. */
+  pointsSeriesId: string;
+  /** Curve colour of the fit. */
+  color: string;
+  /** Short text above the band, such as "B". */
+  label: string;
+  min?: number;
+  max?: number;
+  onChange: (edges: RangeEdges) => void;
+  /** Ends marking the range. */
+  onDone: () => void;
 };
 type ChartProps = {
   series: ChartSeries[];
@@ -62,9 +104,12 @@ type ChartProps = {
   highlightedSeriesId?: string | null;
   /** Keys that run the fits, shown in the notice about missing residuals (e.g. "⌘ ↵"). */
   fitShortcut?: string;
+  /** Range of the fit being edited, shown as a draggable band; absent hides the band. */
+  rangeEditor?: ChartRangeEditor | null;
 };
-const fmt = formatTick;
 const finite = (p: ChartPoint) => Number.isFinite(p.x) && Number.isFinite(p.y);
+/** Points drawn per curve segment when an axis is logarithmic. */
+const CURVE_STEPS = 256;
 /** Smallest pointer target radius, in pixels, around a data point. */
 const HIT_RADIUS = 12;
 function domain(values: number[], log: boolean): [number, number] {
@@ -86,7 +131,11 @@ function domain(values: number[], log: boolean): [number, number] {
  * When the settings request residuals and a visible series has them, a residuals panel
  * shares the X scale below the plot. Without residuals a quiet notice explains why the
  * panel is unavailable.
- * @param props - Series, labels, chart settings, export ref, highlighted series, and fit shortcut.
+ *
+ * With a `rangeEditor`, the X range of the fit being edited is drawn as a band whose edges
+ * can be dragged (or moved with the arrow keys); pressing an edge never starts a pan.
+ * @param props - Series, labels, chart settings, export ref, highlighted series, fit shortcut
+ * and the optional range editor.
  * @returns The rendered React element.
  */
 export function Chart({
@@ -96,6 +145,7 @@ export function Chart({
   graphicRef,
   highlightedSeriesId,
   fitShortcut,
+  rangeEditor = null,
 }: ChartProps) {
   const container = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -119,25 +169,30 @@ export function Chart({
     setXLabel,
     yLabel,
     setYLabel,
-    grid,
-    legend,
-    legendOrientation,
-    legendPosition,
-    setLegendPosition,
-    xLog,
-    yLog,
-    xMin,
-    xMax,
-    yMin,
-    yMax,
-    ticks,
+    xAxis,
+    yAxis,
+    updateAxis,
     residuals,
     residualHistogram,
+    residualErrorBars,
+    residualAxis,
   } = settings;
-  const legendDrag = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
+  const xLog = xAxis.log;
+  const yLog = yAxis.log;
+  const [hotAxis, setHotAxis] = useState<AxisKey | null>(null);
+  const highlightX = useCallback(
+    (on: boolean) => setHotAxis((current) => (on ? "x" : current === "x" ? null : current)),
+    [],
+  );
+  const highlightY = useCallback(
+    (on: boolean) => setHotAxis((current) => (on ? "y" : current === "y" ? null : current)),
+    [],
+  );
   const [active, setActive] = useState<{ seriesId: string; row: number } | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const zoomRef = useRef<ReturnType<typeof zoom<SVGSVGElement, unknown>> | null>(null);
+  /** Edge being dragged and the edges previewed while dragging. */
+  const [drag, setDrag] = useState<{ side: "min" | "max"; edges: RangeEdges } | null>(null);
   useEffect(() => {
     const el = container.current;
     if (!el) return;
@@ -152,6 +207,13 @@ export function Chart({
     if (!el) return;
     const behavior = zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.25, 32])
+      // Pressing an edge of the fit range drags the edge instead of panning the chart.
+      .filter(
+        (event: Event & { ctrlKey?: boolean; button?: number }) =>
+          !(event.target instanceof Element && event.target.closest("[data-range-handle]")) &&
+          (!event.ctrlKey || event.type === "wheel") &&
+          !event.button,
+      )
       .on("start", () => {
         setActive(null);
         setAnnouncement("");
@@ -170,31 +232,74 @@ export function Chart({
   ]);
   const xValues = all.flatMap((p) => [p.x, p.x - (p.sx || 0), p.x + (p.sx || 0)]);
   const yValues = all.flatMap((p) => [p.y, p.y - (p.sy || 0), p.y + (p.sy || 0)]);
-  const limits = (vals: number[], log: boolean, low: string, high: string): [number, number] => {
-    const d = domain(vals, log);
-    const a = low === "" ? d[0] : Number(low);
-    const b = high === "" ? d[1] : Number(high);
-    return Number.isFinite(a) && Number.isFinite(b) && a < b && (!log || a > 0) ? [a, b] : d;
+  const limits = (vals: number[], axis: AxisSettings): [number, number] => {
+    const d = domain(vals, axis.log);
+    const a = axis.min === "" ? d[0] : Number(axis.min);
+    const b = axis.max === "" ? d[1] : Number(axis.max);
+    return Number.isFinite(a) && Number.isFinite(b) && a < b && (!axis.log || a > 0) ? [a, b] : d;
   };
   const { width, height } = size;
   const residualsAvailable = hasResiduals(series);
   const panelOn = residuals && residualsAvailable;
+  const right = 25 + (panelOn && residualHistogram ? HISTOGRAM_GUTTER : 0);
+  const xDomain = limits(xValues, xAxis);
+  const yDomain = limits(yValues, yAxis);
+  /** Scales and ticks for given left and bottom margins (the margins depend on the labels). */
+  const layout = (left: number, bottom: number) => {
+    const w = Math.max(1, width - left - right);
+    const h = Math.max(1, height - 16 - bottom);
+    const baseX = (xLog ? scaleLog() : scaleLinear())
+      .domain(xDomain)
+      .range(xAxis.invert ? [w, 0] : [0, w]);
+    const baseY = (yLog ? scaleLog() : scaleLinear())
+      .domain(yDomain)
+      .range(yAxis.invert ? [0, h] : [h, 0]);
+    const x = transform.rescaleX(baseX);
+    const y = transform.rescaleY(baseY);
+    return { w, h, x, y, xt: majorTicks(x, xAxis), yt: majorTicks(y, yAxis) };
+  };
+  const draft = layout(65, panelOn ? 8 : 38);
+  const xSpace = xLabelSpace(
+    draft.xt.map((t) => formatAxisTick(t, xAxis)),
+    xAxis,
+  );
+  const ySpace =
+    yLabelWidth(
+      draft.yt.map((t) => formatAxisTick(t, yAxis)),
+      yAxis,
+    ) +
+    yLabelGap(yAxis) +
+    4;
+  // The residuals panel shares the left margin, so its labels count too.
+  const residualTicks = panelOn
+    ? majorTicks(
+        scaleLinear().domain(
+          residualYDomain(series, residualErrorBars, residualAxis.min, residualAxis.max),
+        ),
+        residualAxis,
+      )
+    : [];
+  const residualSpace = panelOn
+    ? yLabelWidth(
+        residualTicks.map((t) => formatResidualTick(t, residualAxis)),
+        residualAxis,
+      ) +
+      yLabelGap(residualAxis) +
+      4
+    : 0;
   const margin = {
     top: 16,
-    right: 25 + (panelOn && residualHistogram ? HISTOGRAM_GUTTER : 0),
-    bottom: panelOn ? 8 : 38,
-    left: 65,
+    right,
+    bottom: panelOn ? 8 : Math.max(38, xSpace),
+    left: Math.max(65, Math.ceil(ySpace), Math.ceil(residualSpace)),
   };
-  const w = Math.max(1, width - margin.left - margin.right);
-  const h = Math.max(1, height - margin.top - margin.bottom);
-  const baseX = (xLog ? scaleLog() : scaleLinear())
-    .domain(limits(xValues, xLog, xMin, xMax))
-    .range([0, w]);
-  const baseY = (yLog ? scaleLog() : scaleLinear())
-    .domain(limits(yValues, yLog, yMin, yMax))
-    .range([h, 0]);
-  const x = transform.rescaleX(baseX);
-  const y = transform.rescaleY(baseY);
+  const { w, h, x, y, xt, yt } = layout(margin.left, margin.bottom);
+  const xm = minorTicks(x, xAxis, xt);
+  const ym = minorTicks(y, yAxis, yt);
+  const visibleDomain = (scale: { domain(): number[] }): [number, number] => {
+    const [a, b] = scale.domain();
+    return a <= b ? [a, b] : [b, a];
+  };
   const axes = axisPosition(
     (v) => x(v),
     (v) => y(v),
@@ -202,9 +307,8 @@ export function Chart({
     h,
     xLog,
     yLog,
+    { x: xAxis.edge, y: yAxis.edge },
   );
-  const xt = x.ticks(ticks);
-  const yt = y.ticks(ticks);
   const zoomBy = (factor: number) => {
     if (svgRef.current && zoomRef.current)
       select(svgRef.current).call(zoomRef.current.scaleBy, factor);
@@ -216,6 +320,28 @@ export function Chart({
   const reset = () => {
     if (svgRef.current && zoomRef.current)
       select(svgRef.current).call(zoomRef.current.transform, zoomIdentity);
+  };
+  const rangeSeries = rangeEditor
+    ? series.find((item) => item.id === rangeEditor.pointsSeriesId)
+    : undefined;
+  const rangeBounds = domain(
+    (rangeSeries?.points ?? []).filter(finite).map((p) => p.x),
+    false,
+  );
+  const shownEdges: RangeEdges = drag?.edges ?? { min: rangeEditor?.min, max: rangeEditor?.max };
+  const rangeMin = shownEdges.min ?? rangeBounds[0];
+  const rangeMax = shownEdges.max ?? rangeBounds[1];
+  const outsideRange = (seriesId: string, value: number) =>
+    rangeEditor !== null &&
+    seriesId === rangeEditor.pointsSeriesId &&
+    (value < rangeMin || value > rangeMax);
+  /** Value of X under a pointer, rounded to a readable step. */
+  const pointerValue = (clientX: number, svg: SVGSVGElement | null) => {
+    const box = svg?.getBoundingClientRect();
+    const [a, b] = visibleDomain(x);
+    // Kept inside the visible plot, so the edge being dragged never leaves the view.
+    const value = x.invert(Math.min(w, Math.max(0, clientX - (box?.left ?? 0) - margin.left)));
+    return Math.min(b, Math.max(a, snapRangeValue(value, b - a)));
   };
   const plotted: TooltipPoint[] = visibleSeries.flatMap((item) =>
     item.points.flatMap((p, index) =>
@@ -304,6 +430,9 @@ export function Chart({
             <EditableChartLabel
               value={yLabel}
               onChange={setYLabel}
+              fontSize={yAxis.titleSize}
+              rotated={yAxis.titleRotation === 90}
+              onFontSizeChange={(titleSize) => updateAxis("y", { titleSize })}
               label="Editar título do eixo Y"
               placeholder="Eixo Y"
               orientation="vertical"
@@ -316,7 +445,7 @@ export function Chart({
             role="group"
             tabIndex={0}
             aria-label="Pontos do gráfico. Use as setas para percorrer os pontos e Esc para fechar o detalhe."
-            className="group relative min-h-0 min-w-0 flex-1 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#364cff]"
+            className={`group relative min-h-0 min-w-0 flex-1 ${drag ? "select-none" : ""} focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#364cff]`}
             onKeyDown={(event) => {
               if (event.target !== event.currentTarget) return;
               if (event.key === "Escape") return dismissTooltip();
@@ -430,36 +559,113 @@ export function Chart({
                   </clipPath>
                 </defs>
                 <g transform={`translate(${margin.left},${margin.top})`}>
-                  {xt.map((t) => (
-                    <g key={t} transform={`translate(${x(t)},0)`}>
-                      {grid && <line y2={h} stroke="#e8ece7" />}
-                      {!panelOn && (
-                        <text y={h + 16} textAnchor="middle" fontSize="10" fill="#78857d">
-                          {fmt(t)}
-                        </text>
-                      )}
+                  <AxisGrid
+                    axis="x"
+                    majors={xt}
+                    minors={xm}
+                    scale={x}
+                    width={w}
+                    height={h}
+                    settings={xAxis}
+                  />
+                  <AxisGrid
+                    axis="y"
+                    majors={yt}
+                    minors={ym}
+                    scale={y}
+                    width={w}
+                    height={h}
+                    settings={yAxis}
+                  />
+                  {!panelOn && (
+                    <XTickLabels
+                      ticks={xt}
+                      scale={x}
+                      bottom={h}
+                      settings={xAxis}
+                      highlighted={hotAxis === "x"}
+                    />
+                  )}
+                  <YTickLabels
+                    ticks={yt}
+                    scale={y}
+                    settings={yAxis}
+                    highlighted={hotAxis === "y"}
+                  />
+                  <line
+                    x1={0}
+                    x2={w}
+                    y1={axes.y}
+                    y2={axes.y}
+                    stroke={hotAxis === "x" ? AXIS_COLORS.lineHighlight : AXIS_COLORS.line}
+                    strokeWidth={hotAxis === "x" ? 2 : 1}
+                  />
+                  <line
+                    x1={axes.x}
+                    x2={axes.x}
+                    y1={0}
+                    y2={h}
+                    stroke={hotAxis === "y" ? AXIS_COLORS.lineHighlight : AXIS_COLORS.line}
+                    strokeWidth={hotAxis === "y" ? 2 : 1}
+                  />
+                  <TickMarks
+                    axis="x"
+                    majors={xt}
+                    minors={xm}
+                    scale={x}
+                    at={axes.y}
+                    settings={xAxis}
+                  />
+                  <TickMarks
+                    axis="y"
+                    majors={yt}
+                    minors={ym}
+                    scale={y}
+                    at={axes.x}
+                    settings={yAxis}
+                  />
+                  {rangeEditor && (
+                    <g clipPath={`url(#${clipId})`} pointerEvents="none">
+                      <rect
+                        data-testid="fit-range-band"
+                        x={Math.min(x(rangeMin), x(rangeMax))}
+                        y={0}
+                        width={Math.abs(x(rangeMax) - x(rangeMin))}
+                        height={h}
+                        fill={rangeEditor.color}
+                        fillOpacity={0.08}
+                      />
                     </g>
-                  ))}
-                  {yt.map((t) => (
-                    <g key={t} transform={`translate(0,${y(t)})`}>
-                      {grid && <line x2={w} stroke="#e8ece7" />}
-                      <text x={-8} dy=".32em" textAnchor="end" fontSize="10" fill="#78857d">
-                        {fmt(t)}
-                      </text>
-                    </g>
-                  ))}
-                  <line x1={0} x2={w} y1={axes.y} y2={axes.y} stroke="#aebbb0" />
-                  <line x1={axes.x} x2={axes.x} y1={0} y2={h} stroke="#aebbb0" />
-                  <g clipPath={`url(#${clipId})`}>
+                  )}
+                  {/* While an edge is dragged the points ignore the pointer, so tooltips do not
+                      flash open and closed under the edge. */}
+                  <g
+                    clipPath={`url(#${clipId})`}
+                    pointerEvents={drag ? "none" : undefined}
+                    data-testid="chart-series"
+                  >
                     {visibleSeries.map(
-                      ({ id, points, linePoints, color, radius, symbol, lineStyle, lineWidth }) => {
+                      ({
+                        id,
+                        points,
+                        linePoints,
+                        color,
+                        lineColor,
+                        radius,
+                        symbol,
+                        lineStyle,
+                        lineWidth,
+                      }) => {
                         const valid = points
                           .map((p, index) => ({ ...p, row: index + 1 }))
                           .filter(finite);
                         const path = line<ChartPoint>()
                           .defined((p) => finite(p) && (!xLog || p.x > 0) && (!yLog || p.y > 0))
                           .x((p) => x(p.x))
-                          .y((p) => y(p.y))(linePoints);
+                          .y((p) => y(p.y))(
+                          // Straight segments in the data bend on a log scale.
+                          densifyCurve(linePoints, xLog || yLog ? CURVE_STEPS : 1),
+                        );
                         return (
                           <g
                             key={id}
@@ -469,7 +675,7 @@ export function Chart({
                               <path
                                 d={path}
                                 fill="none"
-                                stroke={color}
+                                stroke={lineColor ?? color}
                                 strokeWidth={lineWidth}
                                 strokeDasharray={chartLinePatterns[lineStyle]}
                               />
@@ -479,7 +685,9 @@ export function Chart({
                               .map((p) => (
                                 <g
                                   key={p.row}
+                                  opacity={outsideRange(id, p.x) ? 0.3 : undefined}
                                   onMouseEnter={() => {
+                                    if (drag) return;
                                     setActive({ seriesId: id, row: p.row });
                                     setAnnouncement("");
                                   }}
@@ -558,66 +766,160 @@ export function Chart({
                       </g>
                     )}
                   </g>
+                  {rangeEditor &&
+                    (["min", "max"] as const).map((side) => {
+                      const value = side === "min" ? rangeMin : rangeMax;
+                      const px = x(value);
+                      if (!Number.isFinite(px) || px < -1 || px > w + 1) return null;
+                      const step = () => {
+                        const [a, b] = visibleDomain(x);
+                        return snapRangeValue((b - a) / 50, b - a) || (b - a) / 50;
+                      };
+                      return (
+                        <g
+                          key={side}
+                          data-range-handle={side}
+                          role="slider"
+                          tabIndex={0}
+                          aria-label={`${side === "min" ? "Início" : "Fim"} do intervalo do ajuste ${rangeEditor.label}`}
+                          aria-valuenow={value}
+                          aria-valuetext={String(value).replace(".", ",")}
+                          transform={`translate(${px},0)`}
+                          className="cursor-ew-resize outline-none [&:focus-visible_.grip]:stroke-[#364cff] [&:focus-visible_.grip]:stroke-[2.5]"
+                          onPointerDown={(event) => {
+                            // No text selection or native drag while moving the edge.
+                            event.preventDefault();
+                            event.stopPropagation();
+                            event.currentTarget.setPointerCapture?.(event.pointerId);
+                            setDrag({
+                              side,
+                              edges: { min: rangeEditor.min, max: rangeEditor.max },
+                            });
+                            dismissTooltip();
+                          }}
+                          onPointerMove={(event) => {
+                            if (!drag) return;
+                            const next = pointerValue(
+                              event.clientX,
+                              event.currentTarget.ownerSVGElement,
+                            );
+                            setDrag({
+                              side: drag.side,
+                              edges: moveRangeEdge(drag.edges, drag.side, next, rangeBounds),
+                            });
+                          }}
+                          onPointerUp={() => {
+                            if (drag) rangeEditor.onChange(drag.edges);
+                            setDrag(null);
+                          }}
+                          onPointerCancel={() => setDrag(null)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Escape") {
+                              event.stopPropagation();
+                              rangeEditor.onDone();
+                              return;
+                            }
+                            const direction =
+                              event.key === "ArrowRight" || event.key === "ArrowUp"
+                                ? 1
+                                : event.key === "ArrowLeft" || event.key === "ArrowDown"
+                                  ? -1
+                                  : 0;
+                            if (!direction) return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            const [a, b] = visibleDomain(x);
+                            rangeEditor.onChange(
+                              moveRangeEdge(
+                                { min: rangeEditor.min, max: rangeEditor.max },
+                                side,
+                                snapRangeValue(value + direction * step(), b - a),
+                                rangeBounds,
+                              ),
+                            );
+                          }}
+                        >
+                          <rect x={-8} y={0} width={16} height={h} fill="transparent" />
+                          <line
+                            y1={0}
+                            y2={h}
+                            stroke={rangeEditor.color}
+                            strokeWidth={1.5}
+                            strokeOpacity={
+                              (side === "min" ? shownEdges.min : shownEdges.max) === undefined
+                                ? 0.45
+                                : 0.9
+                            }
+                          />
+                          <rect
+                            className="grip"
+                            x={-4.5}
+                            y={h / 2 - 13}
+                            width={9}
+                            height={26}
+                            rx={4.5}
+                            fill="#ffffff"
+                            stroke={rangeEditor.color}
+                            strokeWidth={1.5}
+                          />
+                        </g>
+                      );
+                    })}
                 </g>
               </svg>
             )}
-            {legend && (
+            {rangeEditor && (
               <div
-                className={`absolute z-[1] flex max-w-full touch-none cursor-grab select-none gap-x-4 gap-y-1 rounded bg-white/90 px-2 py-1 text-[11px] text-[#66716e] active:cursor-grabbing ${legendOrientation === "vertical" ? "flex-col" : "flex-row flex-wrap"}`}
-                style={{
-                  left: `${legendPosition.x * 100}%`,
-                  top: `${legendPosition.y * 100}%`,
-                  transform: `translate(${-legendPosition.x * 100}%, ${-legendPosition.y * 100}%)`,
-                }}
-                onPointerDown={(event) => {
-                  if (event.button !== 0) return;
-                  event.preventDefault();
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  legendDrag.current = {
-                    pointerId: event.pointerId,
-                    offsetX: event.clientX - rect.left,
-                    offsetY: event.clientY - rect.top,
-                  };
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                  event.stopPropagation();
-                }}
-                onPointerMove={(event) => {
-                  const drag = legendDrag.current;
-                  const parent = container.current;
-                  if (!drag || drag.pointerId !== event.pointerId || !parent) return;
-                  const bounds = parent.getBoundingClientRect();
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  const availableX = Math.max(0, bounds.width - rect.width);
-                  const availableY = Math.max(0, bounds.height - rect.height);
-                  setLegendPosition({
-                    x: availableX
-                      ? Math.max(
-                          0,
-                          Math.min(1, (event.clientX - bounds.left - drag.offsetX) / availableX),
-                        )
-                      : 0,
-                    y: availableY
-                      ? Math.max(
-                          0,
-                          Math.min(1, (event.clientY - bounds.top - drag.offsetY) / availableY),
-                        )
-                      : 0,
-                  });
-                }}
-                onPointerUp={() => {
-                  legendDrag.current = null;
-                }}
-                onPointerCancel={() => {
-                  legendDrag.current = null;
-                }}
+                role="status"
+                data-html2canvas-ignore="true"
+                className="absolute left-1/2 top-2 z-[4] flex max-w-[calc(100%-16px)] -translate-x-1/2 items-center gap-2.5 whitespace-nowrap rounded-full bg-foreground py-1 pl-3 pr-1 text-[11.5px] text-white shadow-md"
               >
-                {visibleSeries.map((item) => (
-                  <span key={item.id} className="whitespace-nowrap">
-                    <span style={{ color: item.color }}>●</span> {item.name}
-                  </span>
-                ))}
+                <span className="truncate">
+                  Intervalo{rangeEditor.label ? ` do ajuste ${rangeEditor.label}` : ""}:{" "}
+                  <b className="font-mono font-semibold">
+                    {rangeFieldText(rangeMin).replace(".", ",")} a{" "}
+                    {rangeFieldText(rangeMax).replace(".", ",")}
+                  </b>{" "}
+                  · arraste as bordas
+                </span>
+                <button
+                  type="button"
+                  onClick={rangeEditor.onDone}
+                  className="rounded-full bg-white px-2.5 py-0.5 font-semibold text-foreground hover:bg-[#eff2ed]"
+                >
+                  Concluir
+                </button>
               </div>
             )}
+            {width > 90 && height > 55 && (
+              <AxisSettingsPopover
+                axis="y"
+                settings={settings}
+                box={{ left: 2, top: margin.top - 6, width: margin.left - 6, height: h + 12 }}
+                domain={visibleDomain(y)}
+                onHighlightChange={highlightY}
+              />
+            )}
+            {width > 90 && height > 55 && !panelOn && (
+              <AxisSettingsPopover
+                axis="x"
+                settings={settings}
+                box={{
+                  left: margin.left - 6,
+                  top: margin.top + h + 3,
+                  width: w + 12,
+                  height: margin.bottom - 4,
+                }}
+                domain={visibleDomain(x)}
+                onHighlightChange={highlightX}
+              />
+            )}
+            <ChartLegend
+              settings={settings}
+              series={visibleSeries}
+              bounds={container}
+              plotLeft={margin.left}
+            />
             {tooltipPoints.length > 0 && (
               <ChartTooltip points={tooltipPoints} labels={tooltipLabels} bounds={size} />
             )}
@@ -631,7 +933,19 @@ export function Chart({
             series={series}
             x={(value) => x(value)}
             xTicks={xt}
+            xMinorTicks={xm}
             xLog={xLog}
+            xHighlighted={hotAxis === "x"}
+            bottom={Math.max(24, xSpace - 3)}
+            xAxisControl={(box) => (
+              <AxisSettingsPopover
+                axis="x"
+                settings={settings}
+                box={box}
+                domain={visibleDomain(x)}
+                onHighlightChange={highlightX}
+              />
+            )}
             margin={{ left: margin.left, right: margin.right }}
             settings={settings}
             highlightedSeriesId={highlightedSeriesId}
@@ -641,6 +955,8 @@ export function Chart({
           <EditableChartLabel
             value={xLabel}
             onChange={setXLabel}
+            fontSize={xAxis.titleSize}
+            onFontSizeChange={(titleSize) => updateAxis("x", { titleSize })}
             label="Editar título do eixo X"
             placeholder="Eixo X"
             alignment={xAlignment}

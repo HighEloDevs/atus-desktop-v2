@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Gráfico com dois ajustes sobre os mesmos pontos e uma régua graduada embaixo">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#2B3439" stroke-width="1"/></pattern>
+  </defs>
+  <rect width="1280" height="720" fill="#20272C"/>
+  <rect width="1280" height="720" fill="url(#grid)"/>
+  <g fill="#F7F7F3">
+    <path d="M110 80H196V104H134V166H110Z"/>
+    <path d="M1170 80H1084V104H1146V166H1170Z"/>
+    <path d="M110 640H196V616H134V554H110Z"/>
+    <path d="M1170 640H1084V616H1146V554H1170Z"/>
+  </g>
+  <rect x="250" y="130" width="780" height="460" rx="16" fill="#000000" opacity=".25" transform="translate(10 14)"/>
+  <rect x="250" y="130" width="780" height="460" rx="16" fill="#F7F7F3"/>
+  <path d="M266 130H1014A16 16 0 0 1 1030 146V174H250V146A16 16 0 0 1 266 130Z" fill="#E6E9E4"/>
+  <g fill="#C9CFC8"><circle cx="274" cy="152" r="6.5"/><circle cx="295" cy="152" r="6.5"/><circle cx="316" cy="152" r="6.5"/></g>
+  <!-- legend card -->
+  <rect x="780" y="196" width="220" height="92" rx="8" fill="#FFFFFF" stroke="#D8DED7" stroke-width="2"/>
+  <path d="M798 224H836" stroke="#364CFF" stroke-width="4" stroke-linecap="round"/>
+  <rect x="848" y="219" width="110" height="10" rx="3" fill="#20272C"/>
+  <path d="M798 252H836" stroke="#F25A3C" stroke-width="4" stroke-linecap="round" stroke-dasharray="9 6"/>
+  <rect x="848" y="247" width="84" height="10" rx="3" fill="#20272C"/>
+  <rect x="798" y="268" width="150" height="8" rx="3" fill="#C9CFC8"/>
+  <!-- axes -->
+  <path d="M300 200V500H980" fill="none" stroke="#20272C" stroke-width="3"/>
+  <g stroke="#E1E6DF" stroke-width="1.5"><path d="M300 440H980M300 380H980M300 320H980M300 260H980M420 200V500M540 200V500M660 200V500M780 200V500M900 200V500"/></g>
+  <!-- fits -->
+  <path d="M320 440L780 262" fill="none" stroke="#364CFF" stroke-width="4" stroke-linecap="round"/>
+  <path d="M320 452C440 410 560 360 780 266" fill="none" stroke="#F25A3C" stroke-width="4" stroke-linecap="round" stroke-dasharray="14 9"/>
+  <g stroke="#20272C" stroke-width="2.5" stroke-linecap="round"><path d="M340 416V444"/><path d="M400 394V422"/><path d="M460 378V406"/><path d="M520 350V378"/><path d="M580 332V360"/><path d="M640 304V332"/><path d="M700 286V314"/><path d="M760 258V286"/></g>
+  <g fill="#364CFF" stroke="#C9CFFF" stroke-width="2.5"><circle cx="340" cy="430" r="6"/><circle cx="400" cy="408" r="6"/><circle cx="460" cy="392" r="6"/><circle cx="520" cy="364" r="6"/><circle cx="580" cy="346" r="6"/><circle cx="640" cy="318" r="6"/><circle cx="700" cy="300" r="6"/><circle cx="760" cy="272" r="6"/></g>
+  <!-- ruler -->
+  <rect x="270" y="500" width="720" height="68" rx="6" fill="#FFFFFF" opacity="0"/>
+  <path d="M300 520v26M316 520v11M332 520v11M348 520v11M364 520v11M380 520v18M396 520v11M412 520v11M428 520v11M444 520v11M460 520v26M476 520v11M492 520v11M508 520v11M524 520v11M540 520v18M556 520v11M572 520v11M588 520v11M604 520v11M620 520v26M636 520v11M652 520v11M668 520v11M684 520v11M700 520v18M716 520v11M732 520v11M748 520v11M764 520v11M780 520v26M796 520v11M812 520v11M828 520v11M844 520v11M860 520v18M876 520v11M892 520v11M908 520v11M924 520v11M940 520v26" stroke="#20272C" stroke-width="2" fill="none" transform="translate(0 10)"/>
+  <!-- caliper jaw -->
+  <path d="M588 546H700V574H588Z" fill="#F25A3C"/>
+  <path d="M700 546V574" stroke="#20272C" stroke-width="3"/>
+  <rect x="604" y="555" width="68" height="8" rx="3" fill="#F7F7F3"/>
+</svg>

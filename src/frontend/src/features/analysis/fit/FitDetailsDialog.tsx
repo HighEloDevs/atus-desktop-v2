@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Dialog } from "radix-ui";
 import { Copy } from "lucide-react";
 import { notify } from "@/lib/notify";
+import { keepOpenForLesson, useLessonEvent } from "@/features/learn/lesson-events";
 import { equationToLatex } from "./equation-to-latex";
 import { MatrixTable } from "./MatrixTable";
 import { ResidualChart } from "./ResidualChart";
@@ -24,12 +25,18 @@ import { Tex } from "./Tex";
 
 const selectClass = "rounded border border-border bg-white px-2 py-1 text-xs";
 
-async function copyText(text: string, success: string) {
+/**
+ * Copies text and reports the outcome in the global snackbar.
+ * @returns True when the text reached the clipboard.
+ */
+async function copyText(text: string, success: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
     notify.success(success);
+    return true;
   } catch {
     notify.error("Não foi possível copiar.");
+    return false;
   }
 }
 
@@ -44,6 +51,7 @@ async function copyText(text: string, success: string) {
  */
 export function FitDetailsDialog({ item, onClose }: { item: ResultItem; onClose: () => void }) {
   const result = item.result;
+  const reportLessonEvent = useLessonEvent();
   const [options, setOptions] = useState<CopyOptions>({
     separator: "Tabulação",
     decimal: "Ponto",
@@ -71,6 +79,8 @@ export function FitDetailsDialog({ item, onClose }: { item: ResultItem; onClose:
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
         <Dialog.Content
+          data-tour="fit-details-dialog"
+          onInteractOutside={keepOpenForLesson}
           aria-describedby={undefined}
           className="fixed left-1/2 top-1/2 z-50 flex max-h-[88vh] w-[min(94vw,700px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg bg-white shadow-xl"
         >
@@ -194,11 +204,14 @@ export function FitDetailsDialog({ item, onClose }: { item: ResultItem; onClose:
                 <button
                   type="button"
                   className={`${small} ml-auto text-foreground`}
+                  data-tour="copy-parameters"
                   onClick={() =>
                     void copyText(
                       parametersToClipboardText(result.parameters, options),
                       `Parâmetros de ${item.name} copiados.`,
-                    )
+                    ).then((copied) => {
+                      if (copied) reportLessonEvent("params.copied");
+                    })
                   }
                 >
                   <Copy size={12} /> Copiar parâmetros

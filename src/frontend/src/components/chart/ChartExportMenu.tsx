@@ -8,6 +8,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { ChevronDown, Copy, FileImage, LoaderCircle } from "lucide-react";
 import { cn } from "cn";
 import { notify } from "@/lib/notify";
+import { useLessonEvent } from "@/features/learn/lesson-events";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +47,7 @@ export function ChartExportMenu({
   disabled: boolean;
 }) {
   const [busy, setBusy] = useState<Action | null>(null);
+  const reportLessonEvent = useLessonEvent();
   const running = useRef(false);
 
   async function run(action: Action) {
@@ -57,10 +59,13 @@ export function ChartExportMenu({
       if (action === "copy") {
         await copyImage(await renderImage(element, "png"));
         notify.success("Imagem copiada", { id: NOTICE_ID });
+        reportLessonEvent("chart.exported");
       } else {
         const path = await saveImage(await renderImage(element, action), action);
-        if (path) notify.success("Imagem salva", { id: NOTICE_ID, description: path });
-        else notify.info("Exportação cancelada", { id: NOTICE_ID });
+        if (path) {
+          notify.success("Imagem salva", { id: NOTICE_ID, description: path });
+          reportLessonEvent("chart.exported");
+        } else notify.info("Exportação cancelada", { id: NOTICE_ID });
       }
     } catch (error) {
       notify.error("Não foi possível exportar", {
@@ -99,7 +104,10 @@ export function ChartExportMenu({
 
   return (
     <div className="ml-auto flex items-center">
-      <div className="inline-flex rounded-md border border-[#20272c] bg-[#20272c]">
+      <div
+        data-tour="chart-export"
+        className="inline-flex rounded-md border border-[#20272c] bg-[#20272c]"
+      >
         <button
           type="button"
           className={cn(segment, "rounded-l-[5px] px-3 font-medium")}
