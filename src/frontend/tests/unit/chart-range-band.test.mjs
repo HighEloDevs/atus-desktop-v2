@@ -121,19 +121,27 @@ it("ends marking from the banner or with Escape on an edge", async () => {
 it("keeps the points from reacting to the pointer while an edge is dragged", async () => {
   await act(async () => root.render(createElement(Harness, { rangeEditor: editor() })));
   const group = () => node.querySelector('[data-testid="chart-series"]');
+  // A point inside the band (x = 2), so it is not faded.
+  const point = () => group().querySelectorAll('circle[fill="#123456"]')[2];
+  const hover = (on) =>
+    act(async () =>
+      point().dispatchEvent(new MouseEvent(on ? "mouseover" : "mouseout", { bubbles: true })),
+    );
+  const tooltip = () => node.querySelector('[role="tooltip"]');
+  // Control: without a drag, hovering a point opens its tooltip.
+  await hover(true);
+  expect(tooltip()).not.toBeNull();
+  await hover(false);
+  expect(tooltip()).toBeNull();
   expect(group().getAttribute("pointer-events")).toBeNull();
   const down = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, pointerId: 1 });
   await act(async () => handle("min").dispatchEvent(down));
   // No native text selection, and no tooltip flashing under the edge.
   expect(down.defaultPrevented).toBe(true);
   expect(group().getAttribute("pointer-events")).toBe("none");
-  const point = group().querySelector("g[opacity]") ?? group().querySelector("g > g");
-  await act(async () =>
-    point.dispatchEvent(
-      new MouseEvent("mouseover", { bubbles: true, relatedTarget: document.body }),
-    ),
-  );
-  expect(node.querySelector('[role="tooltip"]')).toBeNull();
+  expect(node.querySelector(".select-none")).not.toBeNull();
+  await hover(true);
+  expect(tooltip()).toBeNull();
   await act(async () =>
     handle("min").dispatchEvent(new MouseEvent("pointerup", { bubbles: true })),
   );

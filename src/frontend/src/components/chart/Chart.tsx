@@ -445,7 +445,7 @@ export function Chart({
             role="group"
             tabIndex={0}
             aria-label="Pontos do gráfico. Use as setas para percorrer os pontos e Esc para fechar o detalhe."
-            className="group relative min-h-0 min-w-0 flex-1 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#364cff]"
+            className={`group relative min-h-0 min-w-0 flex-1 ${drag ? "select-none" : ""} focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#364cff]`}
             onKeyDown={(event) => {
               if (event.target !== event.currentTarget) return;
               if (event.key === "Escape") return dismissTooltip();

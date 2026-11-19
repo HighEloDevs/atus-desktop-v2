@@ -137,6 +137,8 @@ it("opens an old project with its fit as A and keeps today's single-fit layout",
   expect(button("Marcando no gráfico").getAttribute("aria-pressed")).toBe("true");
   await click(button("Marcando no gráfico"));
   expect(chart.props.rangeEditor).toBeNull();
+  // The range fields stay in view after marking ends.
+  expect(button("Marcar no gráfico").closest("details").open).toBe(true);
   expect(savedDataset()).toMatchObject({ equation: "a*x+b", fitCounter: 1 });
   expect(savedDataset().fits).toHaveLength(1);
 });
@@ -166,6 +168,7 @@ it("duplicates the fit, draws the points once and compares the fits", async () =
   expect(chart.props.rangeEditor).toMatchObject({ pointsSeriesId: "d", label: "B" });
   await act(async () => chart.props.rangeEditor.onDone());
   expect(chart.props.rangeEditor).toBeNull();
+  expect(button("Marcar no gráfico").closest("details").open).toBe(true);
 
   await click(button("Executar ajustes"));
   expect(series().every((s) => s.linePoints.length > 0)).toBe(true);

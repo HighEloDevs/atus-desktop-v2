@@ -3,7 +3,7 @@
  * Controls for entering a model and fit configuration.
  */
 
-import { useId } from "react";
+import { useId, useState } from "react";
 import {
   ChevronRight,
   Lock,
@@ -45,6 +45,8 @@ export function FitControls({
     ? resolveFitParameters("", config.equation)
     : parsedParameters;
   const parametersErrorId = useId();
+  // Controlled so the range section stays open after marking on the chart ends.
+  const [rangeOpen, setRangeOpen] = useState(false);
   const error = config.equation.trim() ? validateFitConfig(config) : null;
   return (
     <div className="text-[12px] text-foreground">
@@ -193,7 +195,8 @@ export function FitControls({
           )}
           <details
             className="group border-t border-border py-5"
-            open={rangeOnChart?.active || undefined}
+            open={rangeOpen || Boolean(rangeOnChart?.active)}
+            onToggle={(event) => setRangeOpen(event.currentTarget.open)}
           >
             <summary className="flex cursor-pointer list-none items-start gap-2 [&::-webkit-details-marker]:hidden">
               <ChevronRight
@@ -237,7 +240,10 @@ export function FitControls({
               <button
                 type="button"
                 aria-pressed={rangeOnChart.active}
-                onClick={rangeOnChart.onToggle}
+                onClick={() => {
+                  setRangeOpen(true);
+                  rangeOnChart.onToggle();
+                }}
                 className={`mt-3 flex h-8 items-center gap-1.5 rounded-md border px-3 text-[12px] font-medium ${rangeOnChart.active ? "border-foreground bg-foreground text-white" : "border-border bg-white hover:bg-[#eff2ed]"}`}
               >
                 <UnfoldHorizontal size={14} aria-hidden="true" />
