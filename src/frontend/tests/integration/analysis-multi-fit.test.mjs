@@ -119,6 +119,9 @@ async function type(input, value) {
   });
 }
 const savedDataset = () => JSON.parse(saved.content)[0].datasets[0].state;
+/** Row of a fit in the sidebar list, by position. */
+const row = (index) => node.querySelectorAll('[aria-label="Ajustes de Queda"] > li')[index];
+const exact = (text, root = node) => buttons(root).find((b) => b.textContent.trim() === text);
 
 it("opens an old project with its fit as A and keeps today's single-fit layout", async () => {
   await render();
@@ -127,6 +130,12 @@ it("opens an old project with its fit as A and keeps today's single-fit layout",
   ]);
   expect(node.querySelector('input[aria-label="Função de ajuste de Queda"]').value).toBe("a*x+b");
   expect(node.querySelector('[aria-label="Ajustes de Queda"]')).toBeNull();
+  expect(chart.props.rangeEditor).toBeNull();
+  // A lone fit can also mark its range on the chart.
+  await click(button("Marcar no gráfico"));
+  expect(chart.props.rangeEditor).toMatchObject({ pointsSeriesId: "d", label: "" });
+  expect(button("Marcando no gráfico").getAttribute("aria-pressed")).toBe("true");
+  await click(button("Marcando no gráfico"));
   expect(chart.props.rangeEditor).toBeNull();
   expect(savedDataset()).toMatchObject({ equation: "a*x+b", fitCounter: 1 });
   expect(savedDataset().fits).toHaveLength(1);
@@ -150,8 +159,13 @@ it("duplicates the fit, draws the points once and compares the fits", async () =
     ["Queda · B", 0, true, "dashed"],
   ]);
   expect(series()[1].color).not.toBe(series()[0].color);
-  // The band edits the range of the active fit, B.
+  expect(button("duplica").textContent).toBe("Novo ajusteduplica B");
+  // The range band only appears while the user marks the range on the chart.
+  expect(chart.props.rangeEditor).toBeNull();
+  await click(button("Marcar no gráfico"));
   expect(chart.props.rangeEditor).toMatchObject({ pointsSeriesId: "d", label: "B" });
+  await act(async () => chart.props.rangeEditor.onDone());
+  expect(chart.props.rangeEditor).toBeNull();
 
   await click(button("Executar ajustes"));
   expect(series().every((s) => s.linePoints.length > 0)).toBe(true);
@@ -174,6 +188,7 @@ it("moves the range from the chart band and refits only that fit, quietly", asyn
   await click(button("Novo ajuste com estes dados"));
   await click(button("Executar ajustes"));
   notify.success.mockClear();
+  await click(button("Marcar no gráfico"));
   await act(async () => chart.props.rangeEditor.onChange({ min: 1, max: undefined }));
   expect(node.querySelector('input[aria-label="Mínimo de X para Queda, ajuste B"]').value).toBe(
     "1",
@@ -191,31 +206,51 @@ it("moves the range from the chart band and refits only that fit, quietly", asyn
 it("labels, hides, removes and keeps letters stable", async () => {
   await render();
   await click(button("Novo ajuste com estes dados"));
-  await click(button("Ajuste em branco"));
+  await click(exact("em branco"));
   expect(node.textContent).toContain("3 ajustes");
   // A fit without a curve is not listed in the legend yet.
   expect(series()[2]).toMatchObject({ name: "Queda · C", visible: false });
-  const list = node.querySelector('[aria-label="Ajustes de Queda"]');
-  expect([...list.querySelectorAll("li")].map((li) => li.textContent)).toEqual([
-    expect.stringContaining("A"),
-    expect.stringContaining("B"),
-    expect.stringContaining("C"),
-  ]);
-  // C is active: remove it, then B; the next fit is D, never C again.
-  await click(button("Remover ajuste"));
-  await click(node.querySelector('button[aria-label="Ajuste B"]'));
-  await type(node.querySelector('input[placeholder="Ajuste B"]'), "Início");
+  expect([...node.querySelectorAll('[aria-label="Ajustes de Queda"] > li')]).toHaveLength(3);
+  expect(row(2).textContent).toContain("Sem função");
+  // Remove C, then rename and hide B; the next fit is D, never C again.
+  await click(button("Remover ajuste", row(2)));
+  await click(button("Renomear", row(1)));
+  const label = row(1).querySelector('input[placeholder="Ajuste B"]');
+  await type(label, "Início");
+  await act(async () =>
+    label.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+  );
   expect(series()[1].name).toBe("Queda · Início");
+  expect(row(1).textContent).toContain("Início");
   await click(node.querySelector('button[aria-label="Ocultar curva do ajuste B"]'));
   expect(series()[1].visible).toBe(false);
-  await click(node.querySelector('button[aria-label="Ajuste A"]'));
-  await click(button("Duplicar ajuste A"));
+  await click(button("Duplicar ajuste A", row(0)));
   expect(savedDataset().fits.map((fit) => [fit.letter, fit.label, fit.visible])).toEqual([
     ["A", "", true],
     ["B", "Início", false],
     ["D", "", true],
   ]);
   expect(savedDataset().fitCounter).toBe(4);
+});
+
+it("lets every fit row be closed and picks the residuals by letter", async () => {
+  await render();
+  await click(button("Novo ajuste com estes dados"));
+  await click(button("Executar ajustes"));
+  const b = node.querySelector('button[aria-label="Ajuste B"]');
+  expect(b.getAttribute("aria-expanded")).toBe("true");
+  await click(button("Marcar no gráfico"));
+  await click(b);
+  // Every row closed: no controls, no band, and the closed rows still show the status.
+  expect(node.querySelector('input[aria-label^="Função de ajuste de Queda"]')).toBeNull();
+  expect(chart.props.rangeEditor).toBeNull();
+  expect(row(0).textContent).toMatch(/χ² /);
+  expect(series().map((s) => Boolean(s.residuals))).toEqual([false, true]);
+  // The residuals panel shows one fit at a time, chosen in the toolbar.
+  await click(node.querySelector('button[role="switch"]'));
+  await click(node.querySelector('button[aria-label="Resíduos do ajuste A"]'));
+  expect(series().map((s) => Boolean(s.residuals))).toEqual([true, false]);
+  expect(button("duplica").textContent).toBe("Novo ajusteduplica A");
 });
 
 it("keeps the points in the dataset colour after fit A is removed", async () => {

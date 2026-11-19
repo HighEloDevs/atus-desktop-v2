@@ -9,6 +9,7 @@ import type { ChartPoint } from "@/components/chart/Chart";
 import { chartLinePatterns } from "@/components/chart/useChartSettings";
 import { defaultFitConfig, type FitConfig } from "./fit-config";
 import type { FitResponse } from "./fit-service";
+import { formatSignificant } from "./result-format";
 
 /** Line pattern name, as in the chart settings. */
 export type LinePattern = keyof typeof chartLinePatterns;
@@ -288,4 +289,17 @@ export function groupParametersByEquation(fits: FitEntry[]): ParameterGroup[] {
     groups.set(key, group);
   }
   return [...groups.values()];
+}
+
+/**
+ * Short status of a fit for its closed row: Chi² (or the sum of squared residuals when the
+ * points have no uncertainty, as in decision 0009), "Falhou", or a dash.
+ * @param fit - The fit.
+ * @returns The status text and whether it is a failure.
+ */
+export function fitStatus(fit: FitEntry): { text: string; failed: boolean } {
+  if (fit.fitState === "error") return { text: "Falhou", failed: true };
+  if (!fit.result) return { text: "—", failed: false };
+  const value = formatSignificant(fit.result.chiSquared, 3);
+  return { text: fit.result.hasUncertainty ? `χ² ${value}` : `Σr² ${value}`, failed: false };
 }

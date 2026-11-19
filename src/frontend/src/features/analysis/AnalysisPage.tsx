@@ -16,6 +16,7 @@ import type { OpenProject } from "@/features/projects/project-client";
 import { useEffect, useLayoutEffect, useRef, useState, type SetStateAction } from "react";
 import { notify } from "@/lib/notify";
 import { FitList } from "./fit/FitList";
+import { FitLineSample } from "./fit/FitLineSample";
 import { validateFitConfig, type FitConfig } from "./fit/fit-config";
 import {
   createFit,
@@ -260,6 +261,12 @@ export function AnalysisPage({
     }));
   });
   const residualsAvailable = hasResiduals(chartSeries);
+  // With several fitted fits, the residuals panel draws one of them, chosen by letter.
+  const residualFits = selected?.fits.filter((fit) => fit.result) ?? [];
+  const residualChoice =
+    selected && residualFits.length > 1
+      ? { dataset: selected, fits: residualFits, current: residualFitId(selected) }
+      : null;
   const residualsOn = chartSettings.residuals && residualsAvailable;
   const saving = useProjectSave(
     project,
@@ -331,6 +338,10 @@ export function AnalysisPage({
   const [panelOpen, setPanelOpen] = useState(true);
   const [mode, setMode] = useState<"analysis" | "visual">("analysis");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  /** Open fit row of each dataset with several fits; absent or `null` means every row is closed. */
+  const [openFits, setOpenFits] = useState<Record<string, string | null>>({});
+  /** Fit whose X range is being chosen by dragging the band on the chart. */
+  const [marking, setMarking] = useState<{ datasetId: string; fitId: string } | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
@@ -611,19 +622,39 @@ export function AnalysisPage({
     );
   }
 
-  /** Opens the controls of a fit; its residuals and range band are shown. */
-  function activateFit(datasetId: string, fitId: string) {
+  /** Puts a fit in focus: it becomes the source of "Novo ajuste" and its residuals are drawn. */
+  function focusFit(datasetId: string, fitId: string) {
     setSelectedId(datasetId);
     setDatasets((items) =>
       items.map((item) => (item.id === datasetId ? { ...item, activeFitId: fitId } : item)),
     );
   }
 
-  /** Adds a fit to a dataset: a copy of the active fit, or a blank one. */
-  function addFit(datasetId: string, mode: "duplicate" | "blank") {
+  /** Opens a closed fit row (putting the fit in focus) or closes the open one. */
+  function toggleFit(datasetId: string, fitId: string) {
+    if (openFits[datasetId] === fitId) {
+      setOpenFits((old) => ({ ...old, [datasetId]: null }));
+      if (marking?.datasetId === datasetId) setMarking(null);
+      return;
+    }
+    setOpenFits((old) => ({ ...old, [datasetId]: fitId }));
+    if (marking?.datasetId === datasetId) setMarking(null);
+    focusFit(datasetId, fitId);
+  }
+
+  /** Starts or stops choosing the X range of a fit on the chart. */
+  function toggleMarking(datasetId: string, fitId: string) {
+    const same = marking?.datasetId === datasetId && marking.fitId === fitId;
+    setMarking(same ? null : { datasetId, fitId });
+    if (!same) setSelectedId(datasetId);
+  }
+
+  /** Adds a fit to a dataset: a copy of `sourceId` (by default the fit in focus), or a blank one. */
+  function addFit(datasetId: string, mode: "duplicate" | "blank", sourceId?: string) {
     const dataset = datasets.find((item) => item.id === datasetId);
     if (!dataset) return;
-    const source = dataset.fits.find((fit) => fit.id === dataset.activeFitId) ?? dataset.fits[0];
+    const source =
+      dataset.fits.find((fit) => fit.id === (sourceId ?? dataset.activeFitId)) ?? dataset.fits[0];
     const id = crypto.randomUUID();
     const letter = fitLetter(dataset.fitCounter);
     const fit = mode === "duplicate" ? duplicateFit(source, id, letter) : createFit(id, letter);
@@ -641,6 +672,8 @@ export function AnalysisPage({
     );
     setSelectedId(datasetId);
     setExpanded((old) => ({ ...old, [datasetId]: true }));
+    setOpenFits((old) => ({ ...old, [datasetId]: id }));
+    setMarking(null);
     notify.success(
       mode === "duplicate"
         ? `Ajuste ${letter} criado a partir de ${source.letter}`
@@ -649,7 +682,7 @@ export function AnalysisPage({
         id: "fit-added",
         description:
           mode === "duplicate"
-            ? "Mude a função ou arraste as bordas da faixa no gráfico para mudar o intervalo."
+            ? "Mude a função ou use Marcar no gráfico para escolher o intervalo."
             : undefined,
       },
     );
@@ -657,6 +690,8 @@ export function AnalysisPage({
 
   /** Removes a fit; the last fit of a dataset cannot be removed (remove the dataset instead). */
   function removeFit(datasetId: string, fitId: string) {
+    if (openFits[datasetId] === fitId) setOpenFits((old) => ({ ...old, [datasetId]: null }));
+    if (marking?.fitId === fitId) setMarking(null);
     setDatasets((items) =>
       items.map((item) => {
         if (item.id !== datasetId || item.fits.length < 2) return item;
@@ -672,7 +707,14 @@ export function AnalysisPage({
     );
   }
 
+  /** Opens or closes a dataset card; closing it also ends marking a range of its fits. */
+  function toggleCard(datasetId: string, open: boolean) {
+    setExpanded((old) => ({ ...old, [datasetId]: !open }));
+    if (open && marking?.datasetId === datasetId) setMarking(null);
+  }
+
   function removeDataset(id: string) {
+    if (marking?.datasetId === id) setMarking(null);
     setDatasets((items) => items.filter((entry) => entry.id !== id));
     if (selectedId === id) setSelectedId(null);
   }
@@ -732,7 +774,7 @@ export function AnalysisPage({
                 <button
                   type="button"
                   onClick={() => {
-                    if (!flat) setExpanded((old) => ({ ...old, [item.id]: !open }));
+                    if (!flat) toggleCard(item.id, open);
                   }}
                   aria-expanded={flat ? undefined : open}
                   className="min-w-0 flex-1 text-left"
@@ -817,7 +859,7 @@ export function AnalysisPage({
                   type="button"
                   aria-expanded={open}
                   aria-label={open ? `Recolher ${item.name}` : `Expandir ${item.name}`}
-                  onClick={() => setExpanded((old) => ({ ...old, [item.id]: !open }))}
+                  onClick={() => toggleCard(item.id, open)}
                   className="rounded p-1 text-[#66716e]"
                 >
                   {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -829,10 +871,13 @@ export function AnalysisPage({
                 <div className={`border-t border-[#e0e5df] py-3.5 ${flat ? "px-0" : "px-3.5"}`}>
                   <FitList
                     dataset={item}
-                    onActivate={(fitId) => activateFit(item.id, fitId)}
+                    openFitId={openFits[item.id] ?? null}
+                    markingFitId={marking?.datasetId === item.id ? marking.fitId : null}
+                    onToggle={(fitId) => toggleFit(item.id, fitId)}
+                    onMarkRange={(fitId) => toggleMarking(item.id, fitId)}
                     onChange={(fitId, changes) => updateFit(item.id, fitId, changes)}
                     onPatch={(fitId, patch) => patchFit(item.id, fitId, patch)}
-                    onAdd={(addMode) => addFit(item.id, addMode)}
+                    onAdd={(addMode, sourceId) => addFit(item.id, addMode, sourceId)}
                     onRemove={(fitId) => removeFit(item.id, fitId)}
                   />
                 </div>
@@ -882,29 +927,31 @@ export function AnalysisPage({
         error: fit.fitState === "error" ? fit.fitError : undefined,
       })),
     }));
-  // The range band follows the active fit of the selected dataset. A lone fit without a typed
-  // range keeps today's chart, with no band.
-  const rangeFit = selected?.fits.find((fit) => fit.id === selected.activeFitId);
+  // The range band is shown only while the user marks the range of a fit on the chart
+  // ("Marcar no gráfico"), for that fit, while its controls are open.
+  const markingDataset = marking && datasets.find((item) => item.id === marking.datasetId);
+  const rangeFit = markingDataset?.fits.find((fit) => fit.id === marking?.fitId);
   const rangeEditor: ChartRangeEditor | null =
-    selected &&
+    markingDataset &&
     rangeFit &&
-    selected.visible &&
-    rangeFit.equation.trim() &&
-    (selected.fits.length > 1 || rangeFit.minX !== "" || rangeFit.maxX !== "")
+    markingDataset.visible &&
+    (markingDataset.fits.length === 1 || openFits[markingDataset.id] === rangeFit.id)
       ? {
-          pointsSeriesId: selected.id,
-          color: fitColor(selected.color, rangeFit.letter),
-          label: selected.fits.length > 1 ? rangeFit.label.trim() || rangeFit.letter : "",
+          pointsSeriesId: markingDataset.id,
+          color: fitColor(markingDataset.color, rangeFit.letter),
+          label: markingDataset.fits.length > 1 ? rangeFit.label.trim() || rangeFit.letter : "",
           min: rangeFit.minX === "" ? undefined : Number(rangeFit.minX),
           max: rangeFit.maxX === "" ? undefined : Number(rangeFit.maxX),
+          onDone: () => setMarking(null),
           onChange: (edges) => {
             const changes = { minX: rangeFieldText(edges.min), maxX: rangeFieldText(edges.max) };
-            updateFit(selected.id, rangeFit.id, changes);
+            updateFit(markingDataset.id, rangeFit.id, changes);
+            if (!rangeFit.equation.trim()) return;
             void runFits(
               [
                 {
-                  datasetId: selected.id,
-                  points: selected.points,
+                  datasetId: markingDataset.id,
+                  points: markingDataset.points,
                   fit: { ...rangeFit, ...changes },
                 },
               ],
@@ -1229,6 +1276,30 @@ export function AnalysisPage({
             <span id="residuals-unavailable" className="sr-only">
               Resíduos desabilitados porque ainda não há resíduos.
             </span>
+          )}
+          {residualsOn && residualChoice && (
+            <div
+              role="group"
+              aria-label={`Resíduos de ${residualChoice.dataset.name}`}
+              className="flex h-8 items-center overflow-hidden rounded-md border border-[#d8ded7] bg-white"
+            >
+              {residualChoice.fits.map((fit) => (
+                <button
+                  key={fit.id}
+                  type="button"
+                  aria-pressed={fit.id === residualChoice.current}
+                  aria-label={`Resíduos do ajuste ${fit.letter}`}
+                  onClick={() => focusFit(residualChoice.dataset.id, fit.id)}
+                  className={`flex h-full items-center gap-1.5 border-l border-[#d8ded7] px-2.5 font-mono text-[11px] font-semibold first:border-l-0 ${fit.id === residualChoice.current ? "bg-[#eff2ed] text-foreground" : "text-[#66716e] hover:bg-[#f4f6f3]"}`}
+                >
+                  <FitLineSample
+                    color={fitColor(residualChoice.dataset.color, fit.letter)}
+                    pattern={fitLinePattern(residualChoice.dataset.lineStyle, fit.letter)}
+                  />
+                  {fit.letter}
+                </button>
+              ))}
+            </div>
           )}
           <ChartExportMenu graphic={graphicRef} disabled={!data} />
           <UpdateButton compact className="ml-auto" />

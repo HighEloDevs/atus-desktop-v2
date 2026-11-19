@@ -48,7 +48,7 @@ import {
 } from "./axisSettings";
 import { AxisGrid, TickMarks, XTickLabels, YTickLabels } from "./AxisMarks";
 import { AxisSettingsPopover } from "./AxisSettingsPopover";
-import { moveRangeEdge, snapRangeValue, type RangeEdges } from "./rangeBand";
+import { moveRangeEdge, rangeFieldText, snapRangeValue, type RangeEdges } from "./rangeBand";
 import {
   describeTooltip,
   groupNearbyPoints,
@@ -78,9 +78,10 @@ export type ChartSeries = {
   lineColor?: string;
 };
 /**
- * The X range of the fit being edited, drawn as a band with two draggable edges.
- * Dragging previews locally and calls `onChange` once, on release; arrow keys on a focused
- * edge call it on every step.
+ * The X range of the fit being edited, drawn as a band with two draggable edges while the user
+ * marks it ("Marcar no gráfico"). Dragging previews locally and calls `onChange` once, on
+ * release; arrow keys on a focused edge call it on every step. A banner above the plot shows the
+ * range and a "Concluir" button; it and Escape call `onDone`.
  */
 export type ChartRangeEditor = {
   /** Series whose points the range filters; points outside it are faded. */
@@ -92,6 +93,8 @@ export type ChartRangeEditor = {
   min?: number;
   max?: number;
   onChange: (edges: RangeEdges) => void;
+  /** Ends marking the range. */
+  onDone: () => void;
 };
 type ChartProps = {
   series: ChartSeries[];
@@ -634,7 +637,13 @@ export function Chart({
                       />
                     </g>
                   )}
-                  <g clipPath={`url(#${clipId})`}>
+                  {/* While an edge is dragged the points ignore the pointer, so tooltips do not
+                      flash open and closed under the edge. */}
+                  <g
+                    clipPath={`url(#${clipId})`}
+                    pointerEvents={drag ? "none" : undefined}
+                    data-testid="chart-series"
+                  >
                     {visibleSeries.map(
                       ({
                         id,
@@ -678,6 +687,7 @@ export function Chart({
                                   key={p.row}
                                   opacity={outsideRange(id, p.x) ? 0.3 : undefined}
                                   onMouseEnter={() => {
+                                    if (drag) return;
                                     setActive({ seriesId: id, row: p.row });
                                     setAnnouncement("");
                                   }}
@@ -777,6 +787,8 @@ export function Chart({
                           transform={`translate(${px},0)`}
                           className="cursor-ew-resize outline-none [&:focus-visible_.grip]:stroke-[#364cff] [&:focus-visible_.grip]:stroke-[2.5]"
                           onPointerDown={(event) => {
+                            // No text selection or native drag while moving the edge.
+                            event.preventDefault();
                             event.stopPropagation();
                             event.currentTarget.setPointerCapture?.(event.pointerId);
                             setDrag({
@@ -802,6 +814,11 @@ export function Chart({
                           }}
                           onPointerCancel={() => setDrag(null)}
                           onKeyDown={(event) => {
+                            if (event.key === "Escape") {
+                              event.stopPropagation();
+                              rangeEditor.onDone();
+                              return;
+                            }
                             const direction =
                               event.key === "ArrowRight" || event.key === "ArrowUp"
                                 ? 1
@@ -848,21 +865,31 @@ export function Chart({
                         </g>
                       );
                     })}
-                  {rangeEditor && (
-                    <text
-                      x={(Math.max(0, x(rangeMin)) + Math.min(w, x(rangeMax))) / 2}
-                      y={11}
-                      textAnchor="middle"
-                      fontSize={10.5}
-                      fontWeight={600}
-                      fill={rangeEditor.color}
-                      pointerEvents="none"
-                    >
-                      {rangeEditor.label}
-                    </text>
-                  )}
                 </g>
               </svg>
+            )}
+            {rangeEditor && (
+              <div
+                role="status"
+                data-html2canvas-ignore="true"
+                className="absolute left-1/2 top-2 z-[4] flex max-w-[calc(100%-16px)] -translate-x-1/2 items-center gap-2.5 whitespace-nowrap rounded-full bg-foreground py-1 pl-3 pr-1 text-[11.5px] text-white shadow-md"
+              >
+                <span className="truncate">
+                  Intervalo{rangeEditor.label ? ` do ajuste ${rangeEditor.label}` : ""}:{" "}
+                  <b className="font-mono font-semibold">
+                    {rangeFieldText(rangeMin).replace(".", ",")} a{" "}
+                    {rangeFieldText(rangeMax).replace(".", ",")}
+                  </b>{" "}
+                  · arraste as bordas
+                </span>
+                <button
+                  type="button"
+                  onClick={rangeEditor.onDone}
+                  className="rounded-full bg-white px-2.5 py-0.5 font-semibold text-foreground hover:bg-[#eff2ed]"
+                >
+                  Concluir
+                </button>
+              </div>
             )}
             {width > 90 && height > 55 && (
               <AxisSettingsPopover

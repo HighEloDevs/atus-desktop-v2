@@ -189,3 +189,13 @@ it("lines up parameter rows only between fits with the same function", () => {
     { equation: "a*x + b", fitIds: ["b", "c"], parameters: ["a", "b"] },
   ]);
 });
+
+it("summarises a closed fit row: Chi², sum of squares, failure or nothing", async () => {
+  const { fitStatus } = await import("../../src/features/analysis/fit/dataset-fits");
+  const fit = createFit("f", "A", { equation: "a*x" });
+  expect(fitStatus(fit)).toEqual({ text: "—", failed: false });
+  expect(fitStatus({ ...fit, fitState: "error" })).toEqual({ text: "Falhou", failed: true });
+  const result = { chiSquared: 12.345, hasUncertainty: true };
+  expect(fitStatus({ ...fit, result }).text).toBe("χ² 12,3");
+  expect(fitStatus({ ...fit, result: { ...result, hasUncertainty: false } }).text).toBe("Σr² 12,3");
+});

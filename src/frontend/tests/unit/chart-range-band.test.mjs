@@ -78,6 +78,7 @@ const editor = (overrides = {}) => ({
   min: 1,
   max: 3,
   onChange: vi.fn(),
+  onDone: vi.fn(),
   ...overrides,
 });
 const handle = (side) => node.querySelector(`[data-range-handle="${side}"]`);
@@ -100,7 +101,43 @@ it("draws the band of the active fit and fades the points outside it", async () 
   expect(faded()).toHaveLength(2);
   expect(handle("min").getAttribute("aria-label")).toBe("Início do intervalo do ajuste B");
   expect(handle("max").getAttribute("aria-valuenow")).toBe("3");
-  expect(node.querySelector('svg[role="img"]').textContent).toContain("B");
+  const banner = node.querySelector('[role="status"][data-html2canvas-ignore]');
+  expect(banner.textContent).toContain("Intervalo do ajuste B: 1 a 3");
+});
+
+it("ends marking from the banner or with Escape on an edge", async () => {
+  const rangeEditor = editor({ min: 0.5 });
+  await act(async () => root.render(createElement(Harness, { rangeEditor })));
+  expect(node.textContent).toContain("0,5 a 3");
+  const done = [...node.querySelectorAll("button")].find((b) => b.textContent === "Concluir");
+  await act(async () => done.click());
+  await act(async () =>
+    handle("min").dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Escape" })),
+  );
+  expect(rangeEditor.onDone).toHaveBeenCalledTimes(2);
+  expect(rangeEditor.onChange).not.toHaveBeenCalled();
+});
+
+it("keeps the points from reacting to the pointer while an edge is dragged", async () => {
+  await act(async () => root.render(createElement(Harness, { rangeEditor: editor() })));
+  const group = () => node.querySelector('[data-testid="chart-series"]');
+  expect(group().getAttribute("pointer-events")).toBeNull();
+  const down = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, pointerId: 1 });
+  await act(async () => handle("min").dispatchEvent(down));
+  // No native text selection, and no tooltip flashing under the edge.
+  expect(down.defaultPrevented).toBe(true);
+  expect(group().getAttribute("pointer-events")).toBe("none");
+  const point = group().querySelector("g[opacity]") ?? group().querySelector("g > g");
+  await act(async () =>
+    point.dispatchEvent(
+      new MouseEvent("mouseover", { bubbles: true, relatedTarget: document.body }),
+    ),
+  );
+  expect(node.querySelector('[role="tooltip"]')).toBeNull();
+  await act(async () =>
+    handle("min").dispatchEvent(new MouseEvent("pointerup", { bubbles: true })),
+  );
+  expect(group().getAttribute("pointer-events")).toBeNull();
 });
 
 it("follows the data on an edge with no typed value", async () => {
