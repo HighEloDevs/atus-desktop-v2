@@ -3,6 +3,9 @@
  * Run from the repository root; `check` requires complete local tags and a fetched base.
  * Only stable `M.m.p` versions are accepted: every merge to main is published to every user,
  * and pre-releases are no longer made. Build metadata is rejected because it does not change precedence.
+ * A version must be higher than the base, or equal to it while it has not been released (no `vM.m.p` tag):
+ * a merge whose release failed leaves its version unpublished, and the next merge may publish it. A version
+ * that already has a tag, or is lower than the base, is always rejected.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -61,16 +64,19 @@ function check(base) {
   if (!versions.every((current) => current === version)) throw new Error('Application versions are inconsistent');
   execFileSync('git', ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`], { stdio: 'pipe' });
   // A base that predates the application manifest has no version to exceed (first release).
+  let unreleasedBase = false;
   const baseHasConfig = spawnSync('git', ['cat-file', '-e', `${base}:${paths.config}`]);
   if (baseHasConfig.error) throw new Error('Could not inspect base');
   if (baseHasConfig.status === 0) {
     const baseConfig = JSON.parse(execFileSync('git', ['show', `${base}:${paths.config}`], { encoding: 'utf8' }));
-    if (compare(version, baseConfig.version) <= 0) throw new Error(`Version ${version} must be greater than base ${baseConfig.version}`);
+    const order = compare(version, baseConfig.version);
+    if (order < 0) throw new Error(`Version ${version} must not be lower than base ${baseConfig.version}`);
+    unreleasedBase = order === 0;
   }
   const tag = spawnSync('git', ['show-ref', '--verify', '--quiet', `refs/tags/v${version}`]);
   if (tag.error || (tag.status !== 0 && tag.status !== 1)) throw new Error('Could not inspect tags');
-  if (tag.status === 0) throw new Error(`Tag v${version} already exists`);
-  console.log(`Version ${version} is valid against ${base}`);
+  if (tag.status === 0) throw new Error(unreleasedBase ? `Version ${version} is already released (tag v${version} exists): bump it` : `Tag v${version} already exists`);
+  console.log(`Version ${version} is valid against ${base}${unreleasedBase ? ' (kept: it has not been released yet)' : ''}`);
 }
 try {
   const args = process.argv.slice(2);

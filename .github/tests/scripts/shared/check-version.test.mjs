@@ -37,7 +37,6 @@ test('bump synchronizes all manifests and checks precedence', (t) => {
 });
 test('rejects divergence, stale versions, existing tags and invalid versions', (t) => {
   const { dir, git, run } = fixture(t);
-  assert.notEqual(run('check', '--base', 'base').status, 0);
   for (const value of ['v1.0.0', '1.0', '01.0.0', '1.0.0+build']) assert.notEqual(run('bump', value).status, 0);
   assert.equal(run('bump', '0.2.0').status, 0);
   writeFileSync(join(dir, 'src/frontend/package.json'), '{"version":"0.1.0"}\n');
@@ -45,8 +44,28 @@ test('rejects divergence, stale versions, existing tags and invalid versions', (
   assert.equal(run('bump', '0.2.0').status, 0);
   git('tag', 'v0.2.0');
   assert.notEqual(run('check', '--base', 'base').status, 0);
-  git('tag', '-d', 'v0.2.0'); git('add', '.'); git('commit', '-m', 'other merge'); git('branch', '-f', 'base');
-  assert.notEqual(run('check', '--base', 'base').status, 0);
+  git('tag', '-d', 'v0.2.0');
+  // A base with a higher version than the proposal is stale, not unreleased.
+  assert.equal(run('bump', '0.3.0').status, 0);
+  git('add', '.'); git('commit', '-m', 'other merge'); git('branch', '-f', 'base');
+  assert.equal(run('bump', '0.2.0').status, 0);
+  const lower = run('check', '--base', 'base');
+  assert.notEqual(lower.status, 0);
+  assert.match(lower.stderr, /must not be lower/);
+});
+test('keeps the base version while it has not been released, and rejects it once tagged', (t) => {
+  const { git, run } = fixture(t);
+  // The base is 0.1.0 and has no tag: its release never happened, so the proposal may keep it.
+  const kept = run('check', '--base', 'base');
+  assert.equal(kept.status, 0);
+  assert.match(kept.stdout, /has not been released yet/);
+  // Once the version is published, keeping it again would republish it: a bump is required.
+  git('tag', 'v0.1.0');
+  const released = run('check', '--base', 'base');
+  assert.notEqual(released.status, 0);
+  assert.match(released.stderr, /already released/);
+  assert.equal(run('bump', '0.1.1').status, 0);
+  assert.equal(run('check', '--base', 'base').status, 0);
 });
 test('rejects pre-release versions, which are no longer published', (t) => {
   const { dir, run } = fixture(t);

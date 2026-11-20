@@ -1,6 +1,6 @@
 [package]
 name = "atus-desktop"
-version = "0.2.11"
+version = "0.2.12"
 description = "ATUS Desktop"
 edition = "2021"
 
