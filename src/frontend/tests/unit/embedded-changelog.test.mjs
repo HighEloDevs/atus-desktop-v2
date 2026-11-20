@@ -16,5 +16,8 @@ it("keeps each version's covers and images in the project's files on GitHub", ()
   const prefix = "https://raw.githubusercontent.com/HighEloDevs/atus-desktop-v2/";
   const [newest] = EMBEDDED_CHANGELOG;
   expect(newest.title.length).toBeGreaterThan(0);
-  expect(newest.cover?.startsWith(prefix)).toBe(true);
+  // A cover is optional, so check every version that has one instead of requiring it of the newest.
+  const covers = EMBEDDED_CHANGELOG.map((item) => item.cover).filter(Boolean);
+  expect(covers.length).toBeGreaterThan(0);
+  for (const cover of covers) expect(cover.startsWith(prefix)).toBe(true);
 });
