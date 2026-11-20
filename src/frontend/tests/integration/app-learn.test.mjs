@@ -54,6 +54,9 @@ import App from "../../src/App";
 import { gravityLesson } from "../../src/features/learn/lessons/gravity";
 import { rangeToTsv } from "../../src/features/learn/sheet-range";
 
+// The free-fall test runs the whole lesson: ~16 s on the slow macOS Intel runner, over the 15 s default.
+vi.setConfig({ testTimeout: 60000 });
+
 let root;
 let node;
 let readText;
